@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inventory.Application\Inventory.Application.csproj" />
+    <ProjectReference Include="..\Inventory.Infrastructre\Inventory.Infrastructre.csproj" />
+    <ProjectReference Include="..\Identity.Application\Identity.Application.csproj" />
+    <ProjectReference Include="..\Identity.Infrastructre\Identity.Infrastructre.csproj" />
+    <ProjectReference Include="..\Shifts.Application\Shifts.Application.csproj" />
+    <ProjectReference Include="..\Shifts.Infrastructre\Shifts.Infrastructre.csproj" />
+    <ProjectReference Include="..\Purchases.Application\Purchases.Application.csproj" />
+    <ProjectReference Include="..\Purchases.Infrastructre\Purchases.Infrastructre.csproj" />
+    <ProjectReference Include="..\Sales.Application\Sales.Application.csproj" />
+    <ProjectReference Include="..\Sales.Infrastructre\Sales.Infrastructre.csproj" />
+    <ProjectReference Include="..\Returns.Application\Returns.Application.csproj" />
+    <ProjectReference Include="..\Returns.Infrastructre\Returns.Infrastructre.csproj" />
+    <ProjectReference Include="..\Expenses.Application\Expenses.Application.csproj" />
+    <ProjectReference Include="..\Expenses.Infrastructre\Expenses.Infrastructre.csproj" />
+    <ProjectReference Include="..\Dashboard.Application\Dashboard.Application.csproj" />
+    <ProjectReference Include="..\Settings.Application\Settings.Application.csproj" />
+    <ProjectReference Include="..\Settings.Infrastructre\Settings.Infrastructre.csproj" />
+    <ProjectReference Include="..\Audit.Application\Audit.Application.csproj" />
+    <ProjectReference Include="..\Audit.Infrastructre\Audit.Infrastructre.csproj" />
+    <ProjectReference Include="..\POS.Shared.Application\POS.Shared.Application.csproj" />
+    <ProjectReference Include="..\POS.Shared.Infrastructre\POS.Shared.Infrastructre.csproj" />
+  </ItemGroup>
+
+</Project>

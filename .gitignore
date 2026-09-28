@@ -1,0 +1,61 @@
+# ==========================================
+# Root .gitignore for Home_Appliances Monorepo
+# ==========================================
+
+# Binaries and APKs
+*.apk
+*.aab
+*.dex
+*.class
+
+# Mobile / Flutter ignores
+**/Cashier_Mobile/.dart_tool/
+**/Cashier_Mobile/.flutter-plugins-dependencies
+**/Cashier_Mobile/.flutter-plugins
+**/Cashier_Mobile/.pub-cache/
+**/Cashier_Mobile/.pub/
+**/Cashier_Mobile/build/
+**/Cashier_Mobile/release.apk
+**/Cashier_Mobile/android/.gradle/
+**/Cashier_Mobile/android/local.properties
+**/Cashier_Mobile/android/app/debug/
+**/Cashier_Mobile/android/app/profile/
+**/Cashier_Mobile/android/app/release/
+**/.dart_tool/
+**/build/
+
+# .NET / C# ignores
+**/[Bb]in/
+**/[Oo]bj/
+**/[Ll]og/
+**/[Ll]ogs/
+**/publish/
+**/publish_cloudapi/
+**/installer/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# IDEs & Editor directories
+.vs/
+**/.vs/
+.idea/
+**/.idea/
+.vscode/
+**/.vscode/
+*.iml
+*.ipr
+*.iws
+
+# System & OS Files
+Thumbs.db
+[Dd]esktop.ini
+.DS_Store
+
+# Temporary & Secret Configs
+appsettings.Local.json
+**/appsettings.Local.json
+.git_bak/
+**/scratch/

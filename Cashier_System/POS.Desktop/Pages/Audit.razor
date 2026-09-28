@@ -1,0 +1,249 @@
+@page "/audit"
+@using Microsoft.AspNetCore.Authorization
+@using global::POS.Desktop.Services.Api
+@attribute [Authorize(Roles = "Admin,Manager")]
+@inject PosApiClient ApiClient
+
+<div style="max-width: 1150px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem;">
+    <div>
+        <h2 style="font-weight: 700;">سجل الأحداث وحركات النظام (Audit Logs)</h2>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            تتبع جميع العمليات والتغييرات المنفذة داخل النظام (إضافة، تعديل، حذف، فتح إغلاق وردية) مع تفاصيل البيانات السابقة والجديدة.
+        </p>
+    </div>
+
+    <!-- Filter Bar & Summary Card -->
+    <div class="card" style="margin-bottom: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+            <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-indigo);">
+                <i class="fa-solid fa-list-check me-2"></i> حركات النظام المسجلة
+            </h3>
+
+            <!-- Filters -->
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">الكيان:</label>
+                    <select class="form-select" style="width: 140px; padding: 0.4rem 0.6rem; font-size: 0.85rem;" @bind="filterEntityName">
+                        <option value="">جميع الكيانات</option>
+                        <option value="Product">المنتجات</option>
+                        <option value="Sale">المبيعات</option>
+                        <option value="Shift">الورديات</option>
+                        <option value="Category">التصنيفات</option>
+                        <option value="Customer">العملاء</option>
+                        <option value="Supplier">الموردين</option>
+                        <option value="Purchase">المشتريات</option>
+                        <option value="Expense">المصروفات</option>
+                        <option value="User">المستخدمين</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">نوع الحركة:</label>
+                    <select class="form-select" style="width: 140px; padding: 0.4rem 0.6rem; font-size: 0.85rem;" @bind="filterAction">
+                        <option value="">جميع الحركات</option>
+                        <option value="Create">إضافة (Create)</option>
+                        <option value="Update">تعديل (Update)</option>
+                        <option value="Delete">حذف (Delete)</option>
+                        <option value="Open">فتح وردية</option>
+                        <option value="Close">إغلاق وردية</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-primary" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;" @onclick="ApplyFilter">
+                    <i class="fa-solid fa-filter me-1"></i> تصفية
+                </button>
+
+                <button class="btn btn-secondary" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;" @onclick="ResetFilter">
+                    <i class="fa-solid fa-rotate-left me-1"></i> إعادة ضبط
+                </button>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                <i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--accent-indigo);"></i>
+                <p style="margin-top: 0.5rem;">جاري تحميل سجل الأحداث...</p>
+            </div>
+        }
+        else if (!logs.Any())
+        {
+            <div style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                <i class="fa-solid fa-shield-cat fa-2x" style="margin-bottom: 0.5rem; display: block;"></i>
+                لا توجد حركات مسجلة تطابق التصفية المختارة.
+            </div>
+        }
+        else
+        {
+            <div class="table-container" style="margin-bottom: 0; box-shadow: none; border-radius: 0.5rem;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>التاريخ والوقت</th>
+                            <th>المستخدم</th>
+                            <th>الكيان (Entity)</th>
+                            <th>نوع الحركة</th>
+                            <th>عنوان IP</th>
+                            <th>التفاصيل والمعاينة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in PagedLogs)
+                        {
+                            <tr>
+                                <td>@log.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                <td>
+                                    <span style="font-weight: 600;">@(log.UserId.HasValue ? $"User #{log.UserId.Value.ToString()[..6]}" : "النظام / System")</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-indigo">@log.EntityName</span>
+                                </td>
+                                <td>
+                                    @if (log.Action.Equals("Create", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="badge badge-green"><i class="fa-solid fa-plus me-1"></i> إضافة</span>
+                                    }
+                                    else if (log.Action.Equals("Update", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="badge badge-amber" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3);"><i class="fa-solid fa-pen me-1"></i> تعديل</span>
+                                    }
+                                    else if (log.Action.Equals("Delete", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="badge badge-red"><i class="fa-solid fa-trash me-1"></i> حذف</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-secondary" style="background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color-light);">@log.Action</span>
+                                    }
+                                </td>
+                                <td style="font-size: 0.85rem; color: var(--text-secondary);">@(string.IsNullOrWhiteSpace(log.IpAddress) ? "Localhost" : log.IpAddress)</td>
+                                <td>
+                                    <button class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.8rem;" @onclick="() => ViewDetails(log)">
+                                        <i class="fa-solid fa-code me-1"></i> القيم والتفاصيل
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div style="margin-top: 1rem;">
+                <Pagination CurrentPage="@currentPage" TotalItems="@logs.Count" PageSize="@pageSize" OnPageChanged="@(p => currentPage = p)" />
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Audit Log Details Modal -->
+@if (selectedLog != null)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" style="width: 750px;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid fa-bug me-2" style="color: var(--accent-indigo);"></i>
+                    تفاصيل حركة الكيان #@selectedLog.Id.ToString()[..8]
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="grid-3" style="margin-bottom: 1.25rem;">
+                    <div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light);">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">الكيان</span>
+                        <strong style="font-size: 0.9rem;">@selectedLog.EntityName</strong>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light);">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">الحركة</span>
+                        <strong style="font-size: 0.9rem;">@selectedLog.Action</strong>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light);">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">التاريخ والوقت</span>
+                        <strong style="font-size: 0.85rem;">@selectedLog.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss")</strong>
+                    </div>
+                </div>
+
+                <div class="grid-2" style="gap: 1rem;">
+                    <div>
+                        <h4 style="font-size: 0.88rem; font-weight: 700; color: var(--accent-red); margin-bottom: 0.5rem;">القيم السابقة (Old Values)</h4>
+                        <pre style="background: var(--bg-primary); color: #f87171; border: 1px solid var(--border-color-light); padding: 0.85rem; border-radius: 0.5rem; font-size: 0.8rem; height: 220px; overflow-y: auto; white-space: pre-wrap; font-family: monospace;">@(string.IsNullOrWhiteSpace(selectedLog.OldValues) ? "لا توجد قيم سابقة (إضافة جديدة)" : selectedLog.OldValues)</pre>
+                    </div>
+
+                    <div>
+                        <h4 style="font-size: 0.88rem; font-weight: 700; color: var(--accent-emerald); margin-bottom: 0.5rem;">القيم الجديدة (New Values)</h4>
+                        <pre style="background: var(--bg-primary); color: var(--accent-emerald); border: 1px solid var(--border-color-light); padding: 0.85rem; border-radius: 0.5rem; font-size: 0.8rem; height: 220px; overflow-y: auto; white-space: pre-wrap; font-family: monospace;">@(string.IsNullOrWhiteSpace(selectedLog.NewValues) ? "لا توجد قيم جديدة (تم الحذف)" : selectedLog.NewValues)</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AuditLogDto> logs = new();
+    private bool isLoading = true;
+    private string? filterEntityName;
+    private string? filterAction;
+
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private IEnumerable<AuditLogDto> PagedLogs => logs.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private AuditLogDto? selectedLog;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLogsAsync();
+    }
+
+    private async Task LoadLogsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            logs = await ApiClient.GetAuditLogsAsync(
+                page: 1,
+                pageSize: 100,
+                entityName: filterEntityName,
+                action: filterAction);
+            currentPage = 1;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading audit logs: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+
+    private async Task ApplyFilter()
+    {
+        await LoadLogsAsync();
+    }
+
+    private async Task ResetFilter()
+    {
+        filterEntityName = null;
+        filterAction = null;
+        await LoadLogsAsync();
+    }
+
+    private void ViewDetails(AuditLogDto log)
+    {
+        selectedLog = log;
+    }
+
+    private void CloseModal()
+    {
+        selectedLog = null;
+    }
+}

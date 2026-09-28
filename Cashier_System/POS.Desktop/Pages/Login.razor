@@ -1,0 +1,800 @@
+@page "/login"
+@layout AuthLayout
+@using global::POS.Desktop.Services.Api
+@using global::POS.Desktop.Services.Auth
+@inject PosApiClient ApiClient
+@inject CustomAuthStateProvider AuthState
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="pos-auth-page">
+    <!-- Top Theme Switcher & Status -->
+    <div class="pos-auth-topbar">
+        <div class="pos-brand-badge">
+            <i class="fa-solid fa-cash-register text-indigo brand-icon"></i>
+            <span>نظام الكاشير المطور</span>
+        </div>
+        <button type="button" class="btn-theme-toggle" @onclick="ToggleTheme" title="تبديل المظهر (فاتح / داكن)">
+            <i class="fa-solid @(isDarkMode ? "fa-sun text-warning" : "fa-moon text-indigo")"></i>
+            <span>@(isDarkMode ? "المظهر الفاتح" : "المظهر الداكن")</span>
+        </button>
+    </div>
+
+    <div class="pos-auth-wrapper">
+        @if (isCheckingSetup)
+        {
+            <!-- Loading State -->
+            <div class="pos-auth-card text-center pos-checking-card">
+                <div class="pos-auth-icon-wrapper">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                </div>
+                <h3 class="pos-auth-title mt-3">جاري الاتصال بالنظام</h3>
+                <p class="pos-auth-subtitle">جاري التحقق من قاعدة البيانات وتهيئة الحسابات...</p>
+                <div class="pos-progress-bar mt-3">
+                    <div class="pos-progress-fill"></div>
+                </div>
+            </div>
+        }
+        else if (isSetupRequired && systemRequiresSetup)
+        {
+            <!-- First-Time Admin Setup Wizard -->
+            <div class="pos-auth-card pos-setup-card">
+                <div class="pos-auth-header">
+                    <div class="pos-auth-icon-wrapper setup-icon">
+                        <i class="fa-solid fa-user-shield"></i>
+                    </div>
+                    <div class="pos-badge-new">الخطوة الأولى</div>
+                    <h2 class="pos-auth-title">إنشاء حساب المدير المسؤول</h2>
+                    <p class="pos-auth-subtitle">قم بإنشاء حساب المدير (Admin) لأول مرة للتحكم بالنظام وإضافة الكاشيرات</p>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="pos-auth-alert danger">
+                        <i class="fa-solid fa-circle-exclamation me-2"></i>
+                        <span>@errorMessage</span>
+                    </div>
+                }
+
+                <EditForm Model="setupModel" OnValidSubmit="HandleInitialSetup" class="pos-auth-form">
+                    <div class="form-row-2">
+                        <div class="pos-input-group">
+                            <label class="pos-label">الاسم بالكامل <span class="required">*</span></label>
+                            <div class="pos-input-wrapper">
+                                <i class="fa-solid fa-id-card pos-input-icon"></i>
+                                <InputText @bind-Value="setupModel.FullName" class="pos-input" placeholder="مثال: مدير النظام" />
+                            </div>
+                        </div>
+
+                        <div class="pos-input-group">
+                            <label class="pos-label">اسم المستخدم للدخول <span class="required">*</span></label>
+                            <div class="pos-input-wrapper">
+                                <i class="fa-solid fa-user pos-input-icon"></i>
+                                <InputText @bind-Value="setupModel.UserName" class="pos-input" placeholder="مثال: admin" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row-2">
+                        <div class="pos-input-group">
+                            <label class="pos-label">رقم الهاتف (اختياري)</label>
+                            <div class="pos-input-wrapper">
+                                <i class="fa-solid fa-phone pos-input-icon"></i>
+                                <InputText @bind-Value="setupModel.Phone" class="pos-input" placeholder="01xxxxxxxxx" />
+                            </div>
+                        </div>
+
+                        <div class="pos-input-group">
+                            <label class="pos-label">البريد الإلكتروني (اختياري)</label>
+                            <div class="pos-input-wrapper">
+                                <i class="fa-solid fa-envelope pos-input-icon"></i>
+                                <InputText @bind-Value="setupModel.Email" class="pos-input" placeholder="admin@pos.local" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row-2">
+                        <div class="pos-input-group">
+                            <label class="pos-label">كلمة المرور <span class="required">*</span></label>
+                            <div class="pos-input-wrapper">
+                                <i class="fa-solid fa-lock pos-input-icon"></i>
+                                <InputText @bind-Value="setupModel.Password" type="@(showSetupPassword ? "text" : "password")" class="pos-input" placeholder="كلمة المرور (مثال: admin أو 123)" />
+                                <button type="button" class="btn-toggle-eye" @onclick="() => showSetupPassword = !showSetupPassword" tabindex="-1">
+                                    <i class="fa-solid @(showSetupPassword ? "fa-eye-slash" : "fa-eye")"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pos-input-group">
+                            <label class="pos-label">تأكيد كلمة المرور <span class="required">*</span></label>
+                            <div class="pos-input-wrapper">
+                                <i class="fa-solid fa-shield-halved pos-input-icon"></i>
+                                <InputText @bind-Value="setupModel.ConfirmPassword" type="@(showSetupPassword ? "text" : "password")" class="pos-input" placeholder="أعد كتابة كلمة المرور" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-pos-primary" disabled="@isLoading">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>جاري إنشاء الحساب والتهيئة...</span>
+                        }
+                        else
+                        {
+                            <i class="fa-solid fa-user-check me-2"></i>
+                            <span>حفظ حساب المدير والدخول إلى النظام</span>
+                        }
+                    </button>
+                </EditForm>
+
+                <div class="pos-auth-footer">
+                    <button type="button" class="btn-link-action" @onclick="() => isSetupRequired = false">
+                        <i class="fa-solid fa-right-to-bracket me-1"></i>
+                        <span>لديك حساب بالفعل؟ تسجيل الدخول</span>
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Standard Login Card -->
+            <div class="pos-auth-card pos-login-card">
+                <div class="pos-auth-header">
+                    <div class="pos-auth-icon-wrapper login-icon">
+                        <i class="fa-solid fa-cash-register"></i>
+                    </div>
+                    <h2 class="pos-auth-title">تسجيل الدخول للنظام</h2>
+                    <p class="pos-auth-subtitle">أدخل بيانات الحساب لبدء جلسة العمل والمبيعات</p>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="pos-auth-alert danger">
+                        <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                        <span>@errorMessage</span>
+                    </div>
+                }
+
+                <EditForm Model="loginModel" OnValidSubmit="HandleLogin" class="pos-auth-form">
+                    <div class="pos-input-group">
+                        <label class="pos-label">اسم المستخدم</label>
+                        <div class="pos-input-wrapper">
+                            <i class="fa-solid fa-user pos-input-icon"></i>
+                            <InputText @bind-Value="loginModel.Username" class="pos-input" placeholder="اسم المستخدم (مثال: admin)" />
+                        </div>
+                    </div>
+
+                    <div class="pos-input-group">
+                        <label class="pos-label">كلمة المرور</label>
+                        <div class="pos-input-wrapper">
+                            <i class="fa-solid fa-lock pos-input-icon"></i>
+                            <InputText @bind-Value="loginModel.Password" type="@(showLoginPassword ? "text" : "password")" class="pos-input" placeholder="••••••••" />
+                            <button type="button" class="btn-toggle-eye" @onclick="() => showLoginPassword = !showLoginPassword" tabindex="-1">
+                                <i class="fa-solid @(showLoginPassword ? "fa-eye-slash" : "fa-eye")"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-pos-primary mt-2" disabled="@isLoading">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>جاري تسجيل الدخول...</span>
+                        }
+                        else
+                        {
+                            <i class="fa-solid fa-arrow-right-to-bracket me-2"></i>
+                            <span>تسجيل الدخول</span>
+                        }
+                    </button>
+                </EditForm>
+
+                <div class="pos-auth-footer d-flex justify-content-between align-items-center">
+                    @if (systemRequiresSetup)
+                    {
+                        <button type="button" class="btn-link-action" @onclick="() => isSetupRequired = true">
+                            <i class="fa-solid fa-user-shield me-1"></i>
+                            <span>تهيئة حساب المدير الأول</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <span style="font-size: 0.8rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.35rem;">
+                            <i class="fa-solid fa-shield-halved text-indigo"></i>
+                            <span>نظام محمي ومشفّر</span>
+                        </span>
+                    }
+                    <button type="button" class="btn-link-action" @onclick="CheckSetup">
+                        <i class="fa-solid fa-rotate me-1"></i>
+                        <span>فحص الاتصال</span>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- 3A Tech Login Screen Footer -->
+    <footer class="pos-auth-screen-footer">
+        <div class="auth-footer-brand">
+            <img src="images/3a-tech-logo.png" alt="3A Tech" class="auth-footer-logo" />
+            <span>نظام الكاشير والمبيعات — تطوير وتشغيل <strong>3A Tech للحلول البرمجية</strong></span>
+        </div>
+        <div class="auth-footer-support">
+            <span style="font-size: 0.78rem; color: var(--text-secondary);"><i class="fa-solid fa-headset me-1"></i> الدعم الفني:</span>
+            <button type="button" class="auth-support-link" @onclick='() => OpenWhatsApp("01062592321")' title="تواصل عبر واتساب">
+                <i class="fa-brands fa-whatsapp"></i> 01062592321
+            </button>
+            <button type="button" class="auth-support-link" @onclick='() => OpenWhatsApp("01063301965")' title="تواصل عبر واتساب">
+                <i class="fa-brands fa-whatsapp"></i> 01063301965
+            </button>
+            <button type="button" class="auth-support-link" @onclick='() => OpenWhatsApp("01095997875")' title="تواصل عبر واتساب">
+                <i class="fa-brands fa-whatsapp"></i> 01095997875
+            </button>
+        </div>
+    </footer>
+</div>
+
+<style>
+    /* Full Page Auth Shell — No Scrollbar */
+    .pos-auth-page {
+        height: 100vh;
+        width: 100vw;
+        max-height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: var(--font-family);
+        position: relative;
+        user-select: none;
+    }
+
+    /* Subtle decorative background glow */
+    .pos-auth-page::before {
+        content: '';
+        position: absolute;
+        width: 500px;
+        height: 500px;
+        top: -100px;
+        right: -100px;
+        background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, transparent 70%);
+        pointer-events: none;
+    }
+
+    .pos-auth-page::after {
+        content: '';
+        position: absolute;
+        width: 400px;
+        height: 400px;
+        bottom: -50px;
+        left: -50px;
+        background: radial-gradient(circle, rgba(56, 189, 248, 0.08) 0%, transparent 70%);
+        pointer-events: none;
+    }
+
+    /* Topbar */
+    .pos-auth-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 2rem;
+        z-index: 5;
+    }
+
+    .pos-brand-badge {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .pos-brand-badge .brand-icon {
+        margin-left: 0.4rem;
+        margin-right: 0.2rem;
+    }
+
+    .text-indigo {
+        color: var(--accent-indigo);
+    }
+
+    .btn-theme-toggle {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+        font-weight: 600;
+        padding: 0.45rem 0.9rem;
+        border-radius: 20px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s ease;
+    }
+
+    .btn-theme-toggle:hover {
+        background: var(--bg-card-hover);
+        color: var(--text-primary);
+        border-color: var(--border-color-light);
+    }
+
+    /* Wrapper Centered */
+    .pos-auth-wrapper {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 1.5rem 2rem 1.5rem;
+        z-index: 5;
+    }
+
+    /* Auth Cards */
+    .pos-auth-card {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        box-shadow: var(--shadow-lg);
+        width: 100%;
+        animation: fadeInScale 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .pos-login-card {
+        max-width: 440px;
+        padding: 2.2rem 2.2rem 1.8rem 2.2rem;
+    }
+
+    .pos-setup-card {
+        max-width: 580px;
+        padding: 2rem 2.2rem;
+    }
+
+    .pos-checking-card {
+        max-width: 380px;
+        padding: 2.5rem 2rem;
+    }
+
+    /* Header */
+    .pos-auth-header {
+        text-align: center;
+        margin-bottom: 1.5rem;
+        position: relative;
+    }
+
+    .pos-auth-icon-wrapper {
+        width: 58px;
+        height: 58px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.6rem;
+        color: #ffffff;
+        margin-bottom: 0.75rem;
+        box-shadow: var(--shadow-glow);
+    }
+
+    .login-icon {
+        background: linear-gradient(135deg, var(--accent-indigo), var(--accent-blue));
+    }
+
+    .setup-icon {
+        background: linear-gradient(135deg, var(--accent-purple), var(--accent-indigo));
+    }
+
+    .pos-badge-new {
+        display: inline-block;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.2rem 0.6rem;
+        border-radius: 12px;
+        background: rgba(99, 102, 241, 0.15);
+        color: var(--accent-indigo);
+        margin-bottom: 0.4rem;
+    }
+
+    .pos-auth-title {
+        font-size: 1.35rem;
+        font-weight: 800;
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    .pos-auth-subtitle {
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+        margin-top: 0.35rem;
+        line-height: 1.4;
+    }
+
+    /* Alerts */
+    .pos-auth-alert {
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .pos-auth-alert.danger {
+        background-color: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: var(--accent-red);
+    }
+
+    /* Forms */
+    .pos-auth-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+    }
+
+    .form-row-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.85rem;
+    }
+
+    .pos-input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .pos-label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+    }
+
+    .required {
+        color: var(--accent-red);
+    }
+
+    .pos-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .pos-input-icon {
+        position: absolute;
+        right: 0.85rem;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        pointer-events: none;
+    }
+
+    .pos-input {
+        width: 100%;
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-family: var(--font-family);
+        font-size: 0.88rem;
+        padding: 0.65rem 2.4rem 0.65rem 0.85rem;
+        transition: all 0.2s ease;
+        outline: none;
+    }
+
+    .pos-input:focus {
+        border-color: var(--accent-indigo);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        background-color: var(--bg-card);
+    }
+
+    .pos-input::placeholder {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+    }
+
+    .btn-toggle-eye {
+        position: absolute;
+        left: 0.75rem;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 0.9rem;
+        padding: 0.2rem;
+        transition: color 0.2s;
+    }
+
+    .btn-toggle-eye:hover {
+        color: var(--text-primary);
+    }
+
+    /* Buttons */
+    .btn-pos-primary {
+        background: linear-gradient(135deg, var(--accent-indigo), #4338ca);
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem 1.25rem;
+        font-family: var(--font-family);
+        font-size: 0.92rem;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+    }
+
+    .btn-pos-primary:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+    }
+
+    .btn-pos-primary:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    /* Footer */
+    .pos-auth-footer {
+        margin-top: 1.25rem;
+        text-align: center;
+        border-top: 1px solid var(--border-color);
+        padding-top: 0.9rem;
+    }
+
+    .btn-link-action {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: color 0.2s;
+    }
+
+    .btn-link-action:hover {
+        color: var(--accent-indigo);
+    }
+
+    /* Progress bar for checking card */
+    .pos-progress-bar {
+        height: 4px;
+        background: var(--bg-secondary);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .pos-progress-fill {
+        height: 100%;
+        width: 40%;
+        background: var(--accent-indigo);
+        border-radius: 4px;
+        animation: progressMove 1.2s infinite ease-in-out;
+    }
+
+    @@keyframes progressMove {
+        0% { transform: translateX(150%); }
+        50% { transform: translateX(-50%); }
+        100% { transform: translateX(-150%); }
+    }
+
+    @@keyframes fadeInScale {
+        from {
+            opacity: 0;
+            transform: scale(0.96);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+</style>
+
+@code {
+    public class SetupAdminFormModel
+    {
+        public string FullName { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string Password { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    public class LoginFormModel
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private LoginFormModel loginModel = new();
+    private SetupAdminFormModel setupModel = new();
+    private string? errorMessage;
+    private bool isLoading;
+    private bool isCheckingSetup = true;
+    private bool systemRequiresSetup = false;
+    private bool isSetupRequired = false;
+    private bool showLoginPassword = false;
+    private bool showSetupPassword = false;
+    private bool isDarkMode = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckSetup();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var theme = await JS.InvokeAsync<string>("getAppTheme");
+                isDarkMode = theme != "light";
+                StateHasChanged();
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        isDarkMode = !isDarkMode;
+        var theme = isDarkMode ? "dark" : "light";
+        try
+        {
+            await JS.InvokeVoidAsync("setAppTheme", theme);
+        }
+        catch { }
+    }
+
+    private async Task CheckSetup()
+    {
+        isCheckingSetup = true;
+        errorMessage = null;
+        try
+        {
+            systemRequiresSetup = await ApiClient.CheckInitialSetupRequiredAsync();
+            isSetupRequired = systemRequiresSetup;
+        }
+        catch (Exception ex)
+        {
+            systemRequiresSetup = false;
+            isSetupRequired = false;
+            errorMessage = $"تعذر الاتصال بخدمة الـ Backend: {ex.Message}";
+        }
+        finally
+        {
+            isCheckingSetup = false;
+        }
+    }
+
+    private async Task HandleInitialSetup()
+    {
+        if (string.IsNullOrWhiteSpace(setupModel.FullName) || string.IsNullOrWhiteSpace(setupModel.UserName) || string.IsNullOrWhiteSpace(setupModel.Password))
+        {
+            errorMessage = "الرجاء إدخال الاسم بالكامل، واسم المستخدم، وكلمة المرور.";
+            return;
+        }
+
+        if (setupModel.Password.Length < 3)
+        {
+            errorMessage = "كلمة المرور يجب ألا تقل عن 3 خانات (مثل admin أو 123).";
+            return;
+        }
+
+        if (setupModel.Password != setupModel.ConfirmPassword)
+        {
+            errorMessage = "كلمة المرور وتأكيد كلمة المرور غير متطابقتين.";
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var req = new SetupAdminRequest(
+                setupModel.FullName.Trim(),
+                setupModel.UserName.Trim(),
+                string.IsNullOrWhiteSpace(setupModel.Email) ? null : setupModel.Email.Trim(),
+                string.IsNullOrWhiteSpace(setupModel.Phone) ? null : setupModel.Phone.Trim(),
+                setupModel.Password
+            );
+
+            var (auth, error) = await ApiClient.SetupInitialAdminAsync(req);
+            if (auth is not null)
+            {
+                var role = string.IsNullOrWhiteSpace(auth.Role) ? "Admin" : auth.Role;
+                Guid.TryParse(auth.UserId, out var userId);
+                AuthState.MarkUserAsAuthenticated(auth.AccessToken, auth.FullName ?? string.Empty, role, userId);
+                Nav.NavigateTo("/");
+            }
+            else
+            {
+                // In case user was already created, attempt login
+                var loginRes = await ApiClient.LoginAsync(new LoginRequest(setupModel.UserName, setupModel.Password));
+                if (loginRes is not null)
+                {
+                    var role = string.IsNullOrWhiteSpace(loginRes.Role) ? "Admin" : loginRes.Role;
+                    Guid.TryParse(loginRes.UserId, out var userId);
+                    AuthState.MarkUserAsAuthenticated(loginRes.AccessToken, loginRes.FullName ?? string.Empty, role, userId);
+                    Nav.NavigateTo("/");
+                }
+                else
+                {
+                    errorMessage = error ?? "فشل إنشاء أو تسجيل الدخول بحساب المدير.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"حدث خطأ غير متوقع: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        if (string.IsNullOrWhiteSpace(loginModel.Username) || string.IsNullOrWhiteSpace(loginModel.Password))
+        {
+            errorMessage = "الرجاء إدخال اسم المستخدم وكلمة المرور.";
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var req = new LoginRequest(loginModel.Username.Trim(), loginModel.Password);
+            var res = await ApiClient.LoginAsync(req);
+            if (res is not null)
+            {
+                var role = string.IsNullOrWhiteSpace(res.Role) ? "Admin" : res.Role;
+                Guid.TryParse(res.UserId, out var userId);
+                AuthState.MarkUserAsAuthenticated(res.AccessToken, res.FullName ?? string.Empty, role, userId);
+                Nav.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = "اسم المستخدم أو كلمة المرور غير صحيحة، أو تعذر الاتصال بقاعدة البيانات.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"خطأ في تسجيل الدخول: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenWhatsApp(string phone)
+    {
+        try
+        {
+            var cleanPhone = phone.Trim().Replace(" ", "").Replace("-", "");
+            if (cleanPhone.StartsWith("0"))
+            {
+                cleanPhone = "2" + cleanPhone;
+            }
+            var msg = Uri.EscapeDataString("السلام عليكم، أحتاج دعم فني بخصوص نظام الكاشير 3A Tech.");
+            var url = $"https://wa.me/{cleanPhone}?text={msg}";
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch { }
+    }
+}

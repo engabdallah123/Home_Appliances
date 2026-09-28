@@ -1,0 +1,534 @@
+@page "/offers"
+@using Microsoft.AspNetCore.Authorization
+@using global::POS.Desktop.Services.Api
+@using global::POS.Desktop.Services.Auth
+@using global::POS.Desktop.Services.State
+@attribute [Authorize]
+@inject PosApiClient ApiClient
+@inject CustomAuthStateProvider AuthState
+@inject IJSRuntime JS
+
+<div>
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">
+                <i class="fa-solid fa-gift text-pink me-2"></i> العروض والخصومات وبكجات جهاز العروسة
+            </h2>
+            <p class="page-subtitle">إنشاء وإدارة حملات التخفيضات، خصومات الماركات، وباقات الأجهزة الكهربائية المجمعة</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button class="btn btn-primary" @onclick="OpenCreateOfferModal">
+                <i class="fa-solid fa-plus me-1"></i> إنشاء عرض / بكج جديد
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters & Search -->
+    <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; align-items: center; flex-wrap: wrap;">
+        <div class="search-box" style="max-width: 360px; flex: 1;">
+            <i class="fa-solid fa-search"></i>
+            <input @bind="searchQuery" @bind:event="oninput" placeholder="بحث بعنوان العرض أو الوصف..." />
+        </div>
+
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+            <button class="btn @(selectedTypeFilter == null ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick="() => FilterByType(null)">
+                الكل (@offers.Count)
+            </button>
+            <button class="btn @(selectedTypeFilter == 3 ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick="() => FilterByType(3)">
+                <i class="fa-solid fa-boxes-packing me-1 text-pink"></i> بكجات جهاز العروسة (@offers.Count(o => o.OfferType == "BundlePackage"))
+            </button>
+            <button class="btn @(selectedTypeFilter == 2 ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick="() => FilterByType(2)">
+                <i class="fa-solid fa-award me-1 text-cyan"></i> خصومات الماركات (@offers.Count(o => o.OfferType == "BrandDiscount"))
+            </button>
+            <button class="btn @(selectedTypeFilter == 0 ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick="() => FilterByType(0)">
+                خصومات المنتجات والتصنيفات (@offers.Count(o => o.OfferType == "ProductDiscount" || o.OfferType == "CategoryDiscount"))
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div style="text-align: center; padding: 4rem; color: var(--text-secondary);">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 1rem; color: var(--accent-indigo);"></i>
+            <div>جاري تحميل العروض الترويجية...</div>
+        </div>
+    }
+    else if (!filteredOffers.Any())
+    {
+        <div class="card" style="text-align: center; padding: 3.5rem 1.5rem; color: var(--text-muted);">
+            <i class="fa-solid fa-tags" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.4;"></i>
+            <h4>لا توجد عروض ترويجية حالياً</h4>
+            <p style="font-size: 0.88rem;">يمكنك تجهيز باقات جهاز العروسة (ثلاجة + غسالة + بوتاجاز + شاشة) بسعر مخفض، أو عمل خصم على ماركة معينة.</p>
+            <button class="btn btn-primary mt-2" @onclick="OpenCreateOfferModal" style="margin: auto;">
+                <i class="fa-solid fa-plus me-1"></i> إنشاء أول عرض
+            </button>
+        </div>
+    }
+    else
+    {
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.25rem;">
+            @foreach (var offer in filteredOffers)
+            {
+                <div class="card" style="padding: 1.25rem; border-radius: 0.75rem; border: 1px solid var(--border-color); background: var(--bg-card); display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden;">
+                    @if (offer.OfferType == "BundlePackage")
+                    {
+                        <div style="position: absolute; top: 0; left: 0; background: linear-gradient(135deg, #ec4899, #8b5cf6); color: white; padding: 0.2rem 1.2rem; font-size: 0.7rem; font-weight: 800; border-bottom-right-radius: 0.5rem;">
+                            بكج جهاز العروسة 🎁
+                        </div>
+                    }
+
+                    <div style="margin-top: @(offer.OfferType == "BundlePackage" ? "0.6rem" : "0");">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">@offer.TitleAr</h4>
+                            <span class="badge @(offer.IsCurrentlyValid ? "badge-success" : (offer.IsActive ? "badge-amber" : "badge-secondary"))" style="font-size: 0.72rem;">
+                                @(offer.IsCurrentlyValid ? "ساري الآن" : (offer.IsActive ? "منتهي التاريخ" : "معطل"))
+                            </span>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(offer.Description))
+                        {
+                            <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.4;">
+                                @offer.Description
+                            </p>
+                        }
+
+                        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color-light); border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.75rem;">
+                            @if (offer.OfferType == "BundlePackage")
+                            {
+                                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem;">
+                                    <span style="font-size: 0.8rem; color: var(--text-secondary);">سعر البكج الإجمالي:</span>
+                                    <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-emerald);">@offer.PackagePrice.ToString("N2") ج.م</span>
+                                </div>
+                                @if (offer.Items != null && offer.Items.Any())
+                                {
+                                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.3rem;">الأجهزة المشمولة في البكج (@offer.Items.Count):</div>
+                                    <ul style="padding-right: 1.2rem; margin: 0; font-size: 0.8rem; color: var(--text-primary);">
+                                        @foreach (var itm in offer.Items)
+                                        {
+                                            <li>@itm.Quantity × @itm.ProductName</li>
+                                        }
+                                    </ul>
+                                }
+                            }
+                            else
+                            {
+                                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                                    <span style="font-size: 0.8rem; color: var(--text-secondary);">قيمة الخصم:</span>
+                                    @if (offer.DiscountPercent > 0)
+                                    {
+                                        <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-amber);">خصم @offer.DiscountPercent%</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-amber);">خصم @offer.DiscountAmount.ToString("N2") ج.م</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">
+                            <div>من: @offer.StartDate.ToString("yyyy-MM-dd")</div>
+                            <div>إلى: @offer.EndDate.ToString("yyyy-MM-dd")</div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color-light);">
+                        <button class="btn @(offer.IsActive ? "btn-secondary" : "btn-primary")" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" @onclick="() => ToggleOfferStatus(offer)">
+                            <i class="fa-solid @(offer.IsActive ? "fa-pause" : "fa-play") me-1"></i>
+                            <span>@(offer.IsActive ? "تعطيل العرض" : "تفعيل العرض")</span>
+                        </button>
+                        <button class="btn btn-danger" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" @onclick="() => DeleteOffer(offer)">
+                            <i class="fa-solid fa-trash me-1"></i> حذف
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Modal: Create Offer / Bundle -->
+@if (showCreateModal)
+{
+    <div class="modal-overlay" @onclick="CloseCreateModal">
+        <div class="modal-card" style="max-width: 650px; width: 100%; max-height: 94vh; display: flex; flex-direction: column;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid fa-gift text-pink me-2"></i> إنشاء عرض ترويجي أو باقة مجمعة
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.35rem 0.65rem;" @onclick="CloseCreateModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="flex: 1; overflow-y: auto;">
+                @if (!string.IsNullOrEmpty(modalError))
+                {
+                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.65rem 1rem; border-radius: 0.5rem; margin-bottom: 0.85rem; font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @modalError
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label style="font-weight: 700; font-size: 0.85rem;">عنوان العرض (بالعربية) <span style="color: var(--accent-red);">*</span></label>
+                    <input class="form-control" @bind="formTitleAr" placeholder="مثال: بكج جهاز العروسة الذهبي، أو خصم خاص على ثلاجات شارب..." autofocus />
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight: 700; font-size: 0.85rem;">نوع العرض الترويجي <span style="color: var(--accent-red);">*</span></label>
+                    <select class="form-select" @bind="formOfferType">
+                        <option value="3">🎁 باقة مجمعة (بكج جهاز العروسة أو أطقم أجهزة)</option>
+                        <option value="2">🏷️ خصم على ماركة تجارية كاملة (مثال: خصم على كل منتجات فريش)</option>
+                        <option value="1">📂 خصم على تصنيف كامل (مثال: خصم على شاشات التلفزيون)</option>
+                        <option value="0">📦 خصم على منتج محدد</option>
+                    </select>
+                </div>
+
+                @if (formOfferType == 2)
+                {
+                    <div class="form-group">
+                        <label style="font-weight: 700; font-size: 0.85rem;">الماركة المستهدفة <span style="color: var(--accent-red);">*</span></label>
+                        <select class="form-select" @bind="formTargetBrandIdString">
+                            <option value="">-- اختر الماركة التجارية --</option>
+                            @foreach (var b in brands)
+                            {
+                                <option value="@b.Id.ToString()">@b.NameAr</option>
+                            }
+                        </select>
+                    </div>
+                }
+                else if (formOfferType == 1)
+                {
+                    <div class="form-group">
+                        <label style="font-weight: 700; font-size: 0.85rem;">التصنيف المستهدف <span style="color: var(--accent-red);">*</span></label>
+                        <select class="form-select" @bind="formTargetCategoryIdString">
+                            <option value="">-- اختر التصنيف --</option>
+                            @foreach (var c in categories)
+                            {
+                                <option value="@c.Id.ToString()">@c.NameAr</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                @if (formOfferType == 3)
+                {
+                    <!-- Bundle Package Items Builder -->
+                    <div style="background: rgba(236, 72, 153, 0.06); border: 1.5px dashed rgba(236, 72, 153, 0.4); border-radius: 0.6rem; padding: 1rem; margin-bottom: 1rem;">
+                        <h5 style="color: #ec4899; margin: 0 0 0.75rem 0; font-size: 0.92rem; font-weight: 800;">
+                            <i class="fa-solid fa-cubes-stacked me-1"></i> محتويات البكج (الأجهزة المشمولة في العرض):
+                        </h5>
+
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+                            <select class="form-select" @bind="selectedBundleProductIdString" style="flex: 2;">
+                                <option value="">-- اختر جهاز لإضافته للبكج --</option>
+                                @foreach (var p in availableProducts)
+                                {
+                                    <option value="@p.Id.ToString()">@p.NameAr (@p.SellingPrice.ToString("N0") ج.م)</option>
+                                }
+                            </select>
+                            <input type="number" class="form-control" @bind="selectedBundleQty" min="1" placeholder="الكمية" style="width: 80px;" />
+                            <button class="btn btn-secondary" type="button" @onclick="AddProductToBundle" style="white-space: nowrap;">
+                                <i class="fa-solid fa-plus"></i> إضافة
+                            </button>
+                        </div>
+
+                        @if (bundleItems.Any())
+                        {
+                            <div class="table-container" style="background: var(--bg-card); margin-bottom: 0.5rem;">
+                                <table class="data-table" style="font-size: 0.82rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>الجهاز</th>
+                                            <th>الكمية</th>
+                                            <th>سعر القطعة الأصلي</th>
+                                            <th>الإجمالي التقديري</th>
+                                            <th>إجراء</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var itm in bundleItems)
+                                        {
+                                            var prod = availableProducts.FirstOrDefault(p => p.Id == itm.ProductId);
+                                            <tr>
+                                                <td>@(prod?.NameAr ?? "منتج")</td>
+                                                <td>@itm.Quantity</td>
+                                                <td>@prod?.SellingPrice.ToString("N2") ج.م</td>
+                                                <td>@((prod != null ? prod.SellingPrice * itm.Quantity : 0).ToString("N2")) ج.م</td>
+                                                <td>
+                                                    <button class="btn btn-danger" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;" @onclick="() => bundleItems.Remove(itm)">
+                                                        <i class="fa-solid fa-xmark"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+
+                        <div class="form-group" style="margin-bottom: 0; margin-top: 0.5rem;">
+                            <label style="font-weight: 800; font-size: 0.88rem; color: var(--accent-emerald);">سعر البكج الإجمالي المعروض للعميل (ج.م) <span style="color: var(--accent-red);">*</span></label>
+                            <input type="number" step="0.01" class="form-control" @bind="formPackagePrice" style="font-size: 1.15rem; font-weight: 800; color: var(--accent-emerald);" />
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label style="font-weight: 700; font-size: 0.85rem;">نسبة الخصم المئوية (%)</label>
+                            <input type="number" step="0.5" class="form-control" @bind="formDiscountPercent" placeholder="مثال: 10 أو 15..." />
+                        </div>
+                        <div class="form-group">
+                            <label style="font-weight: 700; font-size: 0.85rem;">أو خصم بمبلغ نقدي ثابت (ج.م)</label>
+                            <input type="number" step="10" class="form-control" @bind="formDiscountAmount" placeholder="مثال: 500 أو 1000..." />
+                        </div>
+                    </div>
+                }
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label style="font-weight: 700; font-size: 0.85rem;">تاريخ بدء العرض <span style="color: var(--accent-red);">*</span></label>
+                        <input type="date" class="form-control" @bind="formStartDate" />
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight: 700; font-size: 0.85rem;">تاريخ انتهاء العرض <span style="color: var(--accent-red);">*</span></label>
+                        <input type="date" class="form-control" @bind="formEndDate" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight: 700; font-size: 0.85rem;">وصف العرض / تفاصيل الحملة</label>
+                    <textarea class="form-control" @bind="formDescription" rows="2" placeholder="وصف تفصيلي للعرض الترويجي..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                <button class="btn btn-secondary" @onclick="CloseCreateModal">إلغاء</button>
+                <button class="btn btn-primary" @onclick="SaveOfferAsync" disabled="@isSubmitting">
+                    @if (isSubmitting)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-check me-1"></i>
+                    }
+                    <span>حفظ ونشر العرض</span>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<OfferDto> offers = new();
+    private List<BrandDto> brands = new();
+    private List<CategoryDto> categories = new();
+    private List<ProductDto> availableProducts = new();
+
+    private string searchQuery = "";
+    private int? selectedTypeFilter = null;
+    private bool isLoading = true;
+
+    // Create Modal
+    private bool showCreateModal = false;
+    private bool isSubmitting = false;
+    private string? modalError = null;
+
+    private string formTitleAr = "";
+    private string formTitleEn = "";
+    private string formDescription = "";
+    private int formOfferType = 3; // Bundle default
+    private decimal formDiscountPercent = 0;
+    private decimal formDiscountAmount = 0;
+    private decimal formPackagePrice = 0;
+    private DateTime formStartDate = DateTime.Today;
+    private DateTime formEndDate = DateTime.Today.AddDays(30);
+    private string formTargetBrandIdString = "";
+    private string formTargetCategoryIdString = "";
+
+    // Bundle Items
+    private string selectedBundleProductIdString = "";
+    private int selectedBundleQty = 1;
+    private List<CreateOfferItemRequest> bundleItems = new();
+
+    private List<OfferDto> filteredOffers => offers
+        .Where(o => (string.IsNullOrWhiteSpace(searchQuery)
+                || o.TitleAr.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+                || (o.Description != null && o.Description.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)))
+            && (!selectedTypeFilter.HasValue || (selectedTypeFilter == 3 && o.OfferType == "BundlePackage")
+                || (selectedTypeFilter == 2 && o.OfferType == "BrandDiscount")
+                || (selectedTypeFilter == 0 && (o.OfferType == "ProductDiscount" || o.OfferType == "CategoryDiscount"))))
+        .OrderByDescending(o => o.StartDate)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var taskOffers = ApiClient.GetOffersAsync();
+            var taskBrands = ApiClient.GetBrandsAsync(onlyActive: true);
+            var taskCategories = ApiClient.GetCategoriesAsync();
+            var taskProducts = ApiClient.GetProductsAsync();
+
+            await Task.WhenAll(taskOffers, taskBrands, taskCategories, taskProducts);
+
+            offers = taskOffers.Result;
+            brands = taskBrands.Result;
+            categories = taskCategories.Result;
+            availableProducts = taskProducts.Result;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void FilterByType(int? type)
+    {
+        selectedTypeFilter = type;
+    }
+
+    private void OpenCreateOfferModal()
+    {
+        formTitleAr = "";
+        formTitleEn = "";
+        formDescription = "";
+        formOfferType = 3;
+        formDiscountPercent = 0;
+        formDiscountAmount = 0;
+        formPackagePrice = 0;
+        formStartDate = DateTime.Today;
+        formEndDate = DateTime.Today.AddDays(30);
+        formTargetBrandIdString = "";
+        formTargetCategoryIdString = "";
+        bundleItems.Clear();
+        modalError = null;
+        showCreateModal = true;
+    }
+
+    private void CloseCreateModal()
+    {
+        showCreateModal = false;
+    }
+
+    private void AddProductToBundle()
+    {
+        if (Guid.TryParse(selectedBundleProductIdString, out var pId) && selectedBundleQty > 0)
+        {
+            var existing = bundleItems.FirstOrDefault(b => b.ProductId == pId);
+            if (existing != null)
+            {
+                bundleItems.Remove(existing);
+                bundleItems.Add(new CreateOfferItemRequest(pId, existing.Quantity + selectedBundleQty, 0));
+            }
+            else
+            {
+                bundleItems.Add(new CreateOfferItemRequest(pId, selectedBundleQty, 0));
+            }
+            selectedBundleProductIdString = "";
+            selectedBundleQty = 1;
+        }
+    }
+
+    private async Task SaveOfferAsync()
+    {
+        if (string.IsNullOrWhiteSpace(formTitleAr))
+        {
+            modalError = "يرجى إدخال عنوان العرض بالعربية.";
+            return;
+        }
+
+        if (formEndDate < formStartDate)
+        {
+            modalError = "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء.";
+            return;
+        }
+
+        if (formOfferType == 3 && (!bundleItems.Any() || formPackagePrice <= 0))
+        {
+            modalError = "يرجى إضافة جهاز واحد على الأقل وتحديد سعر إجمالي للباقة.";
+            return;
+        }
+
+        Guid? targetBrand = Guid.TryParse(formTargetBrandIdString, out var bId) ? bId : null;
+        Guid? targetCategory = Guid.TryParse(formTargetCategoryIdString, out var cId) ? cId : null;
+
+        isSubmitting = true;
+        modalError = null;
+        try
+        {
+            var req = new CreateOfferRequest(
+                formTitleAr.Trim(),
+                string.IsNullOrWhiteSpace(formTitleEn) ? null : formTitleEn.Trim(),
+                string.IsNullOrWhiteSpace(formDescription) ? null : formDescription.Trim(),
+                formOfferType,
+                formDiscountPercent,
+                formDiscountAmount,
+                formPackagePrice,
+                formStartDate,
+                formEndDate,
+                targetCategory,
+                targetBrand,
+                formOfferType == 3 ? bundleItems : null);
+
+            var (id, err) = await ApiClient.CreateOfferAsync(req);
+            if (id == null)
+            {
+                modalError = err ?? "فشل حفظ العرض.";
+                return;
+            }
+
+            showCreateModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            modalError = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task ToggleOfferStatus(OfferDto offer)
+    {
+        var (success, err) = await ApiClient.ToggleOfferStatusAsync(offer.Id);
+        if (success)
+        {
+            await LoadDataAsync();
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", err ?? "فشل تغيير حالة العرض.");
+        }
+    }
+
+    private async Task DeleteOffer(OfferDto offer)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"هل أنت متأكد من حذف العرض '{offer.TitleAr}'؟");
+        if (confirmed)
+        {
+            var (success, err) = await ApiClient.DeleteOfferAsync(offer.Id);
+            if (success)
+            {
+                await LoadDataAsync();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", err ?? "فشل حذف العرض.");
+            }
+        }
+    }
+}

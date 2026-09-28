@@ -1,0 +1,355 @@
+@page "/brands"
+@using Microsoft.AspNetCore.Authorization
+@using global::POS.Desktop.Services.Api
+@using global::POS.Desktop.Services.Auth
+@using global::POS.Desktop.Services.State
+@attribute [Authorize]
+@inject PosApiClient ApiClient
+@inject CustomAuthStateProvider AuthState
+@inject IJSRuntime JS
+
+<div>
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">
+                <i class="fa-solid fa-copyright text-cyan me-2"></i> الماركات التجارية والتوكيلات
+            </h2>
+            <p class="page-subtitle">إدارة الشركات المصنعة، بلد المنشأ، ومراكز صيانة الأجهزة الكهربائية</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button class="btn btn-primary" @onclick="OpenAddModal">
+                <i class="fa-solid fa-plus me-1"></i> إضافة ماركة جديدة
+            </button>
+        </div>
+    </div>
+
+    <!-- Search & Summary Bar -->
+    <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; align-items: center; flex-wrap: wrap;">
+        <div class="search-box" style="max-width: 380px; flex: 1;">
+            <i class="fa-solid fa-search"></i>
+            <input @bind="searchQuery" @bind:event="oninput" placeholder="بحث بالاسم أو بلد المنشأ أو الهاتف..." />
+        </div>
+        <div style="font-size: 0.88rem; color: var(--text-secondary);">
+            إجمالي الماركات: <strong style="color: var(--text-primary);">@filteredBrands.Count</strong>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div style="text-align: center; padding: 4rem; color: var(--text-secondary);">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 1rem; color: var(--accent-indigo);"></i>
+            <div>جاري تحميل الماركات التجارية...</div>
+        </div>
+    }
+    else if (!filteredBrands.Any())
+    {
+        <div class="card" style="text-align: center; padding: 3.5rem 1.5rem; color: var(--text-muted);">
+            <i class="fa-solid fa-tags" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.4;"></i>
+            <h4>لا توجد ماركات تجارية مطابقة</h4>
+            <p style="font-size: 0.88rem;">يمكنك إضافة ماركة تجارية جديدة مثل (سامسونج، شارب، توشيبا، فريش، إل جي).</p>
+            <button class="btn btn-primary mt-2" @onclick="OpenAddModal" style="margin: auto;">
+                <i class="fa-solid fa-plus me-1"></i> إضافة أول ماركة
+            </button>
+        </div>
+    }
+    else
+    {
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+            @foreach (var brand in filteredBrands)
+            {
+                <div class="card" style="padding: 1.25rem; border-radius: 0.75rem; border: 1px solid var(--border-color); background: var(--bg-card); display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.2s, box-shadow 0.2s;">
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                <div style="width: 42px; height: 42px; border-radius: 0.5rem; background: rgba(99, 102, 241, 0.12); color: var(--accent-indigo); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: 800;">
+                                    <i class="fa-solid fa-award"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">@brand.NameAr</h4>
+                                    @if (!string.IsNullOrWhiteSpace(brand.NameEn))
+                                    {
+                                        <div style="font-size: 0.78rem; color: var(--text-secondary); direction: ltr; text-align: right;">@brand.NameEn</div>
+                                    }
+                                </div>
+                            </div>
+                            <span class="badge @(brand.IsActive ? "badge-success" : "badge-secondary")" style="font-size: 0.72rem;">
+                                @(brand.IsActive ? "نشط" : "غير نشط")
+                            </span>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(brand.Description))
+                        {
+                            <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.4;">
+                                @brand.Description
+                            </p>
+                        }
+
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.8rem; color: var(--text-muted); padding-top: 0.5rem; border-top: 1px solid var(--border-color-light);">
+                            @if (!string.IsNullOrWhiteSpace(brand.OriginCountry))
+                            {
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <i class="fa-solid fa-earth-americas text-blue" style="width: 16px;"></i>
+                                    <span>بلد المنشأ: <strong style="color: var(--text-primary);">@brand.OriginCountry</strong></span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(brand.AgentContactNumber))
+                            {
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <i class="fa-solid fa-headset text-green" style="width: 16px;"></i>
+                                    <span>خدمة الصيانة والضمان: <strong style="color: var(--text-primary); direction: ltr;">@brand.AgentContactNumber</strong></span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color-light);">
+                        <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" @onclick="() => OpenEditModal(brand)" title="تعديل">
+                            <i class="fa-solid fa-pen-to-square"></i> تعديل
+                        </button>
+                        <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" @onclick="() => ConfirmDelete(brand)" title="حذف">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Modal Create / Edit Brand -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" style="max-width: 520px; width: 100%;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid @(isEditing ? "fa-pen-to-square text-amber" : "fa-plus text-indigo") me-2"></i>
+                    <span>@(isEditing ? "تعديل بيانات الماركة" : "إضافة ماركة تجارية جديدة")</span>
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.35rem 0.65rem;" @onclick="CloseModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(modalError))
+                {
+                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.65rem 1rem; border-radius: 0.5rem; margin-bottom: 0.85rem; font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @modalError
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label style="font-weight: 700; font-size: 0.85rem;">اسم الماركة (بالعربية)</label>
+                    <input class="form-control" @bind="formNameAr" placeholder="مثال: توشيبا، سامسونج، شارب، فريش..." autofocus />
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight: 700; font-size: 0.85rem;">اسم الماركة (بالإنجليزية) <span style="font-size: 0.75rem; font-weight: normal; color: var(--text-muted);">(اختياري)</span></label>
+                    <input class="form-control" @bind="formNameEn" placeholder="مثال: Toshiba, Samsung, Sharp..." />
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label style="font-weight: 700; font-size: 0.85rem;">بلد المنشأ والتصنيع <span style="font-size: 0.75rem; font-weight: normal; color: var(--text-muted);">(اختياري)</span></label>
+                        <input class="form-control" @bind="formOriginCountry" placeholder="مثال: مصر، اليابان، كوريا الجنوبية..." />
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight: 700; font-size: 0.85rem;">هاتف الصيانة / الخط الساخن <span style="font-size: 0.75rem; font-weight: normal; color: var(--text-muted);">(اختياري)</span></label>
+                        <input class="form-control" @bind="formAgentContactNumber" placeholder="مثال: 19319 أو 010..." />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight: 700; font-size: 0.85rem;">ملاحظات / وصف الماركة <span style="font-size: 0.75rem; font-weight: normal; color: var(--text-muted);">(اختياري)</span></label>
+                    <textarea class="form-control" @bind="formDescription" rows="2" placeholder="معلومات عن الوكيل أو التغطية..."></textarea>
+                </div>
+
+                @if (isEditing)
+                {
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="brand-is-active" @bind="formIsActive" style="width: 18px; height: 18px;" />
+                        <label for="brand-is-active" style="margin-bottom: 0; cursor: pointer; font-weight: 600;">الماركة نشطة ومتاحة في الكتالوج</label>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                <button class="btn btn-secondary" @onclick="CloseModal">إلغاء</button>
+                <button class="btn btn-primary" @onclick="SaveBrandAsync" disabled="@isSubmitting">
+                    @if (isSubmitting)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-check me-1"></i>
+                    }
+                    <span>@(isEditing ? "تحديث" : "حفظ")</span>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BrandDto> brands = new();
+    private string searchQuery = "";
+    private bool isLoading = true;
+    private bool showModal = false;
+    private bool isEditing = false;
+    private bool isSubmitting = false;
+    private string? modalError = null;
+
+    private Guid editingBrandId = Guid.Empty;
+    private string formNameAr = "";
+    private string formNameEn = "";
+    private string formDescription = "";
+    private string formOriginCountry = "";
+    private string formAgentContactNumber = "";
+    private bool formIsActive = true;
+
+    private List<BrandDto> filteredBrands => brands
+        .Where(b => string.IsNullOrWhiteSpace(searchQuery)
+            || b.NameAr.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+            || (b.NameEn != null && b.NameEn.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+            || (b.OriginCountry != null && b.OriginCountry.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+            || (b.AgentContactNumber != null && b.AgentContactNumber.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBrandsAsync();
+    }
+
+    private async Task LoadBrandsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            brands = await ApiClient.GetBrandsAsync(onlyActive: false);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenAddModal()
+    {
+        isEditing = false;
+        editingBrandId = Guid.Empty;
+        formNameAr = "";
+        formNameEn = "";
+        formDescription = "";
+        formOriginCountry = "";
+        formAgentContactNumber = "";
+        formIsActive = true;
+        modalError = null;
+        showModal = true;
+    }
+
+    private void OpenEditModal(BrandDto brand)
+    {
+        isEditing = true;
+        editingBrandId = brand.Id;
+        formNameAr = brand.NameAr;
+        formNameEn = brand.NameEn ?? "";
+        formDescription = brand.Description ?? "";
+        formOriginCountry = brand.OriginCountry ?? "";
+        formAgentContactNumber = brand.AgentContactNumber ?? "";
+        formIsActive = brand.IsActive;
+        modalError = null;
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+
+    private async Task SaveBrandAsync()
+    {
+        if (string.IsNullOrWhiteSpace(formNameAr) && string.IsNullOrWhiteSpace(formNameEn))
+        {
+            modalError = "يرجى إدخال اسم الماركة على الأقل (بالعربية أو الإنجليزية).";
+            return;
+        }
+
+        isSubmitting = true;
+        modalError = null;
+        try
+        {
+            var brandNameAr = string.IsNullOrWhiteSpace(formNameAr) ? null : formNameAr.Trim();
+            var brandNameEn = string.IsNullOrWhiteSpace(formNameEn) ? null : formNameEn.Trim();
+            var brandDesc = string.IsNullOrWhiteSpace(formDescription) ? null : formDescription.Trim();
+            var brandOrigin = string.IsNullOrWhiteSpace(formOriginCountry) ? null : formOriginCountry.Trim();
+            var brandPhone = string.IsNullOrWhiteSpace(formAgentContactNumber) ? null : formAgentContactNumber.Trim();
+
+            if (isEditing)
+            {
+                var req = new UpdateBrandRequest(
+                    editingBrandId,
+                    brandNameAr,
+                    brandNameEn,
+                    brandDesc,
+                    brandOrigin,
+                    brandPhone,
+                    formIsActive);
+
+                var (success, err) = await ApiClient.UpdateBrandAsync(req);
+                if (!success)
+                {
+                    modalError = err ?? "فشل تعديل الماركة.";
+                    return;
+                }
+            }
+            else
+            {
+                var req = new CreateBrandRequest(
+                    brandNameAr,
+                    brandNameEn,
+                    brandDesc,
+                    brandOrigin,
+                    brandPhone);
+
+                var (id, err) = await ApiClient.CreateBrandAsync(req);
+                if (id == null)
+                {
+                    modalError = err ?? "فشل حفظ الماركة.";
+                    return;
+                }
+            }
+
+            showModal = false;
+            await LoadBrandsAsync();
+        }
+        catch (Exception ex)
+        {
+            modalError = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task ConfirmDelete(BrandDto brand)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"هل أنت متأكد من حذف ماركة '{brand.NameAr}'؟");
+        if (confirmed)
+        {
+            var (success, err) = await ApiClient.DeleteBrandAsync(brand.Id);
+            if (success)
+            {
+                await LoadBrandsAsync();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", err ?? "تعذر حذف الماركة لوجود منتجات مرتبطة بها.");
+            }
+        }
+    }
+}

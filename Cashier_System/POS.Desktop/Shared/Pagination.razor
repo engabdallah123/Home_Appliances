@@ -1,0 +1,116 @@
+@if (TotalItems > 0)
+{
+    <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.25rem; background-color: var(--bg-secondary); border-top: 1px solid var(--border-color); border-radius: 0 0 0.85rem 0.85rem; margin-top: -1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">
+                عرض <strong style="color: var(--text-primary);">@StartIndex</strong> إلى <strong style="color: var(--text-primary);">@EndIndex</strong> من إجمالي <strong style="color: var(--accent-indigo);">@TotalItems</strong> عنصر
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-secondary);">
+                <span>العناصر لكل صفحة:</span>
+                <select class="form-select" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; width: auto; background-color: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.35rem; cursor: pointer;" value="@PageSize" @onchange="ChangePageSize">
+                    @foreach (var option in PageSizeOptions)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (TotalPages > 1)
+        {
+            <div style="display: flex; gap: 0.35rem; align-items: center;">
+                <button class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;" disabled="@(CurrentPage <= 1)" @onclick="() => SelectPage(CurrentPage - 1)">
+                    <i class="fa-solid fa-chevron-right ms-1"></i> السابق
+                </button>
+
+                @foreach (var p in GetVisiblePages())
+                {
+                    if (p == -1)
+                    {
+                        <span style="padding: 0 0.3rem; color: var(--text-muted); font-size: 0.85rem;">...</span>
+                    }
+                    else
+                    {
+                        <button class="btn @(p == CurrentPage ? "btn-primary" : "btn-secondary")"
+                                style="padding: 0.35rem 0.65rem; font-size: 0.8rem; min-width: 34px;"
+                                @onclick="() => SelectPage(p)">
+                            @p
+                        </button>
+                    }
+                }
+
+                <button class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;" disabled="@(CurrentPage >= TotalPages)" @onclick="() => SelectPage(CurrentPage + 1)">
+                    التالي <i class="fa-solid fa-chevron-left me-1"></i>
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int CurrentPage { get; set; } = 1;
+    [Parameter] public int TotalItems { get; set; }
+    [Parameter] public int PageSize { get; set; } = 10;
+    [Parameter] public int[] PageSizeOptions { get; set; } = new[] { 5, 10, 15, 20, 50, 100 };
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+    [Parameter] public EventCallback<int> OnPageSizeChanged { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (PageSize > 0 && !PageSizeOptions.Contains(PageSize))
+        {
+            PageSizeOptions = PageSizeOptions.Append(PageSize).OrderBy(x => x).ToArray();
+        }
+    }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)TotalItems / PageSize));
+    private int StartIndex => TotalItems == 0 ? 0 : (CurrentPage - 1) * PageSize + 1;
+    private int EndIndex => Math.Min(CurrentPage * PageSize, TotalItems);
+
+    private async Task SelectPage(int page)
+    {
+        if (page < 1 || page > TotalPages || page == CurrentPage) return;
+        CurrentPage = page;
+        await OnPageChanged.InvokeAsync(page);
+    }
+
+    private async Task ChangePageSize(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int newSize) && newSize > 0)
+        {
+            PageSize = newSize;
+            await OnPageSizeChanged.InvokeAsync(newSize);
+        }
+    }
+
+    private IEnumerable<int> GetVisiblePages()
+    {
+        var pages = new List<int>();
+        int total = TotalPages;
+        int current = CurrentPage;
+
+        if (total <= 7)
+        {
+            for (int i = 1; i <= total; i++) pages.Add(i);
+        }
+        else
+        {
+            pages.Add(1);
+            if (current > 3) pages.Add(-1);
+
+            int start = Math.Max(2, current - 1);
+            int end = Math.Min(total - 1, current + 1);
+
+            if (current <= 3) end = 4;
+            if (current >= total - 2) start = total - 3;
+
+            for (int i = start; i <= end; i++) pages.Add(i);
+
+            if (current < total - 2) pages.Add(-1);
+            pages.Add(total);
+        }
+
+        return pages;
+    }
+}

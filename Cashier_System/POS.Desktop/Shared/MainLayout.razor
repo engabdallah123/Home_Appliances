@@ -1,0 +1,240 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@using Microsoft.AspNetCore.Components.Authorization
+@using global::POS.Desktop.Pages
+@inject CustomAuthStateProvider AuthState
+@inject ShiftStateContainer ShiftState
+@inject CalculatorStateContainer CalcState
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject global::POS.Desktop.Services.Sync.ICloudSyncService CloudSync
+
+<style>
+    .topbar-btn-price {
+        background: linear-gradient(135deg, #4f46e5, #6366f1);
+        color: #ffffff !important;
+        text-decoration: none;
+        padding: 0.45rem 0.95rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+        transition: all 0.2s ease;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        cursor: pointer;
+    }
+    .topbar-btn-price:hover {
+        transform: translateY(-1.5px);
+        box-shadow: 0 6px 16px rgba(99, 102, 241, 0.5);
+        color: #ffffff !important;
+        background: linear-gradient(135deg, #4338ca, #4f46e5);
+    }
+</style>
+
+<div class="app-container @(isSidebarCollapsed ? "sidebar-collapsed" : "")">
+    <NavMenu IsCollapsed="@isSidebarCollapsed" OnToggle="ToggleSidebar" />
+
+    <div class="main-content">
+        <header class="top-bar">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <!-- Sidebar Toggle Icon Button -->
+                <button type="button" class="sidebar-toggle-btn" @onclick="ToggleSidebar" title="طي / توسيع القائمة الجانبية وتوسيع الصفحة">
+                    <i class="fa-solid @(isSidebarCollapsed ? "fa-bars-staggered" : "fa-bars")"></i>
+                </button>
+
+                <span class="badge @(ShiftState.IsShiftOpen ? "badge-green" : "badge-red")">
+                    <i class="fa-solid fa-circle" style="font-size: 0.5rem;"></i>
+                    @(ShiftState.IsShiftOpen ? $"الوردية مفتوحة (#{ShiftState.ShiftId.ToString()[..6]})" : "الوردية مغلقة")
+                </span>
+
+                <!-- Price Check Top Bar Button (Direct Full Screen Navigation) -->
+                <NavLink href="price-check" class="topbar-btn-price" title="استعلام فوري عن سعر منتج بالباركود [Alt + B]">
+                    <i class="fa-solid fa-barcode"></i>
+                    <span>الاستعلام عن السعر</span>
+                </NavLink>
+
+                <!-- Professional Smart Calculator Top Bar Button -->
+                <button type="button" class="topbar-btn-calc" @onclick="() => CalcState.Toggle()" title="آلة حاسبة ذكية وسريعة [F10 / Alt + C]">
+                    <i class="fa-solid fa-calculator"></i>
+                    <span>آلة حاسبة</span>
+                </button>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <!-- Cloud Sync Status Pill Button (Green = Synced, Yellow = Syncing, Slate = Offline, Red = Failed) -->
+                @{
+                    bool isOffline = CloudSync.IsOffline;
+                    bool isSyncing = CloudSync.IsSyncing && !isOffline;
+                    bool isFailed = !isSyncing && !isOffline && (CloudSync.LastSyncSucceeded == false || !CloudSync.IsCloudReachable);
+                    bool isSuccess = !isSyncing && !isFailed && !isOffline;
+
+                    string syncColor = isOffline ? "#94a3b8" : (isSyncing ? "#f59e0b" : (isFailed ? "#ef4444" : "#10b981"));
+                    string syncBg = isOffline ? "rgba(148, 163, 184, 0.12)" : (isSyncing ? "rgba(245, 158, 11, 0.12)" : (isFailed ? "rgba(239, 68, 68, 0.12)" : "rgba(16, 185, 129, 0.12)"));
+                    string syncBorder = isOffline ? "rgba(148, 163, 184, 0.3)" : (isSyncing ? "rgba(245, 158, 11, 0.4)" : (isFailed ? "rgba(239, 68, 68, 0.4)" : "rgba(16, 185, 129, 0.4)"));
+                    string syncIcon = isOffline ? "fa-solid fa-cloud-slash" : (isSyncing ? "fa-solid fa-cloud-arrow-up fa-bounce" : (isFailed ? "fa-solid fa-cloud-xmark" : "fa-solid fa-cloud"));
+                    string syncLabel = isOffline ? "غير متصل بالإنترنت" : (isSyncing ? "مزامنة جارية..." : (isFailed ? "تعذر المزامنة" : "السحابة متزامنة"));
+                    string syncTooltip = isOffline ? "الكمبيوتر غير متصل بالإنترنت، سيتم استئناف المزامنة تلقائياً عند توفر الإنترنت." : (isSyncing ? "جاري مزامنة البيانات مع السحابة والموبايل حالياً..." : (CloudSync.LastSyncStatus ?? (isFailed ? "تعذر الاتصال بالسحابة" : "تمت المزامنة بنجاح")));
+                }
+                <button type="button" class="btn" style="background: @syncBg; border: 1px solid @syncBorder; color: @syncColor; padding: 0.45rem 0.85rem; font-size: 0.82rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.45rem; cursor: pointer; border-radius: 8px; transition: all 0.2s ease;" @onclick="TriggerHeaderSync" disabled="@(CloudSync.IsSyncing || CloudSync.IsOffline)" title="@syncTooltip">
+                    <i class="@syncIcon" style="color: @syncColor; font-size: 0.95rem;"></i>
+                    <span>@syncLabel</span>
+                </button>
+
+                <!-- Light / Dark Theme Switcher Button -->
+                <button class="btn btn-secondary" style="padding: 0.45rem 0.85rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem; cursor: pointer;" @onclick="ToggleTheme" title="تغيير مظهر البرنامج">
+                    <i class="fa-solid @(isDarkMode ? "fa-sun" : "fa-moon")" style="color: @(isDarkMode ? "#f59e0b" : "#6366f1")"></i>
+                    <span>@(isDarkMode ? "المظهر الفاتح" : "المظهر الداكن")</span>
+                </button>
+
+                <div class="user-profile-badge">
+                    <div class="user-avatar">
+                        @((AuthState.UserFullName ?? "م")[0])
+                    </div>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary);">@(AuthState.UserFullName ?? "مستخدم الكاشير")</span>
+                        <span style="font-size: 0.72rem; color: var(--accent-blue); font-weight: 600;">@(IsAdminOrManager ? "مدير النظام" : "كاشير")</span>
+                    </div>
+                </div>
+
+                <button class="btn btn-secondary" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;" @onclick="Logout" title="تسجيل الخروج">
+                    <i class="fa-solid fa-right-from-bracket me-1"></i> تسجيل خروج
+                </button>
+            </div>
+        </header>
+
+        <main class="page-body">
+            @Body
+        </main>
+    </div>
+</div>
+
+<!-- Standalone Global Smart Calculator Modal Window -->
+<CalculatorModal />
+
+<!-- 3A Tech Customer Care & Direct Support Modal -->
+<SupportModal IsVisible="@showSupportModal" OnClose="() => showSupportModal = false" />
+
+@code {
+    private bool isDarkMode = true;
+    private bool isSidebarCollapsed = false;
+    private bool showSupportModal = false;
+
+    private bool IsAdminOrManager =>
+        string.Equals(AuthState.UserRole, "Admin", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(AuthState.UserRole, "Manager", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(AuthState.UserRole, "Administrator", StringComparison.OrdinalIgnoreCase);
+
+    private void ToggleSidebar()
+    {
+        isSidebarCollapsed = !isSidebarCollapsed;
+        StateHasChanged();
+    }
+
+    private DotNetObjectReference<MainLayout>? _dotNetRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var theme = await JS.InvokeAsync<string>("getAppTheme");
+                isDarkMode = theme != "light";
+                await JS.InvokeVoidAsync("setAppTheme", isDarkMode ? "dark" : "light");
+
+                _dotNetRef = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("initGlobalNavigationShortcuts", _dotNetRef);
+
+                StateHasChanged();
+            }
+            catch
+            {
+                // Fallback if JS call fails during startup
+            }
+        }
+    }
+
+    [JSInvokable]
+    public void OpenQuickWindow(string route)
+    {
+        Nav.NavigateTo(route);
+        if (route == "price-check")
+        {
+            _ = JS.InvokeVoidAsync("focusElementById", "price-check-barcode-input", 120);
+        }
+        else if (route == "products")
+        {
+            _ = JS.InvokeVoidAsync("focusElementById", "product-quick-scan-barcode", 120);
+        }
+        else if (route == "purchases")
+        {
+            _ = JS.InvokeVoidAsync("focusElementById", "purchase-barcode-input", 120);
+        }
+        else if (route == "pos" || route == "home" || string.IsNullOrEmpty(route))
+        {
+            _ = JS.InvokeVoidAsync("focusElementById", "pos-barcode-input", 100);
+        }
+    }
+
+    [JSInvokable]
+    public void ToggleCalculatorModal()
+    {
+        CalcState.Toggle();
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnGlobalEscPressed()
+    {
+        if (CalcState.IsOpen)
+        {
+            CalcState.Close();
+            StateHasChanged();
+            _ = JS.InvokeVoidAsync("focusElementById", "pos-barcode-input", 50);
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        ShiftState.OnShiftStateChanged += StateHasChanged;
+        CalcState.OnStateChanged += StateHasChanged;
+        AuthState.AuthenticationStateChanged += OnAuthStateChanged;
+        CloudSync.OnSyncStateChanged += StateHasChanged;
+    }
+
+    private async Task TriggerHeaderSync()
+    {
+        await CloudSync.SyncNowAsync();
+        StateHasChanged();
+    }
+
+    private async void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleTheme()
+    {
+        isDarkMode = !isDarkMode;
+        var themeStr = isDarkMode ? "dark" : "light";
+        await JS.InvokeVoidAsync("setAppTheme", themeStr);
+    }
+
+    private void Logout()
+    {
+        AuthState.MarkUserAsLoggedOut();
+        Nav.NavigateTo("/");
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+        ShiftState.OnShiftStateChanged -= StateHasChanged;
+        CalcState.OnStateChanged -= StateHasChanged;
+        AuthState.AuthenticationStateChanged -= OnAuthStateChanged;
+        CloudSync.OnSyncStateChanged -= StateHasChanged;
+    }
+}

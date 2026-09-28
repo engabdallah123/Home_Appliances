@@ -1,0 +1,453 @@
+@page "/categories"
+@using Microsoft.AspNetCore.Authorization
+@using global::POS.Desktop.Services.Api
+@using global::POS.Desktop.Services.Auth
+@using global::POS.Desktop.Services.Sync
+@attribute [Authorize]
+@inject PosApiClient ApiClient
+@inject CustomAuthStateProvider AuthState
+@inject ICloudSyncService CloudSync
+@implements IDisposable
+
+<div>
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">إدارة التصنيفات</h2>
+            <p class="page-subtitle">تنظيم المنتجات في تصنيفات رئيسية وفرعية</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button class="btn btn-secondary" @onclick="LoadCategories" title="تحديث القائمة يدوياً">
+                <i class="fa-solid fa-rotate @(CloudSync.IsSyncing ? "fa-spin" : "") me-1"></i> تحديث
+            </button>
+            @if (CanManageCategories)
+            {
+                <button class="btn btn-primary" @onclick="OpenAddModal">
+                    <i class="fa-solid fa-plus me-1"></i> إضافة تصنيف جديد
+                </button>
+            }
+        </div>
+    </div>
+
+    <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; align-items: center;">
+        <div class="search-box" style="max-width: 380px;">
+            <i class="fa-solid fa-search"></i>
+            <input @bind="searchQuery" @bind:event="oninput" @onkeyup="FilterCategories" placeholder="ابحث عن تصنيف..." />
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+            إجمالي التصنيفات: <strong style="color: var(--text-primary);">@filteredCategories.Count</strong>
+        </div>
+    </div>
+
+    <div class="table-container" style="overflow: visible;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>اسم التصنيف</th>
+                    <th>التصنيف الرئيسي</th>
+                    <th>الحالة</th>
+                    <th>تاريخ الإنشاء</th>
+                    @if (CanManageCategories)
+                    {
+                        <th style="width: 120px; text-align: center;">الإجراءات</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @if (!filteredCategories.Any())
+                {
+                    <tr>
+                        <td colspan="@(CanManageCategories ? 5 : 4)" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+                            <i class="fa-solid fa-folder-open" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+                            لا توجد تصنيفات حالياً.
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    var pagedList = PagedCategories.ToList();
+                    for (int i = 0; i < pagedList.Count; i++)
+                    {
+                        var cat = pagedList[i];
+                        var parent = categories.FirstOrDefault(c => c.Id == cat.ParentCategoryId);
+                        <tr>
+                            <td style="font-weight: 600;">@cat.NameAr</td>
+                            <td>
+                                @if (parent != null)
+                                {
+                                    <span class="badge badge-indigo">
+                                        <i class="fa-solid fa-folder me-1"></i> @parent.NameAr
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span style="color: var(--text-muted); font-size: 0.85rem;">تصنيف رئيسي</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="badge @(cat.IsActive ? "badge-green" : "badge-red")" style="cursor: pointer;" @onclick="() => ToggleCategoryStatus(cat)" title="اضغط لتغيير حالة النشاط">
+                                    <i class="fa-solid fa-circle" style="font-size: 0.45rem;"></i>
+                                    @(cat.IsActive ? "نشط" : "غير نشط")
+                                </span>
+                            </td>
+                            <td>@(cat.CreatedAt == default ? "-" : cat.CreatedAt.ToString("yyyy-MM-dd HH:mm"))</td>
+                            @if (CanManageCategories)
+                            {
+                                <td style="text-align: center;">
+                                    <div class="action-dropdown-container @(activeMenuCategoryId == cat.Id ? "active" : "")">
+                                        <button class="action-dropdown-btn @(activeMenuCategoryId == cat.Id ? "active" : "")" @onclick="() => ToggleCategoryMenu(cat.Id)">
+                                            <i class="fa-solid fa-sliders"></i>
+                                            <span>خيارات</span>
+                                            <i class="fa-solid fa-chevron-down" style="font-size: 0.65rem;"></i>
+                                        </button>
+                                        @if (activeMenuCategoryId == cat.Id)
+                                        {
+                                            <div class="action-dropdown-backdrop" @onclick="CloseCategoryMenu"></div>
+                                            <div class="action-dropdown-menu" @onclick:stopPropagation="true">
+                                                <button class="action-dropdown-item item-primary" @onclick="() => { CloseCategoryMenu(); OpenEditModal(cat); }">
+                                                    <i class="fa-solid fa-pen-to-square" style="color: var(--accent-blue);"></i>
+                                                    <span>تعديل البيانات</span>
+                                                </button>
+                                                <button class="action-dropdown-item @(cat.IsActive ? "item-warning" : "item-success")" @onclick="() => ToggleCategoryStatus(cat)">
+                                                    <i class="fa-solid @(cat.IsActive ? "fa-ban" : "fa-circle-check")" style="color: @(cat.IsActive ? "var(--accent-amber)" : "var(--accent-emerald)");"></i>
+                                                    <span>@(cat.IsActive ? "تعطيل التصنيف" : "تفعيل التصنيف")</span>
+                                                </button>
+                                                <div class="action-dropdown-divider"></div>
+                                                <button class="action-dropdown-item item-danger" @onclick="() => { CloseCategoryMenu(); ConfirmDeleteCategory(cat); }">
+                                                    <i class="fa-solid fa-trash-can" style="color: var(--accent-red);"></i>
+                                                    <span>حذف التصنيف</span>
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                </td>
+                            }
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <Pagination CurrentPage="@currentPage" TotalItems="@filteredCategories.Count" PageSize="@pageSize" OnPageChanged="@(p => currentPage = p)" OnPageSizeChanged="@(s => { pageSize = s; currentPage = 1; EnsureValidPage(); })" />
+</div>
+
+
+<!-- Add / Edit Modal -->
+@if (showAddModal || showEditModal)
+{
+    <div class="modal-overlay" @onclick="CloseModals">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid @(showEditModal ? "fa-pen-to-square" : "fa-folder-plus") me-2" style="color: var(--accent-indigo);"></i>
+                    @(showEditModal ? "تعديل التصنيف" : "إضافة تصنيف جديد")
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseModals">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @errorMessage
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label>اسم التصنيف <span style="color: var(--accent-red);">*</span></label>
+                    <input class="form-control" @bind="categoryForm.NameAr" placeholder="مثال: مشروبات ساخنة" />
+                </div>
+
+                <div class="form-group">
+                    <label>التصنيف الأب / الرئيسي (اختياري)</label>
+                    <select class="form-select" @bind="parentCategoryIdString">
+                        <option value="">-- بدون (تصنيف رئيسي) --</option>
+                        @foreach (var cat in categories.Where(c => !showEditModal || c.Id != editingCategoryId))
+                        {
+                            <option value="@cat.Id.ToString()">@cat.NameAr</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModals" disabled="@isSaving">إلغاء</button>
+                <button class="btn btn-primary" @onclick="SaveCategory" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-check me-1"></i> <span>@(showEditModal ? "تحديث التصنيف" : "حفظ التصنيف")</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteModal && categoryToDelete != null)
+{
+    <div class="modal-overlay" @onclick="CloseModals">
+        <div class="modal-card" style="width: 480px;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title" style="color: var(--accent-red);">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i> تأكيد حذف التصنيف
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseModals">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @errorMessage
+                    </div>
+                }
+
+                <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                    هل أنت متأكد من رغبتك في حذف التصنيف <strong style="color: var(--accent-blue);">@categoryToDelete.NameAr</strong> نهائياً من النظام؟
+                </p>
+
+                <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; line-height: 1.5;">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                    <strong>تحذير الأثر:</strong> سيتم حذف هذا التصنيف نهائياً من شجرة التصنيفات. يرجى التأكد من عدم وجود منتجات تابعة له، حيث ستفشل عملية الحذف تلقائياً لحماية سلامة بيانات الأصناف إذا كانت هناك منتجات مرتبطة به.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModals" disabled="@isSaving">إلغاء</button>
+                <button class="btn btn-danger" @onclick="ExecuteDeleteCategory" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الحذف...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-trash-can me-1"></i> <span>نعم، احذف التصنيف</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool CanManageCategories =>
+        string.Equals(AuthState.UserRole, "Admin", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(AuthState.UserRole, "Cashier", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(AuthState.UserRole, "Manager", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(AuthState.UserRole, "Administrator", StringComparison.OrdinalIgnoreCase);
+
+    private List<CategoryDto> categories = new();
+    private List<CategoryDto> filteredCategories = new();
+
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private IEnumerable<CategoryDto> PagedCategories => filteredCategories.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private string searchQuery = string.Empty;
+
+    private bool showAddModal = false;
+    private bool showEditModal = false;
+    private bool showDeleteModal = false;
+    private bool isSaving = false;
+    private string errorMessage = string.Empty;
+    private string parentCategoryIdString = string.Empty;
+    private Guid editingCategoryId = Guid.Empty;
+    private CategoryDto? categoryToDelete;
+
+    private CategoryFormModel categoryForm = new();
+
+    private class CategoryFormModel
+    {
+        public string NameAr { get; set; } = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        CloudSync.OnSyncStateChanged += HandleSyncStateChanged;
+        await LoadCategories();
+    }
+
+    private async void HandleSyncStateChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadCategories();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        CloudSync.OnSyncStateChanged -= HandleSyncStateChanged;
+    }
+
+    private async Task LoadCategories()
+    {
+        categories = await ApiClient.GetCategoriesAsync();
+        FilterCategories();
+    }
+
+    private void FilterCategories()
+    {
+        currentPage = 1;
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            filteredCategories = categories.ToList();
+        }
+        else
+        {
+            filteredCategories = categories.Where(c => 
+                c.NameAr.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+        EnsureValidPage();
+    }
+
+    private void EnsureValidPage()
+    {
+        int maxPage = Math.Max(1, (int)Math.Ceiling((double)filteredCategories.Count / pageSize));
+        if (currentPage > maxPage) currentPage = maxPage;
+    }
+
+    private void OpenAddModal()
+    {
+        categoryForm = new CategoryFormModel();
+        parentCategoryIdString = string.Empty;
+        errorMessage = string.Empty;
+        showAddModal = true;
+        showEditModal = false;
+    }
+
+    private void OpenEditModal(CategoryDto cat)
+    {
+        editingCategoryId = cat.Id;
+        categoryForm = new CategoryFormModel
+        {
+            NameAr = cat.NameAr
+        };
+        parentCategoryIdString = cat.ParentCategoryId?.ToString() ?? string.Empty;
+        errorMessage = string.Empty;
+        showEditModal = true;
+        showAddModal = false;
+    }
+
+    private void ConfirmDeleteCategory(CategoryDto cat)
+    {
+        categoryToDelete = cat;
+        showDeleteModal = true;
+    }
+
+    private void CloseModals()
+    {
+        showAddModal = false;
+        showEditModal = false;
+        showDeleteModal = false;
+        categoryToDelete = null;
+    }
+
+    private async Task SaveCategory()
+    {
+        if (string.IsNullOrWhiteSpace(categoryForm.NameAr))
+        {
+            errorMessage = "الرجاء إدخال اسم التصنيف.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = string.Empty;
+
+        Guid? parentId = Guid.TryParse(parentCategoryIdString, out var pId) ? pId : null;
+
+        if (showEditModal)
+        {
+            var updateReq = new UpdateCategoryRequest(editingCategoryId, categoryForm.NameAr, categoryForm.NameAr, parentId);
+            var success = await ApiClient.UpdateCategoryAsync(updateReq);
+            isSaving = false;
+
+            if (success)
+            {
+                CloseModals();
+                await LoadCategories();
+                CloudSync.RecordLocalChange();
+                _ = CloudSync.SyncNowAsync(forceCatalogPush: true);
+            }
+            else
+            {
+                errorMessage = "فشل تحديث التصنيف. يتطلب صلاحيات المدير.";
+            }
+        }
+        else
+        {
+            var createReq = new CreateCategoryRequest(categoryForm.NameAr, categoryForm.NameAr, parentId);
+            var result = await ApiClient.CreateCategoryAsync(createReq);
+            isSaving = false;
+
+            if (result.HasValue && result.Value != Guid.Empty)
+            {
+                CloseModals();
+                await LoadCategories();
+                CloudSync.RecordLocalChange();
+                _ = CloudSync.SyncNowAsync(forceCatalogPush: true);
+            }
+            else
+            {
+                errorMessage = "فشل إنشاء التصنيف. يتطلب صلاحيات المدير.";
+            }
+        }
+    }
+
+    private async Task ExecuteDeleteCategory()
+    {
+        if (categoryToDelete == null) return;
+
+        isSaving = true;
+        errorMessage = string.Empty;
+        var (success, error) = await ApiClient.DeleteCategoryAsync(categoryToDelete.Id);
+        isSaving = false;
+
+        if (success)
+        {
+            CloseModals();
+            await LoadCategories();
+            CloudSync.RecordLocalChange();
+            _ = CloudSync.SyncNowAsync(forceCatalogPush: true);
+        }
+        else
+        {
+            errorMessage = !string.IsNullOrEmpty(error) ? error : "التصنيف ده مرتبط بمنتج ولن يتم مسحه.";
+        }
+    }
+
+    private Guid? activeMenuCategoryId;
+
+    private void ToggleCategoryMenu(Guid catId)
+    {
+        if (activeMenuCategoryId == catId)
+            activeMenuCategoryId = null;
+        else
+            activeMenuCategoryId = catId;
+    }
+
+    private void CloseCategoryMenu()
+    {
+        activeMenuCategoryId = null;
+    }
+
+    private async Task ToggleCategoryStatus(CategoryDto cat)
+    {
+        CloseCategoryMenu();
+        var (success, error) = await ApiClient.ToggleCategoryStatusAsync(cat.Id, !cat.IsActive);
+        if (success)
+        {
+            await LoadCategories();
+        }
+        else
+        {
+            errorMessage = !string.IsNullOrEmpty(error) ? error : "فشل تغيير حالة التصنيف.";
+        }
+    }
+}

@@ -1,0 +1,1768 @@
+@page "/products"
+@using System.IO
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using global::POS.Desktop.Services
+@using global::POS.Desktop.Services.Api
+@using global::POS.Desktop.Services.Auth
+@using global::POS.Desktop.Services.State
+@attribute [Authorize]
+@inject PosApiClient ApiClient
+@inject CustomAuthStateProvider AuthState
+@inject StoreStateContainer StoreState
+@inject IJSRuntime JS
+
+<div>
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">كتالوج المنتجات والمخزون</h2>
+            <p class="page-subtitle">إدارة المنتجات والأسعار وحدود الطلب والتصنيفات</p>
+        </div>
+        @if (CanManageProducts)
+        {
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <NavLink href="expiry" class="btn btn-secondary" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <i class="fa-solid fa-clock-rotate-left text-amber"></i>
+                    <span>متابعة الصلاحية</span>
+                </NavLink>
+                <button class="btn btn-secondary" style="background: rgba(16, 124, 65, 0.15); border-color: #107c41; color: #107c41;" @onclick="OpenImportModal">
+                    <i class="fa-solid fa-file-import me-1"></i> استيراد من إكسيل
+                </button>
+                <button class="btn btn-primary" @onclick="OpenAddModal">
+                    <i class="fa-solid fa-plus me-1"></i> إضافة منتج جديد
+                </button>
+            </div>
+        }
+    </div>
+
+    <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; align-items: center; flex-wrap: wrap;">
+        <div class="search-box" style="max-width: 380px; flex: 1;">
+            <i class="fa-solid fa-search"></i>
+            <input id="products-search-input" @bind="search" @bind:event="oninput" @onkeyup="Filter" placeholder="تصفية بالاسم أو الباركود..." />
+        </div>
+        <div class="search-box" style="max-width: 320px; flex: 1;">
+            <i class="fa-solid fa-barcode" style="color: var(--accent-indigo);"></i>
+            <input id="product-quick-scan-barcode" @bind="quickScanBarcode" @bind:event="oninput" @onkeyup="HandleQuickScanBarcodeKeyUp" placeholder="مسح باركود صنف للتسجيل... [Enter]" style="border-color: var(--accent-indigo);" />
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+            إجمالي المنتجات: <strong style="color: var(--text-primary);">@filtered.Count</strong>
+        </div>
+    </div>
+
+    <div class="table-container" style="overflow: visible;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>الباركود</th>
+                    <th>المنتج / الموديل</th>
+                    <th>الماركة</th>
+                    <th>التصنيف</th>
+                    <th>سعر البيع</th>
+                    <th>المخزون / السيريال</th>
+                    <th>الضمان</th>
+                    <th>الحالة</th>
+                    @if (CanManageProducts)
+                    {
+                        <th style="width: 120px; text-align: center;">الإجراءات</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @if (!filtered.Any())
+                {
+                    <tr>
+                        <td colspan="@(CanManageProducts ? 9 : 8)" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+                            <i class="fa-solid fa-box-open" style="font-size: 2.2rem; margin-bottom: 0.5rem; display: block;"></i>
+                            لا توجد منتجات في الكتالوج حالياً.
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    var pagedList = PagedProducts.ToList();
+                    for (int i = 0; i < pagedList.Count; i++)
+                    {
+                        var prod = pagedList[i];
+                        <tr>
+                            <td><code style="background: rgba(255,255,255,0.05); padding: 0.2rem 0.4rem; border-radius: 0.3rem;">@prod.Barcode</code></td>
+                            <td style="font-weight: 600;">
+                                <div>@prod.NameAr</div>
+                                @if (!string.IsNullOrWhiteSpace(prod.ModelNumber) || !string.IsNullOrWhiteSpace(prod.Color))
+                                {
+                                    <div style="font-size: 0.72rem; color: var(--accent-indigo); font-weight: 600; margin-top: 0.15rem;">
+                                        موديل: @(prod.ModelNumber ?? "-") @(!string.IsNullOrWhiteSpace(prod.Color) ? $"| لون: {prod.Color}" : "")
+                                    </div>
+                                }
+                            </td>
+                            <td>
+                                <span class="badge" style="background: rgba(99, 102, 241, 0.12); color: var(--accent-indigo); font-weight: 700;">
+                                    @(prod.BrandName ?? "عام")
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-secondary">
+                                    @(prod.CategoryName ?? "عام")
+                                </span>
+                            </td>
+                            <td style="color: var(--accent-emerald); font-weight: 700;">@prod.SellingPrice.ToString("N2") ج.م</td>
+                            <td>
+                                <div style="font-weight: 600; color: var(--text-primary);">
+                                    @PackagingUnitHelper.FormatTwoTierStockBreakdown(prod.QuantityInStock, prod.ConversionFactor, prod.BaseUnit, prod.ParentUnit)
+                                </div>
+                                @if (prod.HasSerialNumber)
+                                {
+                                    <button class="btn btn-secondary" style="padding: 0.15rem 0.45rem; font-size: 0.7rem; margin-top: 0.25rem; display: inline-flex; align-items: center; gap: 0.3rem;" @onclick="() => OpenSerialsModal(prod)" title="عرض وإضافة أرقام السيريال">
+                                        <i class="fa-solid fa-barcode text-cyan"></i>
+                                        <span>السيريالات (S/N)</span>
+                                    </button>
+                                }
+                            </td>
+                            <td>
+                                <span style="font-size: 0.78rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.25rem;">
+                                    <i class="fa-solid fa-shield-halved text-cyan"></i>
+                                    @(prod.WarrantyPeriodMonths > 0 ? $"{prod.WarrantyPeriodMonths} شهر" : "بدون")
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge @(prod.IsActive ? "badge-green" : "badge-red")" style="cursor: pointer;" @onclick="() => ToggleProductStatus(prod)" title="اضغط لتغيير حالة النشاط">
+                                    <i class="fa-solid fa-circle" style="font-size: 0.45rem;"></i>
+                                    @(prod.IsActive ? "نشط" : "غير نشط")
+                                </span>
+                            </td>
+                            @if (CanManageProducts)
+                            {
+                                <td style="text-align: center;">
+                                    <div class="action-dropdown-container @(activeMenuProductId == prod.Id ? "active" : "")">
+                                        <button class="action-dropdown-btn @(activeMenuProductId == prod.Id ? "active" : "")" @onclick="() => ToggleProductMenu(prod.Id)">
+                                            <i class="fa-solid fa-sliders"></i>
+                                            <span>خيارات</span>
+                                            <i class="fa-solid fa-chevron-down" style="font-size: 0.65rem;"></i>
+                                        </button>
+                                        @if (activeMenuProductId == prod.Id)
+                                        {
+                                            <div class="action-dropdown-backdrop" @onclick="CloseProductMenu"></div>
+                                            <div class="action-dropdown-menu" @onclick:stopPropagation="true">
+                                                @if (prod.HasSerialNumber)
+                                                {
+                                                    <button class="action-dropdown-item item-primary" @onclick="async () => { CloseProductMenu(); await OpenSerialsModal(prod); }">
+                                                        <i class="fa-solid fa-barcode" style="color: var(--accent-cyan);"></i>
+                                                        <span>إدارة أرقام السيريال</span>
+                                                    </button>
+                                                }
+                                                <button class="action-dropdown-item item-primary" @onclick="async () => { CloseProductMenu(); await OpenBarcodeModal(prod); }">
+                                                    <i class="fa-solid fa-barcode" style="color: var(--accent-blue);"></i>
+                                                    <span>طباعة الباركود</span>
+                                                </button>
+                                                <button class="action-dropdown-item item-primary" @onclick="() => { CloseProductMenu(); OpenEditModal(prod); }">
+                                                    <i class="fa-solid fa-pen-to-square" style="color: var(--accent-indigo);"></i>
+                                                    <span>تعديل المنتج</span>
+                                                </button>
+                                                <button class="action-dropdown-item @(prod.IsActive ? "item-warning" : "item-success")" @onclick="() => ToggleProductStatus(prod)">
+                                                    <i class="fa-solid @(prod.IsActive ? "fa-ban" : "fa-circle-check")" style="color: @(prod.IsActive ? "var(--accent-amber)" : "var(--accent-emerald)");"></i>
+                                                    <span>@(prod.IsActive ? "تعطيل المنتج" : "تفعيل المنتج")</span>
+                                                </button>
+                                                <div class="action-dropdown-divider"></div>
+                                                <button class="action-dropdown-item item-danger" @onclick="() => { CloseProductMenu(); ConfirmDeleteProduct(prod); }">
+                                                    <i class="fa-solid fa-trash-can" style="color: var(--accent-red);"></i>
+                                                    <span>حذف المنتج</span>
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                </td>
+                            }
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <Pagination CurrentPage="@currentPage" TotalItems="@filtered.Count" PageSize="@pageSize" OnPageChanged="@(p => currentPage = p)" OnPageSizeChanged="@(s => { pageSize = s; currentPage = 1; EnsureValidPage(); })" />
+</div>
+
+
+<!-- Add / Edit Modal -->
+@if (showAddModal || showEditModal)
+{
+    <div class="modal-overlay" @onclick="CloseModals" style="padding: 1rem; align-items: stretch;">
+        <div class="modal-card" style="width: calc(100vw - 32px); max-width: 98vw; height: calc(100vh - 32px); max-height: 96vh; display: flex; flex-direction: column; margin: auto;" @onclick:stopPropagation="true">
+            <div class="modal-header" style="padding: 0.85rem 1.5rem; background: var(--bg-card); border-bottom: 1px solid var(--border-color);">
+                <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.6rem; font-size: 1.15rem;">
+                    <i class="fa-solid @(showEditModal ? "fa-pen-to-square" : "fa-box-archive")" style="color: var(--accent-indigo);"></i>
+                    <span>@(showEditModal ? "تعديل بيانات المنتج" : "إضافة منتج جديد")</span>
+                  
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.35rem 0.65rem;" @onclick="CloseModals" title="إغلاق [Esc]">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" style="padding: 1rem 1.5rem; flex: 1; overflow-y: auto;">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.65rem 1rem; border-radius: 0.5rem; margin-bottom: 0.85rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fa-solid fa-circle-exclamation"></i>
+                        <span>@errorMessage</span>
+                    </div>
+                }
+
+                <!-- 3 Columns Layout: Zero Scroll on Desktop -->
+                <div style="display: grid; grid-template-columns: 1.1fr 1.15fr 0.95fr; gap: 1.25rem; align-items: start;">
+                    
+                    <!-- COLUMN 1: Basic Info, Barcode, Units & Flags -->
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <!-- Regular Product Barcode Section -->
+                        <div class="form-group" style="margin-bottom: 0; background: rgba(255,255,255,0.02); padding: 0.65rem 0.85rem; border-radius: 0.6rem; border: 1px solid var(--border-color-light);">
+                            <label style="font-weight: 700; font-size: 0.84rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+                                <span>رمز الباركود <span style="color: var(--accent-red);">*</span></span>
+                                <span style="font-size: 0.72rem; font-weight: normal; color: var(--text-secondary);">امسح بالقارئ أو أدخل يدوياً</span>
+                            </label>
+                            <div style="display: flex; gap: 0.4rem; align-items: center;">
+                                <input id="product-modal-barcode-input" class="form-control" @bind="newProduct.Barcode" placeholder="امسح أو أدخل رقم الباركود..." style="flex: 1; font-size: 1.05rem; font-weight: 700; font-family: 'Courier New', Courier, monospace; letter-spacing: 1.5px; color: var(--accent-blue); background: var(--bg-secondary); padding: 0.45rem 0.7rem;" />
+                                
+                                <button class="btn btn-secondary" type="button" @onclick="FetchOnlineProductInfo" disabled="@isFetchingOnline" title="جلب اسم المنتج والصورة أونلاين عبر الباركود" style="padding: 0.45rem 0.65rem; font-size: 0.8rem; font-weight: 600; white-space: nowrap;">
+                                    @if (isFetchingOnline)
+                                    {
+                                        <i class="fa-solid fa-spinner fa-spin"></i>
+                                    }
+                                    else
+                                    {
+                                        <span>جلب 🌐</span>
+                                    }
+                                </button>
+                                <button class="btn btn-secondary" type="button" @onclick="GenerateBarcode" title="توليد باركود تلقائي" style="padding: 0.45rem 0.65rem; font-size: 0.8rem; font-weight: 600; white-space: nowrap;">
+                                    <span>توليد 🪄</span>
+                                </button>
+                                <button class="btn btn-secondary" type="button" @onclick="PrintBarcodeFromAddModal" title="طباعة ملصق الباركود لهذا الكود" style="padding: 0.45rem 0.65rem; font-size: 0.8rem; font-weight: 600; white-space: nowrap;">
+                                     <span>طباعة 🖨️</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Category & Brand Selection -->
+                        <div class="grid-2" style="gap: 0.6rem; margin-bottom: 0;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.84rem; font-weight: 700;">التصنيف <span style="color: var(--accent-red);">*</span></label>
+                                <select class="form-select" @bind="categoryIdString" style="padding: 0.45rem 0.7rem; font-size: 0.88rem;">
+                                    <option value="">-- اختر التصنيف --</option>
+                                    @foreach (var cat in categories)
+                                    {
+                                        <option value="@cat.Id.ToString()">@cat.NameAr</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.84rem; font-weight: 700;">الماركة التجارية</label>
+                                <select class="form-select" @bind="brandIdString" style="padding: 0.45rem 0.7rem; font-size: 0.88rem;">
+                                    <option value="">-- عام / بدون ماركة --</option>
+                                    @foreach (var b in brands)
+                                    {
+                                        <option value="@b.Id.ToString()">@b.NameAr</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Product Names -->
+                        <div class="grid-2" style="gap: 0.6rem; margin-bottom: 0;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.82rem; font-weight: 700;">الاسم (بالعربية) <span style="color: var(--accent-red);">*</span></label>
+                                <input class="form-control" @bind="newProduct.NameAr" placeholder="مثال: ثلاجة 16 قدم نوفروست أو شاشة 43 بوصة سمارت" style="padding: 0.45rem 0.7rem; font-size: 0.88rem;" />
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.82rem; font-weight: 700;">الاسم (بالإنجليزية)</label>
+                                <input class="form-control" @bind="newProduct.NameEn" placeholder="مثال: 16 Cu.Ft Refrigerator or 43 Inch Smart TV" style="padding: 0.45rem 0.7rem; font-size: 0.88rem;" />
+                            </div>
+                        </div>
+
+                        <!-- 2-Tier Unit Packaging Configuration -->
+                        <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 0.6rem; padding: 0.65rem 0.85rem;">
+                            <div style="font-weight: 700; font-size: 0.82rem; color: var(--accent-indigo); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                                <span>تهيئة الوحدات ومعامل التحويل</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.45rem; margin-bottom: 0.4rem;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.75rem;">الوحدة الصغرى <span style="color: var(--accent-red);">*</span></label>
+                                    <input class="form-control" @bind="newProduct.BaseUnit" list="common-base-units-list" placeholder="قطعة" style="padding: 0.4rem 0.6rem; font-size: 0.82rem;" />
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.75rem;">الوحدة الكبرى</label>
+                                    <input class="form-control" @bind="newProduct.ParentUnit" list="common-parent-units-list" placeholder="كرتونة" style="padding: 0.4rem 0.6rem; font-size: 0.82rem;" />
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.75rem;">كم قطعة بالكرتونة؟ <span style="color: var(--accent-red);">*</span></label>
+                                    <input type="number" min="1" class="form-control" @bind="newProduct.ConversionFactor" @bind:after="SyncCartonPricesFromPiecePrices" placeholder="1" style="padding: 0.4rem 0.6rem; font-size: 0.82rem; font-weight: 700;" />
+                                </div>
+                            </div>
+                            <div style="font-size: 0.74rem; color: var(--accent-indigo); background: rgba(99, 102, 241, 0.08); padding: 0.35rem 0.6rem; border-radius: 0.35rem; display: flex; align-items: center; justify-content: space-between;">
+                                <span>1 @(string.IsNullOrWhiteSpace(newProduct.ParentUnit) ? "كرتونة" : newProduct.ParentUnit) = <strong>@(newProduct.ConversionFactor > 0 ? newProduct.ConversionFactor : 1)</strong> @(string.IsNullOrWhiteSpace(newProduct.BaseUnit) ? "قطعة" : newProduct.BaseUnit)</span>
+                                <span style="color: var(--text-secondary);">(المخزون بالوحدة الأساسية)</span>
+                            </div>
+                        </div>
+
+                        <!-- Checkbox Status Flags -->
+                        <div style="display: flex; gap: 1rem; background: var(--bg-primary); padding: 0.6rem 0.85rem; border-radius: 0.5rem; border: 1px solid var(--border-color); flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 0.45rem; cursor: pointer; font-size: 0.82rem; font-weight: 600;">
+                                <input type="checkbox" @bind="newProduct.IsActive" style="cursor: pointer;" /> المنتج نشط وجاهز للبيع
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- COLUMN 2: Pricing, Supplier, Carton Calculator & Stock -->
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <!-- Supplier & Tax Rate -->
+                        <div class="grid-2" style="gap: 0.6rem;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.84rem; font-weight: 700;">المورد (اختياري)</label>
+                                <select class="form-select" @bind="supplierIdString" style="padding: 0.45rem 0.7rem; font-size: 0.88rem;">
+                                    <option value="">-- اختر المورد --</option>
+                                    @foreach (var s in suppliers)
+                                    {
+                                        <option value="@s.Id.ToString()">@s.Name</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.84rem; font-weight: 700;">نسبة الضريبة (%)</label>
+                                <input type="number" step="0.01" class="form-control" @bind="newProduct.TaxRate" placeholder="14" style="padding: 0.45rem 0.7rem; font-size: 0.88rem;" />
+                            </div>
+                        </div>
+
+                        <!-- 3 Prices in Grid -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.55rem;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700;">سعر التكلفة (الشراء)</label>
+                                <input type="number" step="0.01" class="form-control" @bind="newProduct.PurchasePrice" @bind:after="OnPiecePriceChanged" placeholder="0.00" style="padding: 0.45rem 0.65rem; font-size: 0.95rem; font-weight: 700;" />
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; color: var(--accent-emerald);">سعر البيع قطاعي *</label>
+                                <input type="number" step="0.01" class="form-control" @bind="newProduct.SellingPrice" @bind:after="OnPiecePriceChanged" placeholder="0.00" style="padding: 0.45rem 0.65rem; font-size: 0.95rem; font-weight: 700; color: var(--accent-emerald); border-color: rgba(16, 185, 129, 0.4);" />
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; color: var(--accent-amber);">سعر البيع جملة</label>
+                                <input type="number" step="0.01" class="form-control" @bind="newProduct.WholesalePrice" @bind:after="OnPiecePriceChanged" placeholder="0.00" style="padding: 0.45rem 0.65rem; font-size: 0.95rem; font-weight: 700; color: var(--accent-amber); border-color: rgba(245, 158, 11, 0.4);" />
+                            </div>
+                        </div>
+
+                        <!-- Carton Price Calculator & Matching (معاينة وحاسبة أسعار الكرتونة) -->
+                        @if (newProduct.ConversionFactor > 1)
+                        {
+                            <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 0.6rem; padding: 0.65rem 0.85rem;">
+                                <div style="font-weight: 700; font-size: 0.82rem; color: var(--accent-emerald); display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; flex-wrap: wrap; gap: 0.35rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                        <i class="fa-solid fa-calculator"></i>
+                                        <span>حاسبة أسعار الكرتونة والقطع (1 @(string.IsNullOrWhiteSpace(newProduct.ParentUnit) ? "كرتونة" : newProduct.ParentUnit) = @newProduct.ConversionFactor قطعة)</span>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-primary" style="background: var(--accent-emerald); border-color: var(--accent-emerald); font-weight: 700; font-size: 0.75rem; padding: 0.25rem 0.65rem; display: inline-flex; align-items: center; gap: 0.35rem;" @onclick="ApplyCartonPricesToPiecePrices" title="تطبيق الأسعار">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                        <span>مطابقة</span>
+                                    </button>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
+                                    <div>
+                                        <label style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.15rem; display: block;">تكلفة شراء القطعة</label>
+                                        <input type="number" step="0.01" min="0" class="form-control" @bind="calcPiecePurchaseCost" @bind:event="oninput" placeholder="تكلفة القطعة" style="padding: 0.35rem 0.5rem; font-size: 0.82rem; border-color: rgba(59, 130, 246, 0.4);" />
+                                        <div style="font-size: 0.72rem; color: var(--accent-blue); margin-top: 0.2rem;">
+                                            <span>كرتونة: </span><strong>@(calcCartonPurchaseCost.ToString("N2")) ج.م</strong>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.15rem; display: block;">بيع القطعة قطاعي</label>
+                                        <input type="number" step="0.01" min="0" class="form-control" @bind="calcPieceSellingPrice" @bind:event="oninput" placeholder="قطاعي" style="padding: 0.35rem 0.5rem; font-size: 0.82rem; border-color: rgba(16, 185, 129, 0.4);" />
+                                        <div style="font-size: 0.72rem; color: var(--accent-emerald); margin-top: 0.2rem;">
+                                            <span>كرتونة: </span><strong>@(calcCartonSellingPrice.ToString("N2")) ج.م</strong>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.15rem; display: block;">بيع القطعة جملة</label>
+                                        <input type="number" step="0.01" min="0" class="form-control" @bind="calcPieceWholesalePrice" @bind:event="oninput" placeholder="جملة" style="padding: 0.35rem 0.5rem; font-size: 0.82rem; border-color: rgba(245, 158, 11, 0.4);" />
+                                        <div style="font-size: 0.72rem; color: var(--accent-amber); margin-top: 0.2rem;">
+                                            <span>كرتونة: </span><strong>@(calcCartonWholesalePrice.ToString("N2")) ج.م</strong>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if (priceMatchedSuccessNotice)
+                                {
+                                    <div style="font-size: 0.74rem; color: var(--accent-emerald); margin-top: 0.3rem; display: flex; align-items: center; gap: 0.35rem;">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                        <span>تمت مطابقة ونقل الأسعار إلى حقول أسعار المنتج بنجاح!</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <!-- Stock Levels -->
+                        <div class="grid-2" style="gap: 0.6rem;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.82rem; font-weight: 700;">حد إعادة الطلب (قطعة)</label>
+                                <input type="number" step="any" class="form-control" @bind="newProduct.ReorderLevel" style="padding: 0.45rem 0.7rem; font-size: 0.88rem;" />
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.82rem; font-weight: 700;">الحد الأقصى للمخزون (قطعة)</label>
+                                <input type="number" step="any" class="form-control" @bind="newProduct.MaxStockLevel" style="padding: 0.45rem 0.7rem; font-size: 0.88rem;" />
+                            </div>
+                        </div>
+
+                        <!-- Opening Stock Section (الرصيد الافتتاحي) -->
+                        @if (showAddModal)
+                        {
+                            <div style="background: rgba(59, 130, 246, 0.05); border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: 0.6rem; padding: 0.65rem 0.85rem;">
+                                <div style="font-weight: 700; font-size: 0.82rem; color: var(--accent-blue); display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                        <i class="fa-solid fa-boxes-packing"></i>
+                                        <span>الرصيد الافتتاحي في المخزون (تسوية أول المدة)</span>
+                                    </div>
+                                    <span style="font-size: 0.72rem; font-weight: 600; color: var(--accent-blue); background: rgba(59, 130, 246, 0.12); padding: 0.15rem 0.45rem; border-radius: 0.35rem;">
+                                        أول المدة
+                                    </span>
+                                </div>
+
+                                @if (newProduct.ConversionFactor > 1)
+                                {
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.45rem; margin-bottom: 0.35rem;">
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label style="font-size: 0.75rem; font-weight: 600;">عدد الكراتين</label>
+                                            <input type="number" min="0" class="form-control" @bind="initialCartons" @bind:after="OnInitialCartonsChanged" placeholder="0" style="font-size: 0.95rem; font-weight: 700; padding: 0.4rem 0.6rem;" />
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label style="font-size: 0.75rem; font-weight: 600;">قطع متبقية</label>
+                                            <input type="number" min="0" class="form-control" @bind="initialPieces" @bind:after="OnInitialPiecesChanged" placeholder="0" style="font-size: 0.95rem; font-weight: 700; padding: 0.4rem 0.6rem;" />
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label style="font-size: 0.75rem; font-weight: 600;">إجمالي القطع</label>
+                                            <input type="number" min="0" class="form-control" @bind="newProduct.InitialStock" @bind:after="OnInitialStockDirectChanged" placeholder="0" style="font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); background: var(--bg-secondary); border-color: rgba(59, 130, 246, 0.4); padding: 0.4rem 0.6rem;" />
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 0.74rem; color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); padding: 0.35rem 0.6rem; border-radius: 0.35rem;">
+                                        <span><i class="fa-solid fa-check-circle me-1"></i> إجمالي الرصيد الأولي: <strong>@newProduct.InitialStock.ToString("N0")</strong> @(string.IsNullOrWhiteSpace(newProduct.BaseUnit) ? "قطعة" : newProduct.BaseUnit) (@initialCartons كرتونة + @initialPieces قطعة)</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="grid-2" style="align-items: center; gap: 0.6rem;">
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label style="font-size: 0.75rem; font-weight: 600;">الكمية المتوفرة حالياً بالمحل (@(string.IsNullOrWhiteSpace(newProduct.BaseUnit) ? "قطعة" : newProduct.BaseUnit))</label>
+                                            <input type="number" min="0" class="form-control" @bind="newProduct.InitialStock" placeholder="0" style="font-size: 1rem; font-weight: 700; color: var(--accent-blue); background: var(--bg-secondary); border-color: rgba(59, 130, 246, 0.4); padding: 0.4rem 0.65rem;" />
+                                        </div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); background: var(--bg-primary); padding: 0.45rem 0.65rem; border-radius: 0.4rem; border: 1px solid var(--border-color);">
+                                            <i class="fa-solid fa-circle-info text-blue me-1"></i>
+                                            رصيد أولي لبدء البيع والخصم فوراً.
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <!-- COLUMN 3: Image, Expiry & Notes -->
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <!-- Product Image Box -->
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.84rem; font-weight: 700;">صورة المنتج</label>
+                            <div class="file-upload-box" style="position: relative; padding: 0.75rem; text-align: center; border-radius: 0.6rem;">
+                                @if (!string.IsNullOrEmpty(imagePreviewUrl))
+                                {
+                                    <div style="text-align: center; margin-bottom: 0.35rem;">
+                                        <img src="@imagePreviewUrl" style="max-height: 85px; border-radius: 0.4rem; border: 1px solid var(--border-color); object-fit: contain;" alt="صورة المنتج" />
+                                        <div style="font-size: 0.72rem; color: var(--accent-emerald); font-weight: 600; margin-top: 0.2rem;">
+                                            <i class="fa-solid fa-circle-check me-1"></i> صورة جديدة محددة
+                                        </div>
+                                    </div>
+                                }
+                                else if (showEditModal && !string.IsNullOrEmpty(currentProductImageUrl))
+                                {
+                                    <div style="text-align: center; margin-bottom: 0.35rem;">
+                                        <img src="@ApiClient.GetImageFullUrl(currentProductImageUrl)" style="max-height: 85px; border-radius: 0.4rem; border: 1px solid var(--border-color); object-fit: contain;" alt="الصورة الحالية للمنتج" />
+                                        <div style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; margin-top: 0.2rem;">الصورة الحالية للمنتج</div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <i class="fa-solid fa-cloud-arrow-up" style="font-size: 1.5rem; color: var(--accent-indigo); margin-bottom: 0.35rem;"></i>
+                                    <div style="font-size: 0.78rem; color: var(--text-secondary);">اختيار صورة للمنتج (اختياري)</div>
+                                }
+
+                                <div style="display: flex; justify-content: center; gap: 0.4rem; margin-top: 0.35rem; position: relative; z-index: 2;">
+                                    <label class="btn btn-sm btn-secondary" style="margin: 0; cursor: pointer; padding: 0.35rem 0.65rem; font-size: 0.78rem;">
+                                        <i class="fa-solid fa-upload me-1"></i> @(string.IsNullOrEmpty(imagePreviewUrl) && (showEditModal && !string.IsNullOrEmpty(currentProductImageUrl)) ? "تغيير الصورة" : "اختيار صورة")
+                                        <InputFile OnChange="HandleFileSelected" accept="image/*" style="display: none;" />
+                                    </label>
+                                    @if (!string.IsNullOrEmpty(imagePreviewUrl) || (showEditModal && !string.IsNullOrEmpty(currentProductImageUrl)))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-danger" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" @onclick="RemoveImage">
+                                            <i class="fa-solid fa-trash me-1"></i> حذف
+                                        </button>
+                                    }
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(selectedFileName))
+                                {
+                                    <div style="margin-top: 0.25rem; color: var(--accent-indigo); font-weight: 600; font-size: 0.75rem;">
+                                        <i class="fa-solid fa-file-image me-1"></i> @selectedFileName
+                                    </div>
+                                }
+                        </div>
+                    </div>
+
+                        <!-- Appliance Specifications Box -->
+                        <div style="background: rgba(99, 102, 241, 0.05); border: 1.5px solid rgba(99, 102, 241, 0.25); border-radius: 0.6rem; padding: 0.75rem 0.85rem;">
+                            <div style="font-weight: 700; font-size: 0.84rem; color: var(--accent-indigo); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.35rem;">
+                                <i class="fa-solid fa-tv"></i>
+                                <span>مواصفات وبيانات الجهاز الكهربائي</span>
+                            </div>
+
+                            <div class="grid-2" style="gap: 0.5rem; margin-bottom: 0.45rem;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.75rem; font-weight: 600;">رقم الموديل (Model)</label>
+                                    <input class="form-control" @bind="newProduct.ModelNumber" placeholder="مثال: GR-EF40P" style="padding: 0.35rem 0.5rem; font-size: 0.82rem;" />
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.75rem; font-weight: 600;">اللون</label>
+                                    <input class="form-control" @bind="newProduct.Color" placeholder="فضي، أسود..." style="padding: 0.35rem 0.5rem; font-size: 0.82rem;" />
+                                </div>
+                            </div>
+
+                            <div class="grid-2" style="gap: 0.5rem; margin-bottom: 0.45rem;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.75rem; font-weight: 600;">مدة الضمان (بالشهور)</label>
+                                    <input type="number" class="form-control" @bind="newProduct.WarrantyPeriodMonths" placeholder="12" style="padding: 0.35rem 0.5rem; font-size: 0.82rem;" />
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.75rem; font-weight: 600;">مركز الصيانة / الوكيل</label>
+                                    <input class="form-control" @bind="newProduct.MaintenanceAgent" placeholder="العربي جروب 19319" style="padding: 0.35rem 0.5rem; font-size: 0.82rem;" />
+                                </div>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0; margin-top: 0.4rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" id="prod-has-serial" @bind="newProduct.HasSerialNumber" style="width: 17px; height: 17px;" />
+                                <label for="prod-has-serial" style="margin-bottom: 0; cursor: pointer; font-size: 0.78rem; font-weight: 700; color: var(--accent-indigo);">
+                                    تتبع الرقم التسلسلي (Serial Number) لكل جهاز
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Description & Notes -->
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.84rem; font-weight: 700;">الوصف والملاحظات</label>
+                            <textarea class="form-control" rows="3" @bind="newProduct.Description" placeholder="ملاحظات اختيارية عن الصنف..." style="font-size: 0.85rem; resize: vertical; padding: 0.45rem 0.7rem;"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="padding: 0.75rem 1.5rem; background: var(--bg-card); border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 0.75rem;">
+                <button class="btn btn-secondary" style="padding: 0.5rem 1.25rem;" @onclick="CloseModals" disabled="@isSaving">إلغاء [Esc]</button>
+                <button class="btn btn-primary" style="padding: 0.5rem 1.5rem; font-weight: 700;" @onclick="SaveProduct" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-check me-1"></i> <span>@(showEditModal ? "تحديث المنتج [Enter]" : "حفظ المنتج [Enter]")</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+
+<!-- Excel Import Modal -->
+@if (showImportModal)
+{
+    <div class="modal-overlay" @onclick="CloseModals">
+        <div class="modal-card" style="width: 680px; max-width: 95vw;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid fa-file-excel me-2" style="color: #107c41;"></i> استيراد منتجات من ملف إكسيل
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseModals">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
+                @if (!string.IsNullOrEmpty(importErrorMessage))
+                {
+                    <div style="background: rgba(239, 68, 68, 0.15); border-right: 4px solid var(--accent-red); color: var(--accent-red); padding: 0.75rem 1rem; border-radius: 0.4rem; margin-bottom: 1rem; font-size: 0.9rem;">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @importErrorMessage
+                    </div>
+                }
+
+                <div style="background: rgba(16, 124, 65, 0.1); border: 1px solid rgba(16, 124, 65, 0.3); border-radius: 0.5rem; padding: 0.75rem 1rem; margin-bottom: 1.15rem; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                        <i class="fa-solid fa-circle-info text-primary me-1"></i>
+                        <span>يمكنك تحميل نموذج الإكسيل المعتمد المتوافق مع كافة بيانات المنتجات:</span>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-secondary" style="background: rgba(16, 124, 65, 0.2); border-color: #107c41; color: #107c41; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;" @onclick="DownloadExcelTemplate">
+                        <i class="fa-solid fa-download"></i>
+                        <span>تحميل نموذج الإكسيل (.xlsx)</span>
+                    </button>
+                </div>
+
+                <div style="margin-bottom: 1.25rem;">
+                    <label class="form-label" style="font-weight: 600;">اختر ملف Excel (.xlsx, .xls) أو حزمة ZIP تحتوي على صور المنتجات (.zip)</label>
+                    <InputFile OnChange="OnImportFileSelected" accept=".xlsx,.xls,.csv,.zip" class="form-control" style="padding: 0.5rem;" />
+                    @if (!string.IsNullOrEmpty(selectedImportFileName))
+                    {
+                        <div style="margin-top: 0.4rem; font-size: 0.85rem; color: var(--accent-emerald);">
+                            <i class="fa-solid fa-file-circle-check me-1"></i> الملف المحدد: <strong>@selectedImportFileName</strong> (@(selectedImportFileBytes?.Length / 1024 ?? 0) KB)
+                        </div>
+                    }
+                </div>
+
+                <div style="background: rgba(255,255,255,0.03); padding: 0.85rem; border-radius: 0.5rem; border: 1px dashed rgba(255,255,255,0.1); margin-bottom: 1.25rem;">
+                    <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.9rem; margin-bottom: 0.3rem; font-weight: 600;">
+                        <input type="checkbox" @bind="updateExistingInImport" style="width: 1.1rem; height: 1.1rem;" />
+                        تحديث بيانات المنتج إذا كان الباركود موجواً بالفعل في الكتالوج
+                    </label>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0; padding-right: 1.7rem;">
+                        عند تفعيل هذا الخيار، سيتم تعديل أسعار واسم وتصنيف المنتج الموجود مسبقاً بنفس الباركود بدلاً من تخطيه.
+                    </p>
+                </div>
+
+                @if (importResult != null)
+                {
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <h4 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--text-primary);">ملخص نتيجة الاستيراد:</h4>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
+                            <div style="background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 0.5rem; text-align: center;">
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">إجمالي الصفوف</div>
+                                <div style="font-size: 1.3rem; font-weight: 700;">@importResult.TotalRows</div>
+                            </div>
+                            <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); padding: 0.75rem; border-radius: 0.5rem; text-align: center;">
+                                <div style="font-size: 0.8rem; color: var(--accent-emerald);">تم استيرادها بنجاح</div>
+                                <div style="font-size: 1.3rem; font-weight: 700; color: var(--accent-emerald);">@importResult.SuccessCount</div>
+                            </div>
+                            <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); padding: 0.75rem; border-radius: 0.5rem; text-align: center;">
+                                <div style="font-size: 0.8rem; color: var(--accent-red);">صفوف بها أخطاء</div>
+                                <div style="font-size: 1.3rem; font-weight: 700; color: var(--accent-red);">@importResult.ErrorCount</div>
+                            </div>
+                        </div>
+
+                        @if (importResult.Errors != null && importResult.Errors.Any())
+                        {
+                            <h5 style="font-size: 0.85rem; color: var(--accent-red); margin-bottom: 0.5rem;">
+                                <i class="fa-solid fa-list-check me-1"></i> قائمة الصفوف غير المستوردة وأسباب الخطأ:
+                            </h5>
+                            <div style="max-height: 200px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 0.4rem;">
+                                <table class="data-table" style="font-size: 0.8rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>الصف</th>
+                                            <th>الباركود</th>
+                                            <th>الاسم</th>
+                                            <th>سبب الخطأ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var err in importResult.Errors)
+                                        {
+                                            <tr>
+                                                <td>#@err.RowNumber</td>
+                                                <td><code>@err.Barcode</code></td>
+                                                <td>@err.ProductName</td>
+                                                <td style="color: var(--accent-red);">@err.ErrorMessage</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModals" disabled="@isSaving">إغلاق</button>
+                <button class="btn btn-primary" style="background: #107c41; border-color: #107c41;" @onclick="ExecuteImportExcel" disabled="@(isSaving || selectedImportFileBytes == null)">
+                    @if (isSaving)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الاستيراد...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-upload me-1"></i> <span>بدء الاستيراد الان</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Barcode Printing Modal -->
+@if (showBarcodeModal && selectedProductForBarcode is not null)
+{
+    <div class="modal-overlay" @onclick="CloseModals">
+        <div class="modal-card" style="width: 520px;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid fa-barcode me-2" style="color: var(--accent-indigo);"></i>
+                    طباعة ملصق الباركود للمنتج
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseModals">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.25rem; text-align: center;">
+                    <h4 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">
+                        @selectedProductForBarcode.NameAr
+                    </h4>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                        الباركود: <code style="font-weight: 700; color: var(--accent-blue);">@selectedProductForBarcode.Barcode</code>
+                        | السعر: <strong style="color: var(--accent-emerald);">@selectedProductForBarcode.SellingPrice.ToString("N2") ج.م</strong>
+                    </p>
+
+                    <!-- Live Barcode SVG Preview Box -->
+                    <div style="background: #ffffff; border-radius: 0.5rem; padding: 0.75rem; display: inline-block; margin: 0 auto; box-shadow: var(--shadow-sm);">
+                        <svg id="preview-barcode-svg"></svg>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>عدد الملصقات المطلوب طباعتها</label>
+                        <input type="number" min="1" max="500" class="form-control" @bind="barcodePrintQty" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>اسم المحل على الملصق</label>
+                        <input class="form-control" @bind="barcodeStoreName" placeholder="اسم المحل..." />
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 0.75rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" @bind="barcodeShowPrice" style="width: 18px; height: 18px;" />
+                        <span>إظهار سعر البيع على ملصق الباركود</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="display: flex; justify-content: space-between;">
+                <button class="btn btn-secondary" @onclick="CloseModals">إلغاء</button>
+                <button class="btn btn-primary" style="padding: 0.65rem 1.5rem; font-weight: 700;" @onclick="ExecutePrintBarcode">
+                    <i class="fa-solid fa-print me-1"></i> طباعة الملصقات (@barcodePrintQty)
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Product Serial Numbers Tracking Modal -->
+@if (showSerialsModal && selectedProductForSerials is not null)
+{
+    <div class="modal-overlay" @onclick="CloseModals">
+        <div class="modal-card" style="width: 720px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fa-solid fa-barcode text-cyan"></i>
+                        <span>الأرقام التسلسلية (S/N) للمنتج: <strong>@selectedProductForSerials.NameAr</strong></span>
+                    </h3>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                        الماركة: <strong>@(selectedProductForSerials.BrandName ?? "-")</strong> | الموديل: <strong>@(selectedProductForSerials.ModelNumber ?? "-")</strong> | الضمان: <strong>@(selectedProductForSerials.WarrantyPeriodMonths) شهر</strong>
+                    </div>
+                </div>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseModals">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.25rem;">
+                <!-- Add New Serials Box -->
+                <div style="background: rgba(99, 102, 241, 0.05); border: 1.5px dashed rgba(99, 102, 241, 0.35); border-radius: 0.6rem; padding: 0.85rem; margin-bottom: 1rem;">
+                    <label style="font-size: 0.84rem; font-weight: 700; color: var(--accent-indigo); margin-bottom: 0.4rem; display: block;">
+                        <i class="fa-solid fa-plus-circle me-1"></i> تسجيل أرقام تسلسلية جديدة بالمخزن
+                    </label>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.4rem;">
+                        امسح بقارئ الباركود أو اكتب السيريالات (سيريال واحد في كل سطر أو مفصولة بفواصل):
+                    </div>
+                    <textarea class="form-control" rows="2" @bind="newSerialsInput" placeholder="مثال:&#10;SN-8493021&#10;SN-8493022" style="font-family: monospace; font-size: 0.85rem; margin-bottom: 0.5rem;"></textarea>
+                    <div style="display: flex; justify-content: flex-end;">
+                        <button class="btn btn-primary" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;" @onclick="SubmitAddSerials" disabled="@isSubmittingSerials">
+                            @if (isSubmittingSerials)
+                            {
+                                <i class="fa-solid fa-spinner fa-spin me-1"></i>
+                            }
+                            else
+                            {
+                                <i class="fa-solid fa-check me-1"></i>
+                            }
+                            <span>تسجيل الأرقام التسلسلية</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Existing Serials List -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <div style="font-size: 0.84rem; font-weight: 700;">
+                        السيريالات المسجلة (@productSerialsList.Count):
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary);">
+                        المتوفر بالمخزن: <strong style="color: var(--accent-emerald);">@productSerialsList.Count(s => s.Status == "InStock")</strong>
+                    </div>
+                </div>
+
+                <div class="table-container" style="max-height: 280px; overflow-y: auto;">
+                    <table class="data-table" style="font-size: 0.82rem;">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>الرقم التسلسلي (S/N)</th>
+                                <th>الحالة</th>
+                                <th>تاريخ البيع</th>
+                                <th>نهاية الضمان</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!productSerialsList.Any())
+                            {
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 1.5rem; color: var(--text-muted);">
+                                        لا توجد أرقام تسلسلية مسجلة لهذا الجهاز حتى الآن.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                var sIdx = 1;
+                                @foreach (var s in productSerialsList)
+                                {
+                                    <tr>
+                                        <td>@(sIdx++)</td>
+                                        <td><code style="font-weight: 700; color: var(--accent-cyan);">@s.SerialNumber</code></td>
+                                        <td>
+                                            @if (s.Status == "InStock")
+                                            {
+                                                <span class="badge badge-success">بالمخزن (متوفر)</span>
+                                            }
+                                            else if (s.Status == "Sold")
+                                            {
+                                                <span class="badge badge-indigo">مباع</span>
+                                            }
+                                            else if (s.Status == "Returned")
+                                            {
+                                                <span class="badge badge-amber">مرتجع</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-danger">عيب صناعة</span>
+                                            }
+                                        </td>
+                                        <td>@(s.SoldAt?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                        <td>
+                                            @if (s.WarrantyExpiryDate.HasValue)
+                                            {
+                                                var isExpired = s.WarrantyExpiryDate.Value < DateTime.Today;
+                                                <span style="color: @(isExpired ? "var(--accent-red)" : "var(--accent-emerald)"); font-weight: 600;">
+                                                    @s.WarrantyExpiryDate.Value.ToString("yyyy-MM-dd")
+                                                    @(isExpired ? " (منتهي)" : " (ساري)")
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span>-</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModals">إغلاق</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Product Confirmation Modal -->
+@if (showDeleteModal && productToDelete != null)
+{
+    <div class="modal-overlay" @onclick="CloseModals">
+        <div class="modal-card" style="width: 500px;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title" style="color: #ef4444;">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i> تأكيد حذف المنتج
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseModals">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @errorMessage
+                    </div>
+                }
+
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; font-size: 0.9rem;">
+                    <div>
+                        <span style="color: var(--text-secondary); display: block; font-size: 0.8rem;">اسم المنتج:</span>
+                        <strong style="color: var(--text-primary);">@productToDelete.NameAr</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-secondary); display: block; font-size: 0.8rem;">الباركود:</span>
+                        <code>@productToDelete.Barcode</code>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-secondary); display: block; font-size: 0.8rem;">سعر البيع:</span>
+                        <strong style="color: var(--accent-emerald);">@productToDelete.SellingPrice.ToString("N2") ج.م</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-secondary); display: block; font-size: 0.8rem;">الرصيد بالمخزن:</span>
+                        <strong style="color: var(--accent-amber);">@productToDelete.QuantityInStock.ToString("N0") @(productToDelete.UnitSymbol ?? "قطع")</strong>
+                    </div>
+                </div>
+
+                <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; line-height: 1.5;">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                    <strong>تحذير الأثر:</strong> سيتم حذف هذا المنتج نهائياً من قاعدة البيانات. لن تتمكن من بيعه في الكاشير أو إضافته في فواتير جديدة، مع بقاء سجلات الفواتير السابقة مسجلة لأغراض التدقيق.
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModals" disabled="@isSaving">إلغاء</button>
+                <button class="btn btn-danger" @onclick="ExecuteDeleteProduct" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الحذف...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-trash me-1"></i> <span>نعم، احذف المنتج نهائياً</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool CanManageProducts =>
+        string.Equals(AuthState.UserRole, "Admin", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(AuthState.UserRole, "Cashier", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(AuthState.UserRole, "Manager", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(AuthState.UserRole, "Administrator", StringComparison.OrdinalIgnoreCase);
+
+    private List<ProductDto> products = new();
+    private List<ProductDto> filtered = new();
+    private List<CategoryDto> categories = new();
+    private List<BrandDto> brands = new();
+    private List<UnitDto> units = new();
+    private List<SupplierDto> suppliers = new();
+
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private IEnumerable<ProductDto> PagedProducts => filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private string search = string.Empty;
+    private string quickScanBarcode = string.Empty;
+    private bool isFetchingOnline = false;
+    private bool showAddModal = false;
+    private bool showEditModal = false;
+    private bool showDeleteModal = false;
+    private bool showBarcodeModal = false;
+    private bool showSerialsModal = false;
+    private ProductDto? selectedProductForSerials;
+    private List<ProductSerialDto> productSerialsList = new();
+    private string newSerialsInput = string.Empty;
+    private bool isSubmittingSerials = false;
+
+    private ProductDto? selectedProductForBarcode;
+    private int barcodePrintQty = 1;
+    private string barcodeStoreName = "معرض الأجهزة الكهربائية والمنزلية";
+    private bool barcodeShowPrice = true;
+    private bool isSaving = false;
+    private string errorMessage = string.Empty;
+
+    private Guid editingProductId = Guid.Empty;
+    private ProductDto? productToDelete;
+    private string categoryIdString = string.Empty;
+    private string brandIdString = string.Empty;
+    private string unitIdString = string.Empty;
+    private string supplierIdString = string.Empty;
+
+    private byte[]? selectedImageBytes;
+    private string? selectedFileName;
+    private string? imagePreviewUrl;
+    private string? currentProductImageUrl;
+    private bool imageRemoved = false;
+
+    // Multi-Unit Packaging State
+    private void RemoveImage()
+    {
+        selectedImageBytes = null;
+        selectedFileName = null;
+        imagePreviewUrl = null;
+        currentProductImageUrl = null;
+        imageRemoved = true;
+    }
+
+    private CreateProductFormModel newProduct = new();
+    private int initialCartons = 0;
+    private decimal initialPieces = 0;
+
+    private void OnInitialCartonsChanged()
+    {
+        int factor = newProduct.ConversionFactor > 0 ? newProduct.ConversionFactor : 1;
+        newProduct.InitialStock = (initialCartons * factor) + initialPieces;
+    }
+
+    private void OnInitialPiecesChanged()
+    {
+        int factor = newProduct.ConversionFactor > 0 ? newProduct.ConversionFactor : 1;
+        newProduct.InitialStock = (initialCartons * factor) + initialPieces;
+    }
+
+    private void OnInitialStockDirectChanged()
+    {
+        int factor = newProduct.ConversionFactor > 0 ? newProduct.ConversionFactor : 1;
+        if (factor > 1)
+        {
+            initialCartons = (int)(newProduct.InitialStock / factor);
+            initialPieces = newProduct.InitialStock % factor;
+        }
+        else
+        {
+            initialCartons = 0;
+            initialPieces = newProduct.InitialStock;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await FocusElementAsync("product-quick-scan-barcode", 50);
+        }
+    }
+
+    private async Task FocusElementAsync(string elementId, int delay = 0)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("focusElementById", elementId, delay);
+        }
+        catch { }
+    }
+
+    private async Task LoadData()
+    {
+        products = await ApiClient.GetProductsAsync();
+        categories = await ApiClient.GetCategoriesAsync();
+        brands = await ApiClient.GetBrandsAsync(onlyActive: true);
+        units = await ApiClient.GetUnitsAsync();
+        suppliers = await ApiClient.GetSuppliersAsync();
+        Filter();
+    }
+
+    private void Filter()
+    {
+        currentPage = 1;
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            filtered = products.ToList();
+        }
+        else
+        {
+            filtered = products.Where(p =>
+                p.NameAr.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                p.NameEn.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                p.Barcode.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (p.BrandName != null && p.BrandName.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                (p.ModelNumber != null && p.ModelNumber.Contains(search, StringComparison.OrdinalIgnoreCase))).ToList();
+        }
+        EnsureValidPage();
+    }
+
+    private void EnsureValidPage()
+    {
+        int maxPage = Math.Max(1, (int)Math.Ceiling((double)filtered.Count / pageSize));
+        if (currentPage > maxPage) currentPage = maxPage;
+    }
+
+    private async Task HandleQuickScanBarcodeKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(quickScanBarcode))
+        {
+            var code = quickScanBarcode.Trim();
+            quickScanBarcode = string.Empty;
+
+            var existing = products.FirstOrDefault(p => string.Equals(p.Barcode, code, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+            {
+                existing = await ApiClient.GetProductByBarcodeAsync(code);
+            }
+
+            if (existing is not null)
+            {
+                OpenEditModal(existing);
+            }
+            else
+            {
+                await OpenAddModalWithBarcodeAsync(code);
+            }
+        }
+    }
+
+    private async Task OpenAddModalWithBarcodeAsync(string barcode)
+    {
+        OpenAddModal();
+        newProduct.Barcode = barcode;
+        await FetchOnlineProductInfo();
+    }
+
+    private async Task FetchOnlineProductInfo()
+    {
+        if (string.IsNullOrWhiteSpace(newProduct.Barcode))
+        {
+            errorMessage = "الرجاء أدخل أو امسح الباركود أولاً قبل البحث أونلاين.";
+            return;
+        }
+
+        isFetchingOnline = true;
+        errorMessage = string.Empty;
+
+        var result = await ApiClient.LookupProductOnlineAsync(newProduct.Barcode);
+        isFetchingOnline = false;
+
+        if (result is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(result.NameAr)) newProduct.NameAr = result.NameAr;
+            if (!string.IsNullOrWhiteSpace(result.NameEn)) newProduct.NameEn = result.NameEn;
+
+            if (result.ImageBytes is not null && result.ImageBytes.Length > 0)
+            {
+                selectedImageBytes = result.ImageBytes;
+                selectedFileName = $"{newProduct.Barcode}_online.jpg";
+                var base64 = Convert.ToBase64String(result.ImageBytes);
+                imagePreviewUrl = $"data:image/jpeg;base64,{base64}";
+            }
+        }
+        else
+        {
+            errorMessage = "لم يتوفر هذا الباركود في قاعدة البيانات العالمية المفتوحة. يمكنك أدخال اسم المنتج وسعر البيع يدوياً بسهولة.";
+        }
+    }
+
+    // Carton Price Calculator State
+    private decimal calcPiecePurchaseCost = 0;
+    private decimal calcPieceSellingPrice = 0;
+    private decimal calcPieceWholesalePrice = 0;
+
+    private decimal calcCartonPurchaseCost => (newProduct.ConversionFactor > 0 && calcPiecePurchaseCost > 0)
+        ? Math.Round(calcPiecePurchaseCost * newProduct.ConversionFactor, 2)
+        : 0;
+
+    private decimal calcCartonSellingPrice => (newProduct.ConversionFactor > 0 && calcPieceSellingPrice > 0)
+        ? Math.Round(calcPieceSellingPrice * newProduct.ConversionFactor, 2)
+        : 0;
+
+    private decimal calcCartonWholesalePrice => (newProduct.ConversionFactor > 0 && calcPieceWholesalePrice > 0)
+        ? Math.Round(calcPieceWholesalePrice * newProduct.ConversionFactor, 2)
+        : 0;
+
+    private bool priceMatchedSuccessNotice = false;
+
+    private void ApplyCartonPricesToPiecePrices()
+    {
+        if (newProduct.ConversionFactor <= 1) return;
+
+        if (calcPiecePurchaseCost > 0)
+            newProduct.PurchasePrice = calcPiecePurchaseCost;
+
+        if (calcPieceSellingPrice > 0)
+            newProduct.SellingPrice = calcPieceSellingPrice;
+
+        if (calcPieceWholesalePrice > 0)
+            newProduct.WholesalePrice = calcPieceWholesalePrice;
+
+        priceMatchedSuccessNotice = true;
+    }
+
+    private void SyncCartonPricesFromPiecePrices()
+    {
+        calcPiecePurchaseCost = newProduct.PurchasePrice;
+        calcPieceSellingPrice = newProduct.SellingPrice;
+        calcPieceWholesalePrice = newProduct.WholesalePrice;
+        priceMatchedSuccessNotice = false;
+    }
+
+    private void OnPiecePriceChanged()
+    {
+        SyncCartonPricesFromPiecePrices();
+    }
+
+    private void OpenAddModal()
+    {
+        editingProductId = Guid.Empty;
+        newProduct = new CreateProductFormModel
+        {
+            BaseUnit = "قطعة",
+            ParentUnit = "كرتونة",
+            ConversionFactor = 1,
+            ShelfLifeDays = 0,
+            ExpiryAlertDays = 0,
+            InitialStock = 0,
+            BrandId = null,
+            ModelNumber = null,
+            Color = null,
+            WarrantyPeriodMonths = 12,
+            MaintenanceAgent = null,
+            HasSerialNumber = false
+        };
+        initialCartons = 0;
+        initialPieces = 0;
+        GenerateBarcode();
+        categoryIdString = categories.FirstOrDefault()?.Id.ToString() ?? string.Empty;
+        brandIdString = string.Empty;
+        unitIdString = units.FirstOrDefault()?.Id.ToString() ?? string.Empty;
+        supplierIdString = string.Empty;
+
+        selectedImageBytes = null;
+        selectedFileName = null;
+        imagePreviewUrl = null;
+        currentProductImageUrl = null;
+        imageRemoved = false;
+
+        SyncCartonPricesFromPiecePrices();
+
+        errorMessage = string.Empty;
+
+        showAddModal = true;
+        showEditModal = false;
+        _ = FocusElementAsync("product-modal-barcode-input", 100);
+    }
+
+    private void OpenEditModal(ProductDto prod)
+    {
+        editingProductId = prod.Id;
+        currentProductImageUrl = prod.ImageUrl;
+        selectedImageBytes = null;
+        selectedFileName = null;
+        imagePreviewUrl = null;
+        imageRemoved = false;
+
+        newProduct = new CreateProductFormModel
+        {
+            Barcode = prod.Barcode,
+            NameAr = prod.NameAr,
+            NameEn = prod.NameEn,
+            Description = PackagingUnitHelper.CleanDescription(prod.Description),
+            CategoryId = prod.CategoryId,
+            BrandId = prod.BrandId,
+            ModelNumber = prod.ModelNumber,
+            Color = prod.Color,
+            WarrantyPeriodMonths = prod.WarrantyPeriodMonths,
+            MaintenanceAgent = prod.MaintenanceAgent,
+            HasSerialNumber = prod.HasSerialNumber,
+            UnitId = prod.UnitId,
+            SupplierId = prod.SupplierId,
+            BaseUnit = string.IsNullOrWhiteSpace(prod.BaseUnit) ? "قطعة" : prod.BaseUnit,
+            ParentUnit = string.IsNullOrWhiteSpace(prod.ParentUnit) ? "كرتونة" : prod.ParentUnit,
+            ConversionFactor = prod.ConversionFactor > 0 ? prod.ConversionFactor : 1,
+            ShelfLifeDays = prod.ShelfLifeDays,
+            ExpiryAlertDays = prod.ExpiryAlertDays,
+            PurchasePrice = prod.PurchasePrice,
+            SellingPrice = prod.SellingPrice,
+            WholesalePrice = prod.WholesalePrice,
+            ReorderLevel = prod.ReorderLevel,
+            MaxStockLevel = prod.MaxStockLevel,
+            IsWeighable = false,
+            IsActive = prod.IsActive,
+            TrackExpiry = false,
+            TaxRate = prod.TaxRate
+        };
+
+        categoryIdString = prod.CategoryId.ToString();
+        brandIdString = prod.BrandId?.ToString() ?? string.Empty;
+        unitIdString = prod.UnitId.ToString();
+        supplierIdString = prod.SupplierId?.ToString() ?? string.Empty;
+
+        SyncCartonPricesFromPiecePrices();
+
+        errorMessage = string.Empty;
+        showEditModal = true;
+        showAddModal = false;
+        _ = FocusElementAsync("product-modal-barcode-input", 100);
+    }
+
+    private void ConfirmDeleteProduct(ProductDto prod)
+    {
+        productToDelete = prod;
+        showDeleteModal = true;
+    }
+
+    private void CloseModals()
+    {
+        showAddModal = false;
+        showEditModal = false;
+        showDeleteModal = false;
+        showImportModal = false;
+        showBarcodeModal = false;
+        showSerialsModal = false;
+        selectedProductForSerials = null;
+        productSerialsList.Clear();
+        newSerialsInput = string.Empty;
+        productToDelete = null;
+        selectedProductForBarcode = null;
+        _ = FocusElementAsync("product-quick-scan-barcode", 50);
+    }
+
+    private async Task OpenSerialsModal(ProductDto prod)
+    {
+        selectedProductForSerials = prod;
+        showSerialsModal = true;
+        await LoadSerialsAsync(prod.Id);
+    }
+
+    private async Task LoadSerialsAsync(Guid productId)
+    {
+        productSerialsList = await ApiClient.GetProductSerialsAsync(productId);
+    }
+
+    private async Task SubmitAddSerials()
+    {
+        if (selectedProductForSerials == null || string.IsNullOrWhiteSpace(newSerialsInput))
+            return;
+
+        var serials = newSerialsInput
+            .Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => !string.IsNullOrEmpty(s))
+            .Distinct()
+            .ToList();
+
+        if (!serials.Any()) return;
+
+        isSubmittingSerials = true;
+        try
+        {
+            var (success, err) = await ApiClient.AddProductSerialsAsync(selectedProductForSerials.Id, serials);
+            if (success)
+            {
+                newSerialsInput = string.Empty;
+                await LoadSerialsAsync(selectedProductForSerials.Id);
+                await LoadData();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", err ?? "فشل تسجيل الأرقام التسلسلية.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", ex.Message);
+        }
+        finally
+        {
+            isSubmittingSerials = false;
+        }
+    }
+
+    private async Task OpenBarcodeModal(ProductDto prod)
+    {
+        selectedProductForBarcode = prod;
+        barcodePrintQty = 1;
+        barcodeShowPrice = true;
+        if (!string.IsNullOrWhiteSpace(StoreState.StoreName))
+        {
+            barcodeStoreName = StoreState.StoreName;
+        }
+        showBarcodeModal = true;
+
+        StateHasChanged();
+        await Task.Delay(150);
+        await JS.InvokeVoidAsync("renderBarcodeSvg", "preview-barcode-svg", prod.Barcode);
+    }
+
+    private async Task PrintBarcodeFromAddModal()
+    {
+        if (string.IsNullOrWhiteSpace(newProduct.Barcode))
+        {
+            errorMessage = "يرجى إدخال أو توليد الباركود أولاً قبل الطباعة.";
+            return;
+        }
+
+        var tempProd = new ProductDto(
+            Id: Guid.Empty,
+            Barcode: newProduct.Barcode,
+            NameAr: string.IsNullOrWhiteSpace(newProduct.NameAr) ? "منتج جديد" : newProduct.NameAr,
+            NameEn: newProduct.NameEn ?? string.Empty,
+            Description: newProduct.Description,
+            CategoryId: Guid.Empty,
+            CategoryName: "عام",
+            UnitId: Guid.Empty,
+            UnitSymbol: "قطعة",
+            SupplierId: null,
+            SupplierName: null,
+            PurchasePrice: newProduct.PurchasePrice,
+            SellingPrice: newProduct.SellingPrice,
+            WholesalePrice: newProduct.WholesalePrice,
+            QuantityInStock: 0,
+            ReorderLevel: 0,
+            MaxStockLevel: 0,
+            IsWeighable: false,
+            IsActive: true,
+            TrackExpiry: false,
+            TaxRate: 14,
+            ImageUrl: null
+        );
+
+        await OpenBarcodeModal(tempProd);
+    }
+
+    private async Task ExecutePrintBarcode()
+    {
+        if (selectedProductForBarcode is null) return;
+
+        var priceText = barcodeShowPrice ? $"{selectedProductForBarcode.SellingPrice:N2} ج.م" : string.Empty;
+        await JS.InvokeVoidAsync("printBarcodeLabels",
+            selectedProductForBarcode.NameAr,
+            selectedProductForBarcode.Barcode,
+            priceText,
+            barcodePrintQty,
+            barcodeStoreName,
+            barcodeShowPrice);
+
+        CloseModals();
+    }
+
+
+
+    private void GenerateBarcode()
+    {
+        newProduct.Barcode = $"{Random.Shared.Next(6290000, 6299999)}{Random.Shared.Next(10000, 99999)}";
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            selectedFileName = file.Name;
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            selectedImageBytes = ms.ToArray();
+
+            var base64 = Convert.ToBase64String(selectedImageBytes);
+            imagePreviewUrl = $"data:{file.ContentType};base64,{base64}";
+        }
+    }
+
+    private async Task SaveProduct()
+    {
+        if (string.IsNullOrWhiteSpace(newProduct.Barcode))
+        {
+            errorMessage = "الرجاء إدخال أو توليد الباركود.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newProduct.NameAr) && string.IsNullOrWhiteSpace(newProduct.NameEn))
+        {
+            errorMessage = "الرجاء إدخال اسم المنتج (بالعربية أو بالإنجليزية على الأقل).";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newProduct.NameAr))
+        {
+            newProduct.NameAr = newProduct.NameEn;
+        }
+        else if (string.IsNullOrWhiteSpace(newProduct.NameEn))
+        {
+            newProduct.NameEn = newProduct.NameAr;
+        }
+
+        if (!Guid.TryParse(categoryIdString, out var categoryId) || categoryId == Guid.Empty)
+        {
+            errorMessage = "الرجاء اختيار تصنيف صحيح.";
+            return;
+        }
+
+        Guid unitId = Guid.Empty;
+        if (!string.IsNullOrWhiteSpace(newProduct.BaseUnit))
+        {
+            var matched = units.FirstOrDefault(u => string.Equals(u.NameAr?.Trim(), newProduct.BaseUnit.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (matched != null)
+            {
+                unitId = matched.Id;
+            }
+        }
+        if (unitId == Guid.Empty)
+        {
+            unitId = units.FirstOrDefault()?.Id ?? (Guid.TryParse(unitIdString, out var uId) ? uId : Guid.Parse("00000000-0000-0000-0000-000000000001"));
+        }
+
+        newProduct.CategoryId = categoryId;
+        newProduct.UnitId = unitId;
+        newProduct.SupplierId = Guid.TryParse(supplierIdString, out var supplierId) ? supplierId : null;
+
+        newProduct.Description = PackagingUnitHelper.CleanDescription(newProduct.Description);
+
+        newProduct.TrackExpiry = false;
+        newProduct.ShelfLifeDays = 0;
+        newProduct.ExpiryAlertDays = 0;
+
+        newProduct.BrandId = Guid.TryParse(brandIdString, out var bId) && bId != Guid.Empty ? bId : null;
+
+        isSaving = true;
+        errorMessage = string.Empty;
+
+        if (showEditModal)
+        {
+            string? targetImageUrl = null;
+            if (selectedImageBytes != null && !string.IsNullOrWhiteSpace(selectedFileName))
+            {
+                var (uploadedUrl, uploadErr) = await ApiClient.UploadProductImageAsync(selectedImageBytes, selectedFileName);
+                if (!string.IsNullOrEmpty(uploadErr))
+                {
+                    errorMessage = $"فشل رفع الصورة الجديدة: {uploadErr}";
+                    isSaving = false;
+                    return;
+                }
+                targetImageUrl = uploadedUrl;
+            }
+            else if (imageRemoved)
+            {
+                targetImageUrl = string.Empty;
+            }
+            else
+            {
+                targetImageUrl = currentProductImageUrl;
+            }
+
+            var updateModel = new UpdateProductCommandModel(
+                editingProductId,
+                newProduct.Barcode,
+                newProduct.NameAr,
+                newProduct.NameEn,
+                newProduct.Description,
+                newProduct.CategoryId,
+                newProduct.UnitId,
+                newProduct.SupplierId,
+                newProduct.PurchasePrice,
+                newProduct.SellingPrice,
+                newProduct.WholesalePrice,
+                newProduct.ReorderLevel,
+                newProduct.MaxStockLevel,
+                newProduct.IsWeighable,
+                newProduct.IsActive,
+                newProduct.TrackExpiry,
+                newProduct.TaxRate,
+                targetImageUrl,
+                newProduct.BaseUnit,
+                newProduct.ParentUnit,
+                newProduct.ConversionFactor,
+                newProduct.ShelfLifeDays,
+                newProduct.ExpiryAlertDays,
+                newProduct.BrandId,
+                newProduct.ModelNumber,
+                newProduct.Color,
+                newProduct.WarrantyPeriodMonths,
+                newProduct.MaintenanceAgent,
+                newProduct.HasSerialNumber);
+
+            var (success, error) = await ApiClient.UpdateProductAsync(updateModel);
+            isSaving = false;
+
+            if (success)
+            {
+                CloseModals();
+                await LoadData();
+            }
+            else
+            {
+                errorMessage = !string.IsNullOrEmpty(error) ? error : "فشل تحديث المنتج.";
+            }
+        }
+        else
+        {
+            var (result, error) = await ApiClient.CreateProductAsync(newProduct, selectedImageBytes, selectedFileName);
+            isSaving = false;
+
+            if (result.HasValue && result.Value != Guid.Empty)
+            {
+                CloseModals();
+                await LoadData();
+            }
+            else
+            {
+                errorMessage = !string.IsNullOrEmpty(error) ? error : "فشل حفظ المنتج. الرجاء التحقق من مدخلاتك أو سجلات النظام.";
+            }
+        }
+    }
+
+    private async Task ExecuteDeleteProduct()
+    {
+        if (productToDelete == null) return;
+
+        isSaving = true;
+        errorMessage = string.Empty;
+        var (success, error) = await ApiClient.DeleteProductAsync(productToDelete.Id);
+        isSaving = false;
+
+        if (success)
+        {
+            CloseModals();
+            await LoadData();
+        }
+        else
+        {
+            errorMessage = !string.IsNullOrEmpty(error) ? error : "فشل حذف المنتج من قاعدة البيانات.";
+        }
+    }
+
+    private string GetImageFullUrl(string? relativeOrUrl)
+    {
+        if (string.IsNullOrWhiteSpace(relativeOrUrl)) return string.Empty;
+        return ApiClient.GetImageFullUrl(relativeOrUrl);
+    }
+
+    private bool showImportModal = false;
+    private bool updateExistingInImport = false;
+    private byte[]? selectedImportFileBytes;
+    private string? selectedImportFileName;
+    private string importErrorMessage = string.Empty;
+    private ProductImportResultDto? importResult;
+
+    private void OpenImportModal()
+    {
+        selectedImportFileBytes = null;
+        selectedImportFileName = null;
+        importErrorMessage = string.Empty;
+        importResult = null;
+        updateExistingInImport = false;
+        showImportModal = true;
+    }
+
+    private async Task OnImportFileSelected(InputFileChangeEventArgs e)
+    {
+        importErrorMessage = string.Empty;
+        importResult = null;
+        var file = e.File;
+        if (file != null)
+        {
+            if (file.Size > 100 * 1024 * 1024)
+            {
+                importErrorMessage = "حجم الملف يتجاوز الحد الأقصى المسموح به (100 ميجابايت).";
+                return;
+            }
+
+            try
+            {
+                using var stream = file.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                selectedImportFileBytes = ms.ToArray();
+                selectedImportFileName = file.Name;
+            }
+            catch (Exception ex)
+            {
+                importErrorMessage = $"خطأ في قراءة الملف: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task ExecuteImportExcel()
+    {
+        if (selectedImportFileBytes == null || string.IsNullOrEmpty(selectedImportFileName))
+        {
+            importErrorMessage = "الرجاء اختيار ملف إكسيل أولاً.";
+            return;
+        }
+
+        isSaving = true;
+        importErrorMessage = string.Empty;
+        importResult = null;
+
+        var (res, err) = await ApiClient.ImportProductsExcelAsync(
+            selectedImportFileBytes,
+            selectedImportFileName,
+            updateExistingInImport);
+
+        isSaving = false;
+
+        if (res != null)
+        {
+            importResult = res;
+            await LoadData();
+        }
+        else
+        {
+            importErrorMessage = !string.IsNullOrEmpty(err) ? err : "فشل استيراد ملف الإكسيل.";
+        }
+    }
+
+    private async Task DownloadExcelTemplate()
+    {
+        var bytes = await ApiClient.DownloadProductExcelTemplateAsync();
+        if (bytes != null && bytes.Length > 0)
+        {
+            var base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                "Products_Import_Template.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                base64);
+        }
+        else
+        {
+            errorMessage = "فشل تحميل قالب الإكسيل من السيرفر.";
+        }
+    }
+
+    private Guid? activeMenuProductId;
+
+    private void ToggleProductMenu(Guid prodId)
+    {
+        if (activeMenuProductId == prodId)
+            activeMenuProductId = null;
+        else
+            activeMenuProductId = prodId;
+    }
+
+    private void CloseProductMenu()
+    {
+        activeMenuProductId = null;
+    }
+
+    private async Task ToggleProductStatus(ProductDto prod)
+    {
+        CloseProductMenu();
+        var (success, error) = await ApiClient.ToggleProductStatusAsync(prod.Id, !prod.IsActive);
+        if (success)
+        {
+            await LoadData();
+        }
+        else
+        {
+            errorMessage = !string.IsNullOrEmpty(error) ? error : "فشل تغيير حالة المنتج.";
+        }
+    }
+}

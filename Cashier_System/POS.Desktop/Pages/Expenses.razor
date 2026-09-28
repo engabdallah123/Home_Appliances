@@ -1,0 +1,495 @@
+@page "/expenses"
+@using Microsoft.AspNetCore.Authorization
+@using global::POS.Desktop.Services.Api
+@using global::POS.Desktop.Services.Auth
+@attribute [Authorize]
+@inject PosApiClient ApiClient
+@inject CustomAuthStateProvider AuthState
+
+<div>
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">إدارة المصروفات</h2>
+            <p class="page-subtitle">تسجيل ومتابعة مصروفات السوبرماركت والتشغيل بالشهر والسنة</p>
+        </div>
+        <button class="btn btn-primary" @onclick="OpenAddModal">
+            <i class="fa-solid fa-plus me-1"></i> إضافة مصروف جديد
+        </button>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="stat-card" style="background: var(--bg-secondary); border-radius: 0.75rem; padding: 1.25rem; border: 1px solid var(--border-color); border-right: 4px solid var(--accent-blue);">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.35rem;">مصروفات اليوم</div>
+            <div style="font-size: 1.35rem; font-weight: 700; color: var(--accent-blue);">@todayTotal.ToString("N2") <span style="font-size: 0.85rem;">ج.م</span></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">(@todayCount مصروف)</div>
+        </div>
+
+        <div class="stat-card" style="background: var(--bg-secondary); border-radius: 0.75rem; padding: 1.25rem; border: 1px solid var(--border-color); border-right: 4px solid var(--accent-emerald);">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.35rem;">مصروفات الشهر الحالي</div>
+            <div style="font-size: 1.35rem; font-weight: 700; color: var(--accent-emerald);">@thisMonthTotal.ToString("N2") <span style="font-size: 0.85rem;">ج.م</span></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">(@thisMonthCount مصروف)</div>
+        </div>
+
+        <div class="stat-card" style="background: var(--bg-secondary); border-radius: 0.75rem; padding: 1.25rem; border: 1px solid var(--border-color); border-right: 4px solid var(--accent-purple);">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.35rem;">مصروفات السنة الحالية</div>
+            <div style="font-size: 1.35rem; font-weight: 700; color: var(--accent-purple);">@thisYearTotal.ToString("N2") <span style="font-size: 0.85rem;">ج.م</span></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">(@thisYearCount مصروف)</div>
+        </div>
+
+        <div class="stat-card" style="background: var(--bg-secondary); border-radius: 0.75rem; padding: 1.25rem; border: 1px solid var(--border-color); border-right: 4px solid var(--accent-red);">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.35rem;">إجمالي الفلترة الحالية</div>
+            <div style="font-size: 1.35rem; font-weight: 700; color: var(--accent-red);">@filteredExpenses.Sum(e => e.Amount).ToString("N2") <span style="font-size: 0.85rem;">ج.م</span></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">(@filteredExpenses.Count مصروف)</div>
+        </div>
+    </div>
+
+    <!-- Filter Controls Toolbar -->
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.25rem;">
+        <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; flex: 1;">
+                <!-- Search Box -->
+                <div class="search-box" style="min-width: 200px; flex: 1;">
+                    <i class="fa-solid fa-search"></i>
+                    <input @bind="searchQuery" @bind:event="oninput" @onkeyup="FilterExpenses" placeholder="بحث بالاسم أو التصنيف..." />
+                </div>
+
+                <!-- Date Preset Filter -->
+                <div>
+                    <select class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem;" @bind="selectedPreset" @bind:after="OnPresetChanged">
+                        <option value="All">كل الفترات الزمنية</option>
+                        <option value="Today">اليوم</option>
+                        <option value="ThisMonth">هذا الشهر</option>
+                        <option value="SelectedMonthYear">شهر وسنة محددة</option>
+                        <option value="CustomRange">فترة مخصصة (من - إلى)</option>
+                    </select>
+                </div>
+
+                <!-- Month Picker -->
+                @if (selectedPreset == "SelectedMonthYear" || selectedPreset == "All")
+                {
+                    <div>
+                        <select class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem;" @bind="selectedMonth" @bind:after="FilterExpenses">
+                            <option value="0">كل الشهور</option>
+                            <option value="1">يناير (1)</option>
+                            <option value="2">فبراير (2)</option>
+                            <option value="3">مارس (3)</option>
+                            <option value="4">أبريل (4)</option>
+                            <option value="5">مايو (5)</option>
+                            <option value="6">يونيو (6)</option>
+                            <option value="7">يوليو (7)</option>
+                            <option value="8">أغسطس (8)</option>
+                            <option value="9">سبتمبر (9)</option>
+                            <option value="10">أكتوبر (10)</option>
+                            <option value="11">نوفمبر (11)</option>
+                            <option value="12">ديسمبر (12)</option>
+                        </select>
+                    </div>
+                }
+
+                <!-- Year Picker -->
+                @if (selectedPreset == "SelectedMonthYear" || selectedPreset == "All")
+                {
+                    <div>
+                        <select class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem;" @bind="selectedYear" @bind:after="FilterExpenses">
+                            <option value="0">كل السنوات</option>
+                            @foreach (var y in availableYears)
+                            {
+                                <option value="@y">@y</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <!-- Category Filter -->
+                <div>
+                    <select class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem;" @bind="selectedCategory" @bind:after="FilterExpenses">
+                        <option value="">جميع التصنيفات</option>
+                        <option value="كهرباء ومياه">كهرباء ومياه</option>
+                        <option value="إيجار">إيجار المقر</option>
+                        <option value="صيانة ومعدات">صيانة ومعدات</option>
+                        <option value="رواتب وأجور">رواتب وأجور</option>
+                        <option value="أدوات مكتبية وتغليف">أدوات مكتبية وتغليف</option>
+                        <option value="ضيافة ونظافة">ضيافة ونظافة</option>
+                        <option value="أخرى">أخرى</option>
+                    </select>
+                </div>
+
+                <!-- Custom Range Inputs -->
+                @if (selectedPreset == "CustomRange")
+                {
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="date" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;" @bind="fromDate" @bind:after="FilterExpenses" />
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">إلى</span>
+                        <input type="date" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;" @bind="toDate" @bind:after="FilterExpenses" />
+                    </div>
+                }
+            </div>
+
+            <!-- Reset Button -->
+            <div>
+                <button class="btn btn-secondary" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;" @onclick="ResetFilters" title="إعادة ضبط الفلاتر">
+                    <i class="fa-solid fa-rotate-left me-1"></i> إعادة ضبط
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>بيان المصروف</th>
+                    <th>التصنيف</th>
+                    <th>المبلغ</th>
+                    <th>تاريخ الصرف</th>
+                    <th>ملاحظات</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (isLoading)
+                {
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                            <i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--accent-blue);"></i>
+                            <p style="margin-top: 0.5rem;">جاري تحميل المصروفات...</p>
+                        </td>
+                    </tr>
+                }
+                else if (!filteredExpenses.Any())
+                {
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                            <i class="fa-solid fa-wallet" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+                            لا توجد مصروفات تطابق خيارات الفلترة المحددة.
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var exp in PagedExpenses)
+                    {
+                        <tr>
+                            <td style="font-weight: 600;">@exp.Title</td>
+                            <td>
+                                <span class="badge badge-indigo">
+                                    @exp.DisplayCategory
+                                </span>
+                            </td>
+                            <td style="color: var(--accent-red); font-weight: 700;">@exp.Amount.ToString("N2") ج.م</td>
+                            <td>@exp.ExpenseDate.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td style="color: var(--text-secondary); font-size: 0.85rem;">@(string.IsNullOrWhiteSpace(exp.Notes) ? "-" : exp.Notes)</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <Pagination CurrentPage="@currentPage" TotalItems="@filteredExpenses.Count" PageSize="@pageSize" OnPageChanged="@(p => currentPage = p)" OnPageSizeChanged="@(s => { pageSize = s; currentPage = 1; EnsureValidPage(); })" />
+</div>
+
+<!-- Add Expense Modal -->
+@if (showAddModal)
+{
+    <div class="modal-overlay" @onclick="CloseAddModal">
+        <div class="modal-card" style="width: 520px;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid fa-wallet me-2" style="color: var(--accent-red);"></i>
+                    تسجيل مصروف جديد
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseAddModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @errorMessage
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label>عنوان المصروف <span style="color: var(--accent-red);">*</span></label>
+                    <input class="form-control" @bind="newExpense.Title" placeholder="مثال: فاتورة كهرباء شهر أغسطس" />
+                </div>
+
+                <div class="form-group">
+                    <label>تصنيف المصروف <span style="color: var(--accent-red);">*</span></label>
+                    <select class="form-select" @bind="newExpense.Category">
+                        <option value="كهرباء ومياه">كهرباء ومياه</option>
+                        <option value="إيجار">إيجار المقر</option>
+                        <option value="صيانة ومعدات">صيانة ومعدات</option>
+                        <option value="رواتب وأجور">رواتب وأجور</option>
+                        <option value="أدوات مكتبية وتغليف">أدوات مكتبية وتغليف</option>
+                        <option value="ضيافة ونظافة">ضيافة ونظافة</option>
+                        <option value="أخرى">أخرى</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>المبلغ (جنيه) <span style="color: var(--accent-red);">*</span></label>
+                    <input type="number" step="0.01" class="form-control" @bind="newExpense.Amount" placeholder="0.00" style="font-size: 1.1rem; font-weight: 700;" />
+                </div>
+
+                <div class="form-group">
+                    <label>ملاحظات إضافية</label>
+                    <textarea class="form-control" rows="2" @bind="newExpense.Notes" placeholder="أدخل تفاصيل إضافية إن وجدت..."></textarea>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseAddModal" disabled="@isSaving">إلغاء</button>
+                <button class="btn btn-danger" @onclick="SaveExpense" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-check me-1"></i> <span>حفظ المصروف</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ExpenseDto> expenses = new();
+    private List<ExpenseDto> filteredExpenses = new();
+    private List<int> availableYears = new();
+
+    private decimal todayTotal = 0;
+    private int todayCount = 0;
+    private decimal thisMonthTotal = 0;
+    private int thisMonthCount = 0;
+    private decimal thisYearTotal = 0;
+    private int thisYearCount = 0;
+
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private IEnumerable<ExpenseDto> PagedExpenses => filteredExpenses.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private string searchQuery = string.Empty;
+    private string selectedPreset = "All";
+    private int selectedMonth = 0;
+    private int selectedYear = 0;
+    private string selectedCategory = string.Empty;
+    private DateTime? fromDate;
+    private DateTime? toDate;
+
+    private bool isLoading = true;
+
+    private bool showAddModal = false;
+    private bool isSaving = false;
+    private string errorMessage = string.Empty;
+
+    private CreateExpenseModel newExpense = new();
+
+    private class CreateExpenseModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Category { get; set; } = "كهرباء ومياه";
+        public decimal Amount { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadExpenses();
+    }
+
+    private async Task LoadExpenses()
+    {
+        isLoading = true;
+        expenses = await ApiClient.GetExpensesListAsync();
+        
+        CalculateStatistics();
+        PopulateAvailableYears();
+        FilterExpenses();
+
+        isLoading = false;
+    }
+
+    private void CalculateStatistics()
+    {
+        var now = DateTime.Now;
+        var today = now.Date;
+
+        var todayList = expenses.Where(e => e.ExpenseDate.Date == today).ToList();
+        todayTotal = todayList.Sum(e => e.Amount);
+        todayCount = todayList.Count;
+
+        var monthList = expenses.Where(e => e.ExpenseDate.Month == now.Month && e.ExpenseDate.Year == now.Year).ToList();
+        thisMonthTotal = monthList.Sum(e => e.Amount);
+        thisMonthCount = monthList.Count;
+
+        var yearList = expenses.Where(e => e.ExpenseDate.Year == now.Year).ToList();
+        thisYearTotal = yearList.Sum(e => e.Amount);
+        thisYearCount = yearList.Count;
+    }
+
+    private void PopulateAvailableYears()
+    {
+        availableYears = expenses
+            .Select(e => e.ExpenseDate.Year)
+            .Union(new[] { DateTime.Now.Year })
+            .Distinct()
+            .OrderByDescending(y => y)
+            .ToList();
+    }
+
+    private void OnPresetChanged()
+    {
+        var now = DateTime.Now;
+        if (selectedPreset == "Today")
+        {
+            selectedMonth = now.Month;
+            selectedYear = now.Year;
+        }
+        else if (selectedPreset == "ThisMonth")
+        {
+            selectedMonth = now.Month;
+            selectedYear = now.Year;
+        }
+        else if (selectedPreset == "SelectedMonthYear" && selectedMonth == 0)
+        {
+            selectedMonth = now.Month;
+            selectedYear = now.Year;
+        }
+
+        FilterExpenses();
+    }
+
+    private void FilterExpenses()
+    {
+        currentPage = 1;
+        var query = expenses.AsEnumerable();
+
+        // 1. Text Search Filter
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            query = query.Where(e =>
+                e.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                e.DisplayCategory.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(e.Notes) && e.Notes.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        // 2. Category Filter
+        if (!string.IsNullOrWhiteSpace(selectedCategory))
+        {
+            query = query.Where(e => string.Equals(e.DisplayCategory, selectedCategory, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // 3. Date / Period Preset Filter
+        var now = DateTime.Now;
+        switch (selectedPreset)
+        {
+            case "Today":
+                query = query.Where(e => e.ExpenseDate.Date == now.Date);
+                break;
+            case "ThisMonth":
+                query = query.Where(e => e.ExpenseDate.Month == now.Month && e.ExpenseDate.Year == now.Year);
+                break;
+            case "SelectedMonthYear":
+                if (selectedMonth > 0)
+                {
+                    query = query.Where(e => e.ExpenseDate.Month == selectedMonth);
+                }
+                if (selectedYear > 0)
+                {
+                    query = query.Where(e => e.ExpenseDate.Year == selectedYear);
+                }
+                break;
+            case "CustomRange":
+                if (fromDate.HasValue)
+                {
+                    query = query.Where(e => e.ExpenseDate.Date >= fromDate.Value.Date);
+                }
+                if (toDate.HasValue)
+                {
+                    query = query.Where(e => e.ExpenseDate.Date <= toDate.Value.Date);
+                }
+                break;
+            case "All":
+            default:
+                if (selectedMonth > 0)
+                {
+                    query = query.Where(e => e.ExpenseDate.Month == selectedMonth);
+                }
+                if (selectedYear > 0)
+                {
+                    query = query.Where(e => e.ExpenseDate.Year == selectedYear);
+                }
+                break;
+        }
+
+        filteredExpenses = query.ToList();
+        EnsureValidPage();
+    }
+
+    private void ResetFilters()
+    {
+        searchQuery = string.Empty;
+        selectedPreset = "All";
+        selectedMonth = 0;
+        selectedYear = 0;
+        selectedCategory = string.Empty;
+        fromDate = null;
+        toDate = null;
+        FilterExpenses();
+    }
+
+    private void EnsureValidPage()
+    {
+        int maxPage = Math.Max(1, (int)Math.Ceiling((double)filteredExpenses.Count / pageSize));
+        if (currentPage > maxPage) currentPage = maxPage;
+    }
+
+    private void OpenAddModal()
+    {
+        newExpense = new CreateExpenseModel();
+        errorMessage = string.Empty;
+        showAddModal = true;
+    }
+
+    private void CloseAddModal() => showAddModal = false;
+
+    private async Task SaveExpense()
+    {
+        if (string.IsNullOrWhiteSpace(newExpense.Title))
+        {
+            errorMessage = "الرجاء إدخال عنوان المصروف.";
+            return;
+        }
+
+        if (newExpense.Amount <= 0)
+        {
+            errorMessage = "الرجاء إدخال مبلغ صحيح أكبر من صفر.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = string.Empty;
+
+        var req = new CreateExpenseRequest(newExpense.Title, newExpense.Amount, AuthState.UserId, newExpense.Category, DateTime.Now, newExpense.Notes);
+        var (success, error) = await ApiClient.CreateExpenseAsync(req);
+        isSaving = false;
+
+        if (success)
+        {
+            CloseAddModal();
+            await LoadExpenses();
+        }
+        else
+        {
+            errorMessage = !string.IsNullOrEmpty(error) ? error : "فشل إضافة المصروف.";
+        }
+    }
+}

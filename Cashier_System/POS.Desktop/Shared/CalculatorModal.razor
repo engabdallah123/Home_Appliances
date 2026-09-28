@@ -1,0 +1,572 @@
+@implements IDisposable
+@inject CalculatorStateContainer CalcState
+@inject IJSRuntime JS
+
+@if (CalcState.IsOpen)
+{
+    <div class="calculator-modal-backdrop" @onclick="Close">
+        <div class="calculator-modal-container @(showHistory ? "with-history" : "")" @onclick:stopPropagation="true">
+            
+            <!-- Main Calculator Window -->
+            <div class="calc-main-card">
+                
+                <!-- Calculator Header Bar -->
+                <div class="calc-header">
+                    <div class="calc-title">
+                        <div class="calc-icon-badge">
+                            <i class="fa-solid fa-calculator"></i>
+                        </div>
+                        <div class="calc-title-text">
+                            <h3>آلة حاسبة ذكية</h3>
+                            <span>نظام الكاشير والمبيعات السريع</span>
+                        </div>
+                    </div>
+
+                    <div class="calc-header-actions">
+                        <button type="button" 
+                                class="calc-btn-icon @(showHistory ? "active" : "")" 
+                                @onclick="ToggleHistory" 
+                                title="سجل العمليات السابقة">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            @if (history.Any())
+                            {
+                                <span class="calc-history-badge">@history.Count</span>
+                            }
+                        </button>
+                        <button type="button" class="calc-btn-icon close" @onclick="Close" title="إغلاق (Esc)">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Digital Screen Display -->
+                <div class="calc-screen">
+                    <div class="calc-screen-top">
+                        <div class="calc-indicators">
+                            @if (hasMemory)
+                            {
+                                <span class="indicator-tag memory">M</span>
+                            }
+                            @if (!string.IsNullOrEmpty(currentOperationDisplay))
+                            {
+                                <span class="indicator-tag op">@currentOperationDisplay</span>
+                            }
+                        </div>
+                        <div class="calc-equation" title="@formulaDisplay">
+                            @(string.IsNullOrWhiteSpace(formulaDisplay) ? " " : formulaDisplay)
+                        </div>
+                    </div>
+
+                    <div class="calc-screen-main">
+                        <div class="calc-display-digits" title="@currentDisplay">
+                            @FormatDisplay(currentDisplay)
+                        </div>
+                        <button type="button" class="calc-copy-btn @(showCopyFeedback ? "copied" : "")" @onclick="CopyToClipboard" title="نسخ الناتج">
+                            <i class="fa-solid @(showCopyFeedback ? "fa-check" : "fa-copy")"></i>
+                            <span>@(showCopyFeedback ? "تم النسخ" : "نسخ")</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- POS Quick Actions Toolbar (Tax, Discount, Math Helpers) -->
+                <div class="calc-quick-toolbar">
+                    <button type="button" class="quick-pill tax" @onclick='() => ApplyTax(14)' title="إضافة ضريبة القيمة المضافة 14%">+14% ضريبة</button>
+                    <button type="button" class="quick-pill tax" @onclick='() => ApplyTax(10)' title="إضافة ضريبة 10%">+10% ضريبة</button>
+                    <button type="button" class="quick-pill discount" @onclick='() => ApplyDiscount(10)' title="خصم 10%">-10% خصم</button>
+                    <button type="button" class="quick-pill discount" @onclick='() => ApplyDiscount(5)' title="خصم 5%">-5% خصم</button>
+                    <button type="button" class="quick-pill util" @onclick="RoundDisplay" title="تقريب الناتج لأقرب رقمين عشريين">تقريب</button>
+                </div>
+
+                <!-- Keypad Area -->
+                <div class="calc-keypad">
+                    <!-- Row 1: Memory & Backspace -->
+                    <button type="button" class="calc-btn mem @(hasMemory ? "active" : "")" @onclick="MemoryClear" title="مسح الذاكرة (Memory Clear)">MC</button>
+                    <button type="button" class="calc-btn mem @(hasMemory ? "active" : "")" @onclick="MemoryRecall" title="استرجاع من الذاكرة (Memory Recall)">MR</button>
+                    <button type="button" class="calc-btn mem" @onclick="MemoryAdd" title="إضافة إلى الذاكرة (Memory Add)">M+</button>
+                    <button type="button" class="calc-btn mem" @onclick="MemorySubtract" title="طرح من الذاكرة (Memory Subtract)">M-</button>
+                    <button type="button" class="calc-btn func backspace" @onclick="Backspace" title="حذف رقم (Backspace)">
+                        <i class="fa-solid fa-delete-left"></i>
+                    </button>
+
+                    <!-- Row 2: Clear & Functions & Division -->
+                    <button type="button" class="calc-btn func clear-all" @onclick="ClearAll" title="مسح الكل (C / Esc)">C</button>
+                    <button type="button" class="calc-btn func clear-entry" @onclick="ClearEntry" title="مسح المدخل الحالي (CE / Delete)">CE</button>
+                    <button type="button" class="calc-btn math" @onclick="SquareRoot" title="الجذر التربيعي (√x)">√x</button>
+                    <button type="button" class="calc-btn math" @onclick="Percentage" title="النسبة المئوية (%)">%</button>
+                    <button type="button" class="calc-btn op @(pendingOp == "/" ? "selected" : "")" @onclick='() => SetOperation("/")' title="قسمة (/)">÷</button>
+
+                    <!-- Row 3: 7, 8, 9, Square, Multiply -->
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("7")'>7</button>
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("8")'>8</button>
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("9")'>9</button>
+                    <button type="button" class="calc-btn math" @onclick="Square" title="التربيع (x²)">x²</button>
+                    <button type="button" class="calc-btn op @(pendingOp == "*" ? "selected" : "")" @onclick='() => SetOperation("*")' title="ضرب (*)">×</button>
+
+                    <!-- Row 4: 4, 5, 6, Reciprocal, Subtract -->
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("4")'>4</button>
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("5")'>5</button>
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("6")'>6</button>
+                    <button type="button" class="calc-btn math" @onclick="Reciprocal" title="مقلوب العدد (1/x)">1/x</button>
+                    <button type="button" class="calc-btn op @(pendingOp == "-" ? "selected" : "")" @onclick='() => SetOperation("-")' title="طرح (−)">−</button>
+
+                    <!-- Row 5: 1, 2, 3, 00, Add -->
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("1")'>1</button>
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("2")'>2</button>
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("3")'>3</button>
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("00")'>00</button>
+                    <button type="button" class="calc-btn op @(pendingOp == "+" ? "selected" : "")" @onclick='() => SetOperation("+")' title="جمع (+)">+</button>
+
+                    <!-- Row 6: Sign, 0, Decimal, Equals (Spans 2 columns) -->
+                    <button type="button" class="calc-btn num" @onclick="ToggleSign" title="تغيير الإشارة (±)">±</button>
+                    <button type="button" class="calc-btn num" @onclick='() => AppendDigit("0")'>0</button>
+                    <button type="button" class="calc-btn num" @onclick="AppendDecimal" title="فاصلة عشرية (.)">.</button>
+                    <button type="button" class="calc-btn equals" style="grid-column: span 2;" @onclick="CalculateEquals" title="حساب الناتج (Enter / =)">=</button>
+                </div>
+
+                <!-- Footer Shortcut Help -->
+                <div class="calc-footer-info">
+                    <i class="fa-solid fa-keyboard me-1"></i>
+                    <span>استخدم لوحة الأرقام والكيبورد مباشرة [Enter للناتج | Esc للإغلاق | F10 لفتح/غلق]</span>
+                </div>
+            </div>
+
+            <!-- Slide-out History Tape Drawer -->
+            @if (showHistory)
+            {
+                <div class="calc-history-drawer">
+                    <div class="calc-history-header">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-indigo);"></i>
+                            <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700;">سجل العمليات</h4>
+                        </div>
+                        <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" @onclick="ClearHistory" title="مسح السجل">
+                            <i class="fa-solid fa-trash-can me-1"></i> مسح
+                        </button>
+                    </div>
+
+                    <div class="calc-history-body">
+                        @if (!history.Any())
+                        {
+                            <div class="calc-history-empty">
+                                <i class="fa-solid fa-receipt fa-2x" style="opacity: 0.3; margin-bottom: 0.5rem;"></i>
+                                <p>لا توجد عمليات سابقة حتى الآن</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var item in history)
+                            {
+                                <div class="calc-history-item" @onclick="() => UseHistoryResult(item.Result)" title="انقر لاستخدام هذا الناتج في الشاشة">
+                                    <div class="history-item-time">@item.Timestamp.ToString("hh:mm:ss tt")</div>
+                                    <div class="history-item-exp">@item.Expression</div>
+                                    <div class="history-item-res">= @item.Result</div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+
+        </div>
+    </div>
+}
+
+@code {
+    private string currentDisplay = "0";
+    private string formulaDisplay = "";
+    private string? pendingOp = null;
+    private decimal? firstOperand = null;
+    private bool isNewEntry = true;
+    private bool hasMemory = false;
+    private decimal memoryValue = 0;
+    private bool showHistory = false;
+    private bool showCopyFeedback = false;
+    private List<HistoryEntry> history = new();
+
+    private string currentOperationDisplay => pendingOp switch
+    {
+        "+" => "+",
+        "-" => "−",
+        "*" => "×",
+        "/" => "÷",
+        _ => ""
+    };
+
+    private record HistoryEntry(string Expression, string Result, DateTime Timestamp);
+
+    protected override void OnInitialized()
+    {
+        CalcState.OnStateChanged += HandleStateChanged;
+    }
+
+    private async void HandleStateChanged()
+    {
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Close()
+    {
+        CalcState.Close();
+    }
+
+    private void ToggleHistory()
+    {
+        showHistory = !showHistory;
+    }
+
+    private void ClearHistory()
+    {
+        history.Clear();
+    }
+
+    private void UseHistoryResult(string result)
+    {
+        currentDisplay = result;
+        isNewEntry = true;
+    }
+
+    private void AppendDigit(string digit)
+    {
+        if (isNewEntry || currentDisplay == "0")
+        {
+            currentDisplay = digit;
+            isNewEntry = false;
+        }
+        else
+        {
+            if (currentDisplay.Length < 16)
+            {
+                currentDisplay += digit;
+            }
+        }
+    }
+
+    private void AppendDecimal()
+    {
+        if (isNewEntry)
+        {
+            currentDisplay = "0.";
+            isNewEntry = false;
+        }
+        else if (!currentDisplay.Contains("."))
+        {
+            currentDisplay += ".";
+        }
+    }
+
+    private void ToggleSign()
+    {
+        if (decimal.TryParse(currentDisplay, out var val) && val != 0)
+        {
+            currentDisplay = (-val).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+    }
+
+    private void ClearEntry()
+    {
+        currentDisplay = "0";
+        isNewEntry = true;
+    }
+
+    private void ClearAll()
+    {
+        currentDisplay = "0";
+        formulaDisplay = "";
+        pendingOp = null;
+        firstOperand = null;
+        isNewEntry = true;
+    }
+
+    private void Backspace()
+    {
+        if (isNewEntry) return;
+
+        if (currentDisplay.Length > 1)
+        {
+            currentDisplay = currentDisplay[..^1];
+            if (currentDisplay == "-" || currentDisplay == "")
+            {
+                currentDisplay = "0";
+                isNewEntry = true;
+            }
+        }
+        else
+        {
+            currentDisplay = "0";
+            isNewEntry = true;
+        }
+    }
+
+    private void SetOperation(string op)
+    {
+        if (decimal.TryParse(currentDisplay, out var currentVal))
+        {
+            if (firstOperand != null && pendingOp != null && !isNewEntry)
+            {
+                // Chain evaluation
+                var intermediate = ExecuteMath(firstOperand.Value, currentVal, pendingOp);
+                firstOperand = intermediate;
+                currentDisplay = intermediate.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                firstOperand = currentVal;
+            }
+
+            pendingOp = op;
+            var opSymbol = op switch { "*" => "×", "/" => "÷", "-" => "−", _ => "+" };
+            formulaDisplay = $"{FormatNumber(firstOperand.Value)} {opSymbol}";
+            isNewEntry = true;
+        }
+    }
+
+    private void CalculateEquals()
+    {
+        if (firstOperand != null && pendingOp != null && decimal.TryParse(currentDisplay, out var secondVal))
+        {
+            var opSymbol = pendingOp switch { "*" => "×", "/" => "÷", "-" => "−", _ => "+" };
+            var fullExpression = $"{FormatNumber(firstOperand.Value)} {opSymbol} {FormatNumber(secondVal)}";
+
+            var result = ExecuteMath(firstOperand.Value, secondVal, pendingOp);
+            var resultStr = result.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            history.Insert(0, new HistoryEntry(fullExpression, FormatNumber(result), DateTime.Now));
+            if (history.Count > 50) history.RemoveAt(history.Count - 1);
+
+            formulaDisplay = $"{fullExpression} =";
+            currentDisplay = resultStr;
+            firstOperand = null;
+            pendingOp = null;
+            isNewEntry = true;
+        }
+    }
+
+    private decimal ExecuteMath(decimal a, decimal b, string op)
+    {
+        try
+        {
+            return op switch
+            {
+                "+" => a + b,
+                "-" => a - b,
+                "*" => a * b,
+                "/" => b != 0 ? a / b : 0,
+                _ => b
+            };
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private void SquareRoot()
+    {
+        if (decimal.TryParse(currentDisplay, out var val) && val >= 0)
+        {
+            var res = (decimal)Math.Sqrt((double)val);
+            RecordUnaryOp($"√({FormatNumber(val)})", res);
+        }
+    }
+
+    private void Square()
+    {
+        if (decimal.TryParse(currentDisplay, out var val))
+        {
+            var res = val * val;
+            RecordUnaryOp($"sqr({FormatNumber(val)})", res);
+        }
+    }
+
+    private void Reciprocal()
+    {
+        if (decimal.TryParse(currentDisplay, out var val) && val != 0)
+        {
+            var res = 1m / val;
+            RecordUnaryOp($"1/({FormatNumber(val)})", res);
+        }
+    }
+
+    private void Percentage()
+    {
+        if (decimal.TryParse(currentDisplay, out var val))
+        {
+            if (firstOperand != null && pendingOp != null)
+            {
+                var percentVal = firstOperand.Value * (val / 100m);
+                currentDisplay = percentVal.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                var res = val / 100m;
+                RecordUnaryOp($"{FormatNumber(val)}%", res);
+            }
+        }
+    }
+
+    private void ApplyTax(decimal percent)
+    {
+        if (decimal.TryParse(currentDisplay, out var val))
+        {
+            var res = val * (1m + (percent / 100m));
+            RecordUnaryOp($"{FormatNumber(val)} + {percent}% ضريبة", res);
+        }
+    }
+
+    private void ApplyDiscount(decimal percent)
+    {
+        if (decimal.TryParse(currentDisplay, out var val))
+        {
+            var res = val * (1m - (percent / 100m));
+            RecordUnaryOp($"{FormatNumber(val)} − {percent}% خصم", res);
+        }
+    }
+
+    private void RoundDisplay()
+    {
+        if (decimal.TryParse(currentDisplay, out var val))
+        {
+            var res = Math.Round(val, 2);
+            currentDisplay = res.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            isNewEntry = true;
+        }
+    }
+
+    private void RecordUnaryOp(string expr, decimal result)
+    {
+        formulaDisplay = $"{expr} =";
+        currentDisplay = result.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        history.Insert(0, new HistoryEntry(expr, FormatNumber(result), DateTime.Now));
+        isNewEntry = true;
+    }
+
+    private void MemoryClear()
+    {
+        memoryValue = 0;
+        hasMemory = false;
+    }
+
+    private void MemoryRecall()
+    {
+        if (hasMemory)
+        {
+            currentDisplay = memoryValue.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            isNewEntry = true;
+        }
+    }
+
+    private void MemoryAdd()
+    {
+        if (decimal.TryParse(currentDisplay, out var val))
+        {
+            memoryValue += val;
+            hasMemory = memoryValue != 0;
+            isNewEntry = true;
+        }
+    }
+
+    private void MemorySubtract()
+    {
+        if (decimal.TryParse(currentDisplay, out var val))
+        {
+            memoryValue -= val;
+            hasMemory = memoryValue != 0;
+            isNewEntry = true;
+        }
+    }
+
+    private async Task CopyToClipboard()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", currentDisplay);
+            showCopyFeedback = true;
+            StateHasChanged();
+            _ = Task.Delay(2000).ContinueWith(_ =>
+            {
+                showCopyFeedback = false;
+                _ = InvokeAsync(StateHasChanged);
+            });
+        }
+        catch
+        {
+            // Fallback ignore
+        }
+    }
+
+    [JSInvokable]
+    public void HandleCalculatorKeyPress(string key)
+    {
+        if (!CalcState.IsOpen) return;
+
+        switch (key)
+        {
+            case "0":
+            case "1":
+            case "2":
+            case "3":
+            case "4":
+            case "5":
+            case "6":
+            case "7":
+            case "8":
+            case "9":
+                AppendDigit(key);
+                break;
+            case ".":
+            case ",":
+                AppendDecimal();
+                break;
+            case "+":
+            case "-":
+            case "*":
+            case "/":
+                SetOperation(key);
+                break;
+            case "Enter":
+            case "=":
+                CalculateEquals();
+                break;
+            case "Backspace":
+                Backspace();
+                break;
+            case "Escape":
+                Close();
+                break;
+            case "Delete":
+            case "c":
+            case "C":
+                ClearAll();
+                break;
+        }
+        StateHasChanged();
+    }
+
+    private string FormatDisplay(string raw)
+    {
+        if (decimal.TryParse(raw, out var val))
+        {
+            if (raw.EndsWith(".")) return val.ToString("#,##0") + ".";
+            if (raw.Contains("."))
+            {
+                var parts = raw.Split('.');
+                if (decimal.TryParse(parts[0], out var intPart))
+                {
+                    return intPart.ToString("#,##0") + "." + parts[1];
+                }
+            }
+            return val.ToString("#,##0.######");
+        }
+        return raw;
+    }
+
+    private string FormatNumber(decimal val)
+    {
+        return val.ToString("#,##0.##");
+    }
+
+    public void Dispose()
+    {
+        CalcState.OnStateChanged -= HandleStateChanged;
+    }
+}

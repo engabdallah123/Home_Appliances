@@ -1,0 +1,23 @@
+## Build and output directories
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+publish/
+installer/
+.vs/
+.idea/
+.vscode/
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Environment & Secrets
+appsettings.Local.json
+
+## EF Core Migrations / Design temporary files
+*.log

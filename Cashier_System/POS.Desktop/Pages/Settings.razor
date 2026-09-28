@@ -1,0 +1,649 @@
+@page "/settings"
+@using Microsoft.AspNetCore.Authorization
+@using System.IO
+@attribute [Authorize(Roles = "Admin,Manager")]
+@inject PosApiClient ApiClient
+@inject StoreStateContainer StoreState
+@inject IJSRuntime JS
+
+<div style="max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem;">
+    <div>
+        <h2 style="font-weight: 700;">إعدادات المتجر والنظام</h2>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            تحديث البيانات الأساسية للمتجر، نسبة الضريبة العامة، الخيارات الفنية وسياسة البيع والطباعة
+        </p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(saveSuccessMessage))
+    {
+        <div style="background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--accent-emerald); padding: 0.85rem 1.25rem; border-radius: 0.6rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-solid fa-circle-check"></i> @saveSuccessMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(saveErrorMessage))
+    {
+        <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.85rem 1.25rem; border-radius: 0.6rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-solid fa-circle-exclamation"></i> @saveErrorMessage
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+            <i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--accent-indigo);"></i>
+            <p style="margin-top: 0.5rem;">جاري تحميل إعدادات المتجر...</p>
+        </div>
+    }
+    else
+    {
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <!-- Store Profile Section -->
+            <div class="card">
+                <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 1.25rem; color: var(--accent-indigo);">
+                    <i class="fa-solid fa-store me-2"></i> بيانات المتجر الأساسية
+                </h3>
+
+                <!-- Invoice Branding & Images Section -->
+                <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
+                    <!-- 1. Header Image (الهيدر) -->
+                    <div style="padding: 1.25rem; background: var(--bg-primary); border-radius: 0.75rem; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 1.25rem;">
+                            <div style="width: 140px; height: 65px; border-radius: 0.5rem; border: 2px dashed var(--border-color); background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;">
+                                @if (!string.IsNullOrEmpty(headerPreviewUrl) || !string.IsNullOrEmpty(headerImageUrl))
+                                {
+                                    var displayImg = !string.IsNullOrEmpty(headerPreviewUrl) ? headerPreviewUrl : ApiClient.GetImageFullUrl(headerImageUrl);
+                                    <img src="@displayImg" alt="رأس الفاتورة" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                }
+                                else
+                                {
+                                    <div style="text-align: center; color: var(--text-secondary); opacity: 0.6;">
+                                        <i class="fa-solid fa-heading"></i>
+                                        <div style="font-size: 0.65rem;">افتراضي</div>
+                                    </div>
+                                }
+                            </div>
+                            <div>
+                                <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.25rem;">
+                                    <i class="fa-solid fa-file-invoice text-primary me-1"></i> صورة رأس الفاتورة (الهيدر)
+                                </h4>
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">
+                                    شريط الترويسة الرسمي الذي يظهر في أعلى الفاتورة المطبوعة (عرضي - PNG, JPG, WebP)
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 0.75rem; align-items: center;">
+                            <div style="position: relative; overflow: hidden; display: inline-block;">
+                                <button type="button" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem; pointer-events: none;" disabled="@isUploadingHeader">
+                                    @if (isUploadingHeader)
+                                    {
+                                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الرفع...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-solid fa-upload me-1"></i> <span>@(string.IsNullOrEmpty(headerImageUrl) && string.IsNullOrEmpty(headerPreviewUrl) ? "رفع صورة الهيدر" : "تغيير الهيدر")</span>
+                                    }
+                                </button>
+                                <InputFile OnChange="HandleHeaderSelected" accept="image/png, image/jpeg, image/webp" style="position: absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" disabled="@isUploadingHeader" />
+                            </div>
+                            @if (!string.IsNullOrEmpty(headerImageUrl) || !string.IsNullOrEmpty(headerPreviewUrl))
+                            {
+                                <button type="button" class="btn btn-danger" style="font-size: 0.85rem; padding: 0.5rem 1rem;" @onclick="RemoveHeader" disabled="@isUploadingHeader">
+                                    <i class="fa-solid fa-trash me-1"></i> حذف
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- 2. Footer Image (الفوتر) -->
+                    <div style="padding: 1.25rem; background: var(--bg-primary); border-radius: 0.75rem; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 1.25rem;">
+                            <div style="width: 140px; height: 65px; border-radius: 0.5rem; border: 2px dashed var(--border-color); background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;">
+                                @if (!string.IsNullOrEmpty(footerPreviewUrl) || !string.IsNullOrEmpty(footerImageUrl))
+                                {
+                                    var displayImg = !string.IsNullOrEmpty(footerPreviewUrl) ? footerPreviewUrl : ApiClient.GetImageFullUrl(footerImageUrl);
+                                    <img src="@displayImg" alt="تذييل الفاتورة" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                }
+                                else
+                                {
+                                    <div style="text-align: center; color: var(--text-secondary); opacity: 0.6;">
+                                        <i class="fa-solid fa-shoe-prints"></i>
+                                        <div style="font-size: 0.65rem;">افتراضي</div>
+                                    </div>
+                                }
+                            </div>
+                            <div>
+                                <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.25rem;">
+                                    <i class="fa-solid fa-shoe-prints text-primary me-1"></i> صورة تذييل الفاتورة (الفوتر)
+                                </h4>
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">
+                                    شريط العنوان والتواصل الذي يظهر في أسفل الفاتورة المطبوعة (عرضي - PNG, JPG, WebP)
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 0.75rem; align-items: center;">
+                            <div style="position: relative; overflow: hidden; display: inline-block;">
+                                <button type="button" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem; pointer-events: none;" disabled="@isUploadingFooter">
+                                    @if (isUploadingFooter)
+                                    {
+                                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الرفع...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-solid fa-upload me-1"></i> <span>@(string.IsNullOrEmpty(footerImageUrl) && string.IsNullOrEmpty(footerPreviewUrl) ? "رفع صورة الفوتر" : "تغيير الفوتر")</span>
+                                    }
+                                </button>
+                                <InputFile OnChange="HandleFooterSelected" accept="image/png, image/jpeg, image/webp" style="position: absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" disabled="@isUploadingFooter" />
+                            </div>
+                            @if (!string.IsNullOrEmpty(footerImageUrl) || !string.IsNullOrEmpty(footerPreviewUrl))
+                            {
+                                <button type="button" class="btn btn-danger" style="font-size: 0.85rem; padding: 0.5rem 1rem;" @onclick="RemoveFooter" disabled="@isUploadingFooter">
+                                    <i class="fa-solid fa-trash me-1"></i> حذف
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- 3. Logo / Watermark -->
+                    <div style="padding: 1.25rem; background: var(--bg-primary); border-radius: 0.75rem; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 1.25rem;">
+                            <div style="width: 75px; height: 75px; border-radius: 0.5rem; border: 2px dashed var(--border-color); background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;">
+                                @if (!string.IsNullOrEmpty(logoPreviewUrl) || !string.IsNullOrEmpty(logoUrl))
+                                {
+                                    var displayImg = !string.IsNullOrEmpty(logoPreviewUrl) ? logoPreviewUrl : ApiClient.GetImageFullUrl(logoUrl);
+                                    <img src="@displayImg" alt="شعار المتجر" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                }
+                                else
+                                {
+                                    <i class="fa-solid fa-image fa-2x" style="color: var(--text-secondary); opacity: 0.5;"></i>
+                                }
+                            </div>
+                            <div>
+                                <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.25rem;">
+                                    <i class="fa-solid fa-stamp text-primary me-1"></i> شعار المتجر / العلامة المائية
+                                </h4>
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">
+                                    يظهر كعلامة مائية خفيفة خلف جدول الأصناف في الفاتورة (PNG, JPG, WebP)
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 0.75rem; align-items: center;">
+                            <div style="position: relative; overflow: hidden; display: inline-block;">
+                                <button type="button" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem; pointer-events: none;" disabled="@isUploadingLogo">
+                                    @if (isUploadingLogo)
+                                    {
+                                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الرفع...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-solid fa-upload me-1"></i> <span>@(string.IsNullOrEmpty(logoUrl) && string.IsNullOrEmpty(logoPreviewUrl) ? "رفع الشعار" : "تغيير الشعار")</span>
+                                    }
+                                </button>
+                                <InputFile OnChange="HandleLogoSelected" accept="image/png, image/jpeg, image/webp" style="position: absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" disabled="@isUploadingLogo" />
+                            </div>
+                            @if (!string.IsNullOrEmpty(logoUrl) || !string.IsNullOrEmpty(logoPreviewUrl))
+                            {
+                                <button type="button" class="btn btn-danger" style="font-size: 0.85rem; padding: 0.5rem 1rem;" @onclick="RemoveLogo" disabled="@isUploadingLogo">
+                                    <i class="fa-solid fa-trash me-1"></i> حذف
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>اسم المعرض / المتجر <span style="color: var(--accent-red);">*</span></label>
+                        <input @bind="storeName" class="form-control" placeholder="مثال: معرض النور للأجهزة الكهربائية والمنزلية..." />
+                    </div>
+
+                    <div class="form-group">
+                        <label>العملة الرسمية</label>
+                        <input @bind="currency" class="form-control" placeholder="مثال: EGP أو ج.م" maxlength="5" />
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>العنوان التفصيلي</label>
+                        <input @bind="address" class="form-control" placeholder="أدخل عنوان المعرض..." />
+                    </div>
+
+                    <div class="form-group">
+                        <label>رقم الهاتف / التواصل</label>
+                        <input @bind="phone" class="form-control" placeholder="مثال: 01000000000" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tax & Inventory Section -->
+            <div class="card">
+                <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 1.25rem; color: var(--accent-indigo);">
+                    <i class="fa-solid fa-percent me-2"></i> إعدادات الضريبة وسياسات البيع
+                </h3>
+
+                <div class="grid-2" style="margin-bottom: 1rem;">
+                    <div class="form-group">
+                        <label>نسبة ضريبة القيمة المضافة الافتراضية (%)</label>
+                        <input type="number" step="0.1" @bind="taxRate" class="form-control" />
+                    </div>
+
+                    <div class="form-group" style="justify-content: flex-end; padding-bottom: 0.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer;">
+                            <input type="checkbox" @bind="isTaxIncluded" id="isTaxInc" style="width: 18px; height: 18px; cursor: pointer;" />
+                            <label for="isTaxInc" style="font-size: 0.9rem; font-weight: 600; cursor: pointer;">الأسعار المعروضة شاملة الضريبة تلقائياً</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background: var(--bg-primary); padding: 1rem 1.25rem; border-radius: 0.6rem; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.75rem;">
+                    <input type="checkbox" @bind="allowNegativeStock" id="negStock" style="width: 20px; height: 20px; cursor: pointer;" />
+                    <div>
+                        <label for="negStock" style="font-size: 0.95rem; font-weight: 700; cursor: pointer; display: block;">السماح بالبيع بالسالب (تجاوز نفاد المخزون)</label>
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">عند تفعيله، يمكن للكاشير إتمام عمليات البيع حتى إن كان رصيد الصنف بالكمية صفر.</span>
+                    </div>
+                </div>
+
+                <div style="background: var(--bg-primary); padding: 1rem 1.25rem; border-radius: 0.6rem; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; margin-top: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <input type="checkbox" @bind="enableDepletedBatchAlert" id="depletedBatchToggle" style="width: 20px; height: 20px; cursor: pointer;" />
+                        <div>
+                            <label for="depletedBatchToggle" style="font-size: 0.95rem; font-weight: 700; cursor: pointer; display: block;">
+                                إشعار وتنبيه نفاد كميات الأصناف في شاشة نقاط البيع (POS)
+                            </label>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                                عند نفاد رصيد صنف أثناء البيع، تظهر نافذة تفاعلية لتنبيه الكاشير وتحديث الرصيد الفعلي إن وُجد بالمخزن.
+                            </span>
+                        </div>
+                    </div>
+                    <span class="badge @(enableDepletedBatchAlert ? "badge-green" : "badge-amber")" style="font-size: 0.8rem; white-space: nowrap;">
+                        <i class="fa-solid @(enableDepletedBatchAlert ? "fa-circle-check" : "fa-ban") me-1"></i>
+                        @(enableDepletedBatchAlert ? "تنبيه الدفعات مفعل" : "تنبيه الدفعات معطل")
+                    </span>
+                </div>
+            </div>
+
+            <!-- Print & Invoice Options Section -->
+            <div class="card">
+                <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 1.25rem; color: var(--accent-indigo);">
+                    <i class="fa-solid fa-print me-2"></i> خيارات الطباعة وتذييل الفاتورة
+                </h3>
+
+                <div style="background: var(--bg-primary); padding: 1rem 1.25rem; border-radius: 0.6rem; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <input type="checkbox" @bind="autoPrintInvoice" id="autoPrintToggle" style="width: 20px; height: 20px; cursor: pointer;" />
+                        <div>
+                            <label for="autoPrintToggle" style="font-size: 0.95rem; font-weight: 700; cursor: pointer; display: block;">
+                                عرض نافذة الطباعة تلقائياً بعد إتمام عملية الشراء
+                            </label>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                                عند التفعيل، تظهر نافذة الطابعة تلقائياً فور حفظ الفاتورة. عند التعطيل، يتم إتمام الفاتورة سريعاً بدون فتح الطابعة.
+                            </span>
+                        </div>
+                    </div>
+                    <span class="badge @(autoPrintInvoice ? "badge-green" : "badge-amber")" style="font-size: 0.8rem; white-space: nowrap;">
+                        <i class="fa-solid @(autoPrintInvoice ? "fa-circle-check" : "fa-ban") me-1"></i>
+                        @(autoPrintInvoice ? "الطباعة التلقائية مفعلة" : "الطباعة التلقائية معطلة")
+                    </span>
+                </div>
+
+                <div class="form-group">
+                    <label>رسالة التذييل (تطبع في أسفل جميع إيصالات الكاشير)</label>
+                    <textarea @bind="invoiceFooterMessage" rows="3" class="form-control" placeholder="شكراً لزيارتكم! نتمنى لكم يوماً سعيداً."></textarea>
+                </div>
+            </div>
+
+            <!-- Save Action Bar -->
+            <div style="display: flex; justify-content: flex-end;">
+                <button class="btn btn-primary" style="padding: 0.85rem 2rem; font-size: 1rem;" disabled="@(isSaving || isUploadingLogo)" @onclick="SaveSettings">
+                    @if (isSaving)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-floppy-disk me-1"></i> <span>حفظ الإعدادات</span>
+                    }
+                </button>
+            </div>
+
+            <!-- 3A Tech Developer & Support Card -->
+            <div class="card" style="border: 1px solid rgba(56, 189, 248, 0.35); background: linear-gradient(135deg, var(--bg-card), rgba(56, 189, 248, 0.05));">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <img src="images/3a-tech-logo.png" alt="3A Tech" style="height: 52px; width: auto; object-fit: contain; filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.4));" />
+                        <div>
+                            <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                                <span>3A Tech For Software Developments</span>
+                                <span class="badge badge-indigo">الشركة المطورة</span>
+                            </h3>
+                            <p style="font-size: 0.82rem; color: var(--accent-blue); font-weight: 600; margin: 0.25rem 0 0 0;">
+                                التطوير البرمجي والدعم الفني المعتمد لنظام الكاشير وإدارة المبيعات
+                            </p>
+                        </div>
+                    </div>
+                    <span class="badge badge-blue" style="font-size: 0.78rem; padding: 0.4rem 0.8rem;">
+                        <i class="fa-solid fa-code me-1"></i> إصدار 3A Tech Enterprise v2.5
+                    </span>
+                </div>
+
+                <p style="font-size: 0.86rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1.25rem;">
+                    تم بناء وتطوير هذا النظام بأحدث التقنيات البرمجية بواسطة شركة <strong>3A Tech</strong>. لأي طلبات ترقية أو استفسارات أو دعم فني مباشر، تواصلوا معنا مباشرة عبر قنوات الاتصال والواتساب التالية:
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.85rem;">
+                    <!-- Number 1 -->
+                    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">الدعم الفني والخدمات</div>
+                            <div style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);" dir="ltr">01062592321</div>
+                        </div>
+                        <button type="button" class="btn-whatsapp" @onclick='() => OpenWhatsApp("01062592321")' title="محادثة واتساب">
+                            <i class="fa-brands fa-whatsapp"></i> <span>واتساب</span>
+                        </button>
+                    </div>
+
+                    <!-- Number 2 -->
+                    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">خدمة العملاء والمبيعات</div>
+                            <div style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);" dir="ltr">01063301965</div>
+                        </div>
+                        <button type="button" class="btn-whatsapp" @onclick='() => OpenWhatsApp("01063301965")' title="محادثة واتساب">
+                            <i class="fa-brands fa-whatsapp"></i> <span>واتساب</span>
+                        </button>
+                    </div>
+
+                    <!-- Number 3 -->
+                    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">المتابعة الفنية والصيانة</div>
+                            <div style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);" dir="ltr">01095997875</div>
+                        </div>
+                        <button type="button" class="btn-whatsapp" @onclick='() => OpenWhatsApp("01095997875")' title="محادثة واتساب">
+                            <i class="fa-brands fa-whatsapp"></i> <span>واتساب</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string storeName = string.Empty;
+    private string? address;
+    private string? phone;
+    private decimal taxRate = 14;
+    private bool isTaxIncluded = false;
+    private string currency = "EGP";
+    private string? invoiceFooterMessage;
+    private bool allowNegativeStock = false;
+    private bool autoPrintInvoice = true;
+    private bool enableDepletedBatchAlert = true;
+    private string? logoUrl;
+    private string? logoPreviewUrl;
+    private bool isUploadingLogo = false;
+
+    private string? headerImageUrl;
+    private string? headerPreviewUrl;
+    private bool isUploadingHeader = false;
+
+    private string? footerImageUrl;
+    private string? footerPreviewUrl;
+    private bool isUploadingFooter = false;
+
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string? saveSuccessMessage;
+    private string? saveErrorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettingsAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        isLoading = true;
+        saveErrorMessage = null;
+        try
+        {
+            autoPrintInvoice = StoreState.AutoPrintInvoiceAfterSale;
+            enableDepletedBatchAlert = StoreState.EnableDepletedBatchAlert;
+            var res = await ApiClient.GetSettingsAsync();
+            if (res != null)
+            {
+                storeName = res.StoreName;
+                address = res.Address;
+                phone = res.Phone;
+                taxRate = res.TaxRate;
+                isTaxIncluded = res.IsTaxIncluded;
+                currency = string.IsNullOrWhiteSpace(res.Currency) ? "EGP" : res.Currency;
+                invoiceFooterMessage = res.InvoiceFooterMessage;
+                allowNegativeStock = res.AllowNegativeStock;
+                autoPrintInvoice = res.AutoPrintInvoice;
+                enableDepletedBatchAlert = res.EnableDepletedBatchAlert;
+                logoUrl = res.LogoUrl;
+                headerImageUrl = res.HeaderImageUrl;
+                footerImageUrl = res.FooterImageUrl;
+            }
+        }
+        catch (Exception ex)
+        {
+            saveErrorMessage = $"خطأ في تحميل الإعدادات: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleHeaderSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            try
+            {
+                isUploadingHeader = true;
+                saveErrorMessage = null;
+                saveSuccessMessage = null;
+
+                using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                var selectedBytes = ms.ToArray();
+
+                var base64 = Convert.ToBase64String(selectedBytes);
+                headerPreviewUrl = $"data:{file.ContentType};base64,{base64}";
+
+                var uploadRes = await ApiClient.UploadStoreHeaderImageAsync(selectedBytes, file.Name);
+                if (!string.IsNullOrEmpty(uploadRes.HeaderImageUrl))
+                {
+                    headerImageUrl = uploadRes.HeaderImageUrl;
+                    saveSuccessMessage = "تم رفع صورة رأس الفاتورة بنجاح. اضغط على حفظ الإعدادات لتأكيد التغييرات.";
+                }
+                else if (!string.IsNullOrEmpty(uploadRes.Error))
+                {
+                    saveErrorMessage = uploadRes.Error;
+                }
+            }
+            catch (Exception ex)
+            {
+                saveErrorMessage = $"فشل قراءة أو رفع ملف صورة الهيدر: {ex.Message}";
+            }
+            finally
+            {
+                isUploadingHeader = false;
+            }
+        }
+    }
+
+    private void RemoveHeader()
+    {
+        headerImageUrl = null;
+        headerPreviewUrl = null;
+        saveSuccessMessage = "تمت إزالة صورة الهيدر. اضغط على حفظ الإعدادات لتأكيد التغييرات.";
+    }
+
+    private async Task HandleFooterSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            try
+            {
+                isUploadingFooter = true;
+                saveErrorMessage = null;
+                saveSuccessMessage = null;
+
+                using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                var selectedBytes = ms.ToArray();
+
+                var base64 = Convert.ToBase64String(selectedBytes);
+                footerPreviewUrl = $"data:{file.ContentType};base64,{base64}";
+
+                var uploadRes = await ApiClient.UploadStoreFooterImageAsync(selectedBytes, file.Name);
+                if (!string.IsNullOrEmpty(uploadRes.FooterImageUrl))
+                {
+                    footerImageUrl = uploadRes.FooterImageUrl;
+                    saveSuccessMessage = "تم رفع صورة تذييل الفاتورة بنجاح. اضغط على حفظ الإعدادات لتأكيد التغييرات.";
+                }
+                else if (!string.IsNullOrEmpty(uploadRes.Error))
+                {
+                    saveErrorMessage = uploadRes.Error;
+                }
+            }
+            catch (Exception ex)
+            {
+                saveErrorMessage = $"فشل قراءة أو رفع ملف صورة الفوتر: {ex.Message}";
+            }
+            finally
+            {
+                isUploadingFooter = false;
+            }
+        }
+    }
+
+    private void RemoveFooter()
+    {
+        footerImageUrl = null;
+        footerPreviewUrl = null;
+        saveSuccessMessage = "تمت إزالة صورة الفوتر. اضغط على حفظ الإعدادات لتأكيد التغييرات.";
+    }
+
+    private async Task HandleLogoSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            try
+            {
+                isUploadingLogo = true;
+                saveErrorMessage = null;
+                saveSuccessMessage = null;
+
+                using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                var selectedBytes = ms.ToArray();
+
+                var base64 = Convert.ToBase64String(selectedBytes);
+                logoPreviewUrl = $"data:{file.ContentType};base64,{base64}";
+
+                var uploadRes = await ApiClient.UploadStoreLogoAsync(selectedBytes, file.Name);
+                if (!string.IsNullOrEmpty(uploadRes.LogoUrl))
+                {
+                    logoUrl = uploadRes.LogoUrl;
+                    saveSuccessMessage = "تم رفع شعار المتجر بنجاح. اضغط على حفظ الإعدادات لتأكيد التغييرات.";
+                }
+                else if (!string.IsNullOrEmpty(uploadRes.Error))
+                {
+                    saveErrorMessage = uploadRes.Error;
+                }
+            }
+            catch (Exception ex)
+            {
+                saveErrorMessage = $"فشل قراءة أو رفع ملف الصورة: {ex.Message}";
+            }
+            finally
+            {
+                isUploadingLogo = false;
+            }
+        }
+    }
+
+    private void RemoveLogo()
+    {
+        logoUrl = null;
+        logoPreviewUrl = null;
+        saveSuccessMessage = "تمت إزالة الشعار. اضغط على حفظ الإعدادات لتأكيد التغييرات.";
+    }
+
+    private async Task SaveSettings()
+    {
+        if (string.IsNullOrWhiteSpace(storeName))
+        {
+            saveErrorMessage = "الرجاء إدخال اسم المتجر.";
+            return;
+        }
+
+        isSaving = true;
+        saveSuccessMessage = null;
+        saveErrorMessage = null;
+
+        var req = new UpdateStoreSettingRequest(
+            StoreName: storeName,
+            Address: address,
+            Phone: phone,
+            TaxRate: taxRate,
+            IsTaxIncluded: isTaxIncluded,
+            Currency: currency,
+            InvoiceFooterMessage: invoiceFooterMessage,
+            AllowNegativeStock: allowNegativeStock,
+            AutoPrintInvoice: autoPrintInvoice,
+            LogoUrl: logoUrl,
+            EnableDepletedBatchAlert: enableDepletedBatchAlert,
+            HeaderImageUrl: headerImageUrl,
+            FooterImageUrl: footerImageUrl);
+
+        var (success, error) = await ApiClient.UpdateSettingsAsync(req);
+        isSaving = false;
+
+        if (success)
+        {
+            saveSuccessMessage = "تم حفظ إعدادات المتجر والصور والتصميم والطباعة بنجاح.";
+            await StoreState.LoadSettingsAsync(ApiClient, JS);
+        }
+        else
+        {
+            saveErrorMessage = !string.IsNullOrEmpty(error) ? error : "فشل حفظ الإعدادات.";
+        }
+    }
+
+    private void OpenWhatsApp(string phone)
+    {
+        try
+        {
+            var cleanPhone = phone.Trim().Replace(" ", "").Replace("-", "");
+            if (cleanPhone.StartsWith("0"))
+            {
+                cleanPhone = "2" + cleanPhone;
+            }
+            var msg = Uri.EscapeDataString("السلام عليكم، أحتاج استفسار/دعم فني بخصوص نظام الكاشير 3A Tech.");
+            var url = $"https://wa.me/{cleanPhone}?text={msg}";
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch { }
+    }
+}

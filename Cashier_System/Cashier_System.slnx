@@ -1,0 +1,69 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Hosts/">
+    <Project Path="POS.WebAPI/POS.WebAPI.csproj" />
+    <Project Path="POS.Desktop/POS.Desktop.csproj" />
+    <Project Path="POS.CloudAPI/POS.CloudAPI.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Identity/">
+    <Project Path="Identity.Application/Identity.Application.csproj" />
+    <Project Path="Identity.Domain/Identity.Domain.csproj" />
+    <Project Path="Identity.Infrastructre/Identity.Infrastructre.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Shifts/">
+    <Project Path="Shifts.Application/Shifts.Application.csproj" />
+    <Project Path="Shifts.Domain/Shifts.Domain.csproj" />
+    <Project Path="Shifts.Infrastructre/Shifts.Infrastructre.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Inventory/">
+    <Project Path="Inventory.Application/Inventory.Application.csproj" />
+    <Project Path="Inventory.Domain/Inventory.Domain.csproj" />
+    <Project Path="Inventory.Infrastructre/Inventory.Infrastructre.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Purchases/">
+    <Project Path="Purchases.Application/Purchases.Application.csproj" />
+    <Project Path="Purchases.Domain/Purchases.Domain.csproj" />
+    <Project Path="Purchases.Infrastructre/Purchases.Infrastructre.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Sales/">
+    <Project Path="Sales.Application/Sales.Application.csproj" />
+    <Project Path="Sales.Domain/Sales.Domain.csproj" />
+    <Project Path="Sales.Infrastructre/Sales.Infrastructre.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Returns/">
+    <Project Path="Returns.Application/Returns.Application.csproj" />
+    <Project Path="Returns.Domain/Returns.Domain.csproj" />
+    <Project Path="Returns.Infrastructre/Returns.Infrastructre.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Expenses/">
+    <Project Path="Expenses.Application/Expenses.Application.csproj" />
+    <Project Path="Expenses.Domain/Expenses.Domain.csproj" />
+    <Project Path="Expenses.Infrastructre/Expenses.Infrastructre.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Dashboard/">
+    <Project Path="Dashboard.Application/Dashboard.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Settings/">
+    <Project Path="Settings.Application/Settings.Application.csproj" />
+    <Project Path="Settings.Domain/Settings.Domain.csproj" />
+    <Project Path="Settings.Infrastructre/Settings.Infrastructre.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Audit/">
+    <Project Path="Audit.Application/Audit.Application.csproj" />
+    <Project Path="Audit.Domain/Audit.Domain.csproj" />
+    <Project Path="Audit.Infrastructre/Audit.Infrastructre.csproj" />
+  </Folder>
+  <Folder Name="/src/Shared/">
+    <Project Path="POS.Shared.Application/POS.Shared.Application.csproj" />
+    <Project Path="POS.Shared.Domain/POS.Shared.Domain.csproj" />
+    <Project Path="POS.Shared.Infrastructre/POS.Shared.Infrastructre.csproj" />
+    <Project Path="POS.Licensing/POS.Licensing.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="POS.Licensing.Tests/POS.Licensing.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="POS.LicenseGenerator/POS.LicenseGenerator.csproj" />
+  </Folder>
+</Solution>

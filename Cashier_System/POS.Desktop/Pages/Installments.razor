@@ -1,0 +1,495 @@
+@page "/installments"
+@using Microsoft.AspNetCore.Authorization
+@using global::POS.Desktop.Services.Api
+@using global::POS.Desktop.Services.Auth
+@using global::POS.Desktop.Services.State
+@attribute [Authorize]
+@inject PosApiClient ApiClient
+@inject CustomAuthStateProvider AuthState
+@inject IJSRuntime JS
+
+<div>
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">
+                <i class="fa-solid fa-file-invoice-dollar text-emerald me-2"></i> موديول التقسيط والتمويل الاستهلاكي
+            </h2>
+            <p class="page-subtitle">إدارة ومتابعة عقود تقسيط الأجهزة الكهربائية، الجداول الشهرية، وتحصيل الأقساط</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button class="btn btn-secondary" @onclick="LoadDataAsync">
+                <i class="fa-solid fa-arrows-rotate me-1"></i> تحديث البيانات
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="card" style="padding: 1rem 1.25rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem;">إجمالي عقود التقسيط</div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: var(--accent-indigo);">@contracts.Count</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">عقد مسجل بالنظام</div>
+        </div>
+
+        <div class="card" style="padding: 1rem 1.25rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem;">إجمالي المبالغ القائمة (المتبقية)</div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: var(--accent-emerald);">@totalRemainingBalance.ToString("N2") <small style="font-size: 0.9rem;">ج.م</small></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">مستحقات آجلة لدى العملاء</div>
+        </div>
+
+        <div class="card" style="padding: 1rem 1.25rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem;">أقساط قادمة ومستحقة قريباً</div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: var(--accent-amber);">@upcomingInstallments.Count</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">خلال 7 أيام القادمة</div>
+        </div>
+
+        <div class="card" style="padding: 1rem 1.25rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem;">أقساط متأخرة الدفع</div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: var(--accent-red);">@overdueCount</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">تجاوزت تاريخ الاستحقاق</div>
+        </div>
+    </div>
+
+    <!-- Filters & Search -->
+    <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; align-items: center; flex-wrap: wrap;">
+        <div class="search-box" style="max-width: 360px; flex: 1;">
+            <i class="fa-solid fa-search"></i>
+            <input @bind="searchQuery" @bind:event="oninput" placeholder="بحث برقم العقد، اسم العميل، أو الهاتف..." />
+        </div>
+
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+            <button class="btn @(selectedStatusFilter == "" ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick='() => FilterByStatus("")'>
+                الكل (@contracts.Count)
+            </button>
+            <button class="btn @(selectedStatusFilter == "Active" ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick='() => FilterByStatus("Active")'>
+                جاري السداد (@contracts.Count(c => c.Status == "Active"))
+            </button>
+            <button class="btn @(selectedStatusFilter == "Completed" ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick='() => FilterByStatus("Completed")'>
+                مكتمل ومسدد (@contracts.Count(c => c.Status == "Completed"))
+            </button>
+            <button class="btn @(selectedStatusFilter == "Defaulted" ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick='() => FilterByStatus("Defaulted")'>
+                متعثر / متأخر (@contracts.Count(c => c.Status == "Defaulted"))
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div style="text-align: center; padding: 4rem; color: var(--text-secondary);">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 1rem; color: var(--accent-indigo);"></i>
+            <div>جاري تحميل عقود التقسيط...</div>
+        </div>
+    }
+    else if (!filteredContracts.Any())
+    {
+        <div class="card" style="text-align: center; padding: 3.5rem 1.5rem; color: var(--text-muted);">
+            <i class="fa-solid fa-file-invoice-dollar" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.4;"></i>
+            <h4>لا توجد عقود تقسيط مطابقة</h4>
+            <p style="font-size: 0.88rem;">يتم إنشاء عقود التقسيط تلقائياً عند إتمام عملية بيع بالتقسيط من شاشة البيع (POS).</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>رقم العقد</th>
+                        <th>العميل</th>
+                        <th>رقم الفاتورة</th>
+                        <th>إجمالي المبلغ</th>
+                        <th>المقدم</th>
+                        <th>المتبقي</th>
+                        <th>القسط الشهري</th>
+                        <th>المدة</th>
+                        <th>نسبة السداد</th>
+                        <th>الحالة</th>
+                        <th style="text-align: center;">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in filteredContracts)
+                    {
+                        var paidPercent = c.TotalWithInterest > 0 
+                            ? Math.Min(100, Math.Round((c.DownPayment + (c.TotalWithInterest - c.RemainingAmount)) / c.TotalWithInterest * 100))
+                            : 100;
+                        <tr>
+                            <td>
+                                <strong style="color: var(--accent-indigo);">@c.ContractNumber</strong>
+                                <div style="font-size: 0.72rem; color: var(--text-muted);">@c.StartDate.ToString("yyyy-MM-dd")</div>
+                            </td>
+                            <td>
+                                <div style="font-weight: 700; color: var(--text-primary);">@c.CustomerName</div>
+                                <div style="font-size: 0.76rem; color: var(--text-secondary); direction: ltr; text-align: right;">@c.CustomerPhone</div>
+                            </td>
+                            <td>
+                                <code>@c.InvoiceNumber</code>
+                            </td>
+                            <td>
+                                <strong>@c.TotalWithInterest.ToString("N2")</strong> ج.م
+                                @if (c.InterestRate > 0)
+                                {
+                                    <div style="font-size: 0.72rem; color: var(--accent-amber);">فائدة: @c.InterestRate%</div>
+                                }
+                            </td>
+                            <td>@c.DownPayment.ToString("N2") ج.م</td>
+                            <td>
+                                <span style="font-weight: 800; color: @(c.RemainingAmount > 0 ? "var(--accent-red)" : "var(--accent-emerald)");">
+                                    @c.RemainingAmount.ToString("N2") ج.م
+                                </span>
+                            </td>
+                            <td>
+                                <strong style="color: var(--accent-blue);">@c.MonthlyAmount.ToString("N2")</strong> ج.م
+                            </td>
+                            <td>@c.NumberOfMonths شهر</td>
+                            <td style="min-width: 120px;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                                        <div style="width: @paidPercent%; height: 100%; background: @(paidPercent >= 100 ? "var(--accent-emerald)" : "var(--accent-indigo)");"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem; font-weight: 700;">@paidPercent%</span>
+                                </div>
+                            </td>
+                            <td>
+                                @if (c.Status == "Active")
+                                {
+                                    <span class="badge badge-indigo">جاري السداد</span>
+                                }
+                                else if (c.Status == "Completed")
+                                {
+                                    <span class="badge badge-success">مسدد بالكامل</span>
+                                }
+                                else if (c.Status == "Defaulted")
+                                {
+                                    <span class="badge badge-danger">متعثر</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">@c.Status</span>
+                                }
+                            </td>
+                            <td style="text-align: center;">
+                                <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.8rem;" @onclick="() => OpenScheduleModal(c)">
+                                    <i class="fa-solid fa-calendar-check me-1 text-emerald"></i> جدول الأقساط
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Modal: Contract Schedule & Installment Collection -->
+@if (showScheduleModal && selectedContract != null)
+{
+    <div class="modal-overlay" @onclick="CloseScheduleModal">
+        <div class="modal-card" style="max-width: 850px; width: 100%; max-height: 92vh; display: flex; flex-direction: column;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fa-solid fa-file-contract text-emerald"></i>
+                        <span>جدول أقساط العقد: <strong>@selectedContract.ContractNumber</strong></span>
+                    </h3>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                        العميل: <strong style="color: var(--text-primary);">@selectedContract.CustomerName</strong> (@selectedContract.CustomerPhone) - فاتورة: @selectedContract.InvoiceNumber
+                    </div>
+                </div>
+                <button class="btn btn-secondary" style="padding: 0.35rem 0.65rem;" @onclick="CloseScheduleModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Guarantor Box if exists -->
+            @if (!string.IsNullOrWhiteSpace(selectedContract.GuarantorName))
+            {
+                <div style="background: rgba(99, 102, 241, 0.08); border-bottom: 1px solid var(--border-color); padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1.5rem; font-size: 0.82rem;">
+                    <div><i class="fa-solid fa-user-shield text-indigo me-1"></i> بيانات الضامن: <strong style="color: var(--text-primary);">@selectedContract.GuarantorName</strong></div>
+                    @if (!string.IsNullOrWhiteSpace(selectedContract.GuarantorPhone))
+                    {
+                        <div><i class="fa-solid fa-phone text-secondary me-1"></i> هاتف: <strong style="color: var(--text-primary); direction: ltr;">@selectedContract.GuarantorPhone</strong></div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(selectedContract.GuarantorNationalId))
+                    {
+                        <div><i class="fa-solid fa-id-card text-secondary me-1"></i> رقم قومي: <strong style="color: var(--text-primary);">@selectedContract.GuarantorNationalId</strong></div>
+                    }
+                </div>
+            }
+
+            <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.25rem;">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th># القسط</th>
+                                <th>تاريخ الاستحقاق</th>
+                                <th>قيمة القسط</th>
+                                <th>الحالة</th>
+                                <th>تاريخ السداد</th>
+                                <th>المسدد</th>
+                                <th>رقم الإيصال</th>
+                                <th style="text-align: center;">تحصيل</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (selectedContract.Schedules != null)
+                            {
+                                @foreach (var s in selectedContract.Schedules.OrderBy(x => x.InstallmentNumber))
+                                {
+                                    var isPastDue = s.Status == "Pending" && s.DueDate < DateTime.Today;
+                                    <tr style="@(isPastDue ? "background: rgba(239, 68, 68, 0.06);" : "")">
+                                        <td><strong>قسط @s.InstallmentNumber</strong></td>
+                                        <td>
+                                            <span style="font-weight: 600; color: @(isPastDue ? "var(--accent-red)" : "inherit");">
+                                                @s.DueDate.ToString("yyyy-MM-dd")
+                                            </span>
+                                            @if (isPastDue)
+                                            {
+                                                <span class="badge badge-danger" style="font-size: 0.65rem; margin-right: 0.3rem;">متأخر</span>
+                                            }
+                                        </td>
+                                        <td><strong>@s.Amount.ToString("N2")</strong> ج.م</td>
+                                        <td>
+                                            @if (s.Status == "Paid")
+                                            {
+                                                <span class="badge badge-success"><i class="fa-solid fa-check me-1"></i> مسدد</span>
+                                            }
+                                            else if (s.Status == "PartiallyPaid")
+                                            {
+                                                <span class="badge badge-amber">مدفوع جزئياً</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge @(isPastDue ? "badge-danger" : "badge-secondary")">مستحق</span>
+                                            }
+                                        </td>
+                                        <td>@(s.PaidDate?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                        <td>@(s.PaidAmount > 0 ? $"{s.PaidAmount:N2} ج.م" : "-")</td>
+                                        <td>@(s.ReceiptNumber ?? "-")</td>
+                                        <td style="text-align: center;">
+                                            @if (s.Status != "Paid")
+                                            {
+                                                <button class="btn btn-primary" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;" @onclick="() => OpenPayModal(s)">
+                                                    <i class="fa-solid fa-hand-holding-dollar me-1"></i> سداد
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span style="color: var(--accent-emerald); font-size: 0.82rem;"><i class="fa-solid fa-circle-check"></i> مكتمل</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 0.88rem;">
+                    المتبقي من العقد: <strong style="color: var(--accent-red); font-size: 1.05rem;">@selectedContract.RemainingAmount.ToString("N2") ج.م</strong>
+                </div>
+                <button class="btn btn-secondary" @onclick="CloseScheduleModal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Pay Installment Form -->
+@if (showPayModal && targetSchedule != null)
+{
+    <div class="modal-overlay" @onclick="ClosePayModal">
+        <div class="modal-card" style="max-width: 440px; width: 100%;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid fa-hand-holding-dollar text-emerald me-2"></i> سداد قسط شهري
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.35rem 0.65rem;" @onclick="ClosePayModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(payError))
+                {
+                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.65rem 1rem; border-radius: 0.5rem; margin-bottom: 0.85rem; font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @payError
+                    </div>
+                }
+
+                <div style="background: var(--bg-secondary); padding: 0.75rem 1rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.84rem;">
+                    <div>قسط رقم: <strong>@targetSchedule.InstallmentNumber</strong></div>
+                    <div>تاريخ الاستحقاق: <strong>@targetSchedule.DueDate.ToString("yyyy-MM-dd")</strong></div>
+                    <div>قيمة القسط الكاملة: <strong style="color: var(--accent-indigo);">@targetSchedule.Amount.ToString("N2") ج.م</strong></div>
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight: 700; font-size: 0.85rem;">المبلغ المدفوع (ج.م) <span style="color: var(--accent-red);">*</span></label>
+                    <input type="number" step="0.01" class="form-control" @bind="payAmount" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-emerald);" />
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight: 700; font-size: 0.85rem;">طريقة الدفع</label>
+                    <select class="form-select" @bind="payPaymentMethod">
+                        <option value="Cash">نقدي (كاش) في الخزينة</option>
+                        <option value="Card">بطاقة بنكية / فيزا</option>
+                        <option value="BankTransfer">تحويل بنكي / فودافون كاش / إنستاباي</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight: 700; font-size: 0.85rem;">ملاحظات السداد</label>
+                    <input class="form-control" @bind="payNotes" placeholder="مثال: سداد فرع المحل أو إيصال تحويل..." />
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                <button class="btn btn-secondary" @onclick="ClosePayModal">إلغاء</button>
+                <button class="btn btn-primary" @onclick="SubmitPaymentAsync" disabled="@isSubmittingPayment">
+                    @if (isSubmittingPayment)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-check me-1"></i>
+                    }
+                    <span>تأكيد السداد والترحيل</span>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<InstallmentContractDto> contracts = new();
+    private List<UpcomingInstallmentDto> upcomingInstallments = new();
+    private string searchQuery = "";
+    private string selectedStatusFilter = "";
+    private bool isLoading = true;
+
+    // Schedule Modal
+    private bool showScheduleModal = false;
+    private InstallmentContractDto? selectedContract = null;
+
+    // Payment Modal
+    private bool showPayModal = false;
+    private InstallmentScheduleDto? targetSchedule = null;
+    private decimal payAmount = 0;
+    private string payPaymentMethod = "Cash";
+    private string payNotes = "";
+    private bool isSubmittingPayment = false;
+    private string? payError = null;
+
+    private decimal totalRemainingBalance => contracts.Sum(c => c.RemainingAmount);
+    private int overdueCount => upcomingInstallments.Count(u => u.IsOverdue);
+
+    private List<InstallmentContractDto> filteredContracts => contracts
+        .Where(c => (string.IsNullOrWhiteSpace(selectedStatusFilter) || c.Status == selectedStatusFilter)
+            && (string.IsNullOrWhiteSpace(searchQuery)
+                || c.ContractNumber.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+                || c.CustomerName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+                || c.CustomerPhone.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+                || c.InvoiceNumber.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)))
+        .OrderByDescending(c => c.StartDate)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var taskContracts = ApiClient.GetInstallmentContractsAsync();
+            var taskUpcoming = ApiClient.GetUpcomingInstallmentsAsync(daysAhead: 7);
+            await Task.WhenAll(taskContracts, taskUpcoming);
+
+            contracts = taskContracts.Result;
+            upcomingInstallments = taskUpcoming.Result;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void FilterByStatus(string status)
+    {
+        selectedStatusFilter = status;
+    }
+
+    private void OpenScheduleModal(InstallmentContractDto contract)
+    {
+        selectedContract = contract;
+        showScheduleModal = true;
+    }
+
+    private void CloseScheduleModal()
+    {
+        showScheduleModal = false;
+        selectedContract = null;
+    }
+
+    private void OpenPayModal(InstallmentScheduleDto schedule)
+    {
+        targetSchedule = schedule;
+        payAmount = schedule.Amount - schedule.PaidAmount;
+        payPaymentMethod = "Cash";
+        payNotes = "";
+        payError = null;
+        showPayModal = true;
+    }
+
+    private void ClosePayModal()
+    {
+        showPayModal = false;
+        targetSchedule = null;
+    }
+
+    private async Task SubmitPaymentAsync()
+    {
+        if (targetSchedule == null) return;
+        if (payAmount <= 0)
+        {
+            payError = "يرجى إدخال مبلغ صحيح أكبر من الصفر.";
+            return;
+        }
+
+        isSubmittingPayment = true;
+        payError = null;
+        try
+        {
+            var req = new PayInstallmentRequest(targetSchedule.Id, payAmount, payPaymentMethod, payNotes);
+            var (success, err) = await ApiClient.PayInstallmentScheduleAsync(req);
+            if (!success)
+            {
+                payError = err ?? "فشل تسجيل سداد القسط.";
+                return;
+            }
+
+            showPayModal = false;
+            await LoadDataAsync();
+
+            // Refresh selected contract
+            if (selectedContract != null)
+            {
+                selectedContract = contracts.FirstOrDefault(c => c.Id == selectedContract.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            payError = ex.Message;
+        }
+        finally
+        {
+            isSubmittingPayment = false;
+        }
+    }
+}

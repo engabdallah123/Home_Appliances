@@ -1,0 +1,153 @@
+@HostAddress = http://localhost:5088
+
+### 1. Create Category
+POST {{HostAddress}}/api/inventory/categories
+Content-Type: application/json
+
+{
+  "name": "Electronics",
+  "description": "Smartphones, Accessories and Tech Devices"
+}
+
+### 2. Create Brand
+POST {{HostAddress}}/api/inventory/brands
+Content-Type: application/json
+
+{
+  "name": "Samsung"
+}
+
+### 3. Create Unit of Measurement
+POST {{HostAddress}}/api/inventory/units
+Content-Type: application/json
+
+{
+  "name": "Piece",
+  "abbreviation": "Pcs"
+}
+
+### 4. Create Main Warehouse
+POST {{HostAddress}}/api/inventory/warehouses
+Content-Type: application/json
+
+{
+  "name": "Main Central Warehouse",
+  "code": "WH-MAIN-01",
+  "address": "123 Central Industrial Zone, Cairo"
+}
+
+### 5. Create Branch Warehouse
+POST {{HostAddress}}/api/inventory/warehouses
+Content-Type: application/json
+
+{
+  "name": "Downtown Branch Warehouse",
+  "code": "WH-BRANCH-01",
+  "address": "45 Tahrir Square, Cairo"
+}
+
+### 6. Get All Warehouses (Dapper Query)
+GET {{HostAddress}}/api/inventory/warehouses?onlyActive=true
+Accept: application/json
+
+### 7. Create Product (Catalog)
+# Note: Replace categoryId, brandId, unitId with Guids received from steps 1-3 if desired
+POST {{HostAddress}}/api/inventory/products
+Content-Type: application/json
+
+{
+  "name": "Samsung Galaxy S24 Ultra",
+  "sku": "SAM-S24U-512GB",
+  "price": 45000.00,
+  "currency": "EGP",
+  "lowStockThreshold": 5
+}
+
+### 8. Get Product By Id or Barcode (Dapper Query)
+GET {{HostAddress}}/api/inventory/products
+Accept: application/json
+
+### 9. Initial Stock Adjustment (Add 100 units to Main Warehouse)
+# Replace productId and warehouseId with actual Guids from above steps
+# MovementType 8 = InitialStock, 4 = Adjustment, 1 = Purchase
+POST {{HostAddress}}/api/inventory/stock/adjust
+Content-Type: application/json
+
+{
+  "productId": "00000000-0000-0000-0000-000000000000",
+  "warehouseId": "00000000-0000-0000-0000-000000000000",
+  "quantity": 100,
+  "movementType": 8,
+  "referenceType": "InitialStock",
+  "performedBy": "Admin User"
+}
+
+### 10. Query Stock Balances (Dapper Query)
+GET {{HostAddress}}/api/inventory/stock/balances
+Accept: application/json
+
+### 11. Create Stock Transfer (Transfer 20 units from Main to Branch Warehouse)
+POST {{HostAddress}}/api/inventory/stocktransfers
+Content-Type: application/json
+
+{
+  "transferNumber": "TRF-2026-001",
+  "sourceWarehouseId": "00000000-0000-0000-0000-000000000000",
+  "destinationWarehouseId": "00000000-0000-0000-0000-000000000000",
+  "createdBy": "Inventory Manager",
+  "notes": "Weekly stock replenishment for branch",
+  "items": [
+    {
+      "productId": "00000000-0000-0000-0000-000000000000",
+      "quantity": 20
+    }
+  ]
+}
+
+### 12. Execute Stock Transfer
+# Replace transferId with Guid from step 11
+POST {{HostAddress}}/api/inventory/stocktransfers/00000000-0000-0000-0000-000000000000/execute
+Content-Type: application/json
+
+"Store Supervisor"
+
+### 13. Query Stock Movement Audit Log (Dapper Query)
+GET {{HostAddress}}/api/inventory/stock/movements?pageSize=20
+Accept: application/json
+
+### 14. Create Retail Price List
+POST {{HostAddress}}/api/inventory/pricelists
+Content-Type: application/json
+
+{
+  "name": "Retail Price List 2026",
+  "description": "Standard selling prices for retail customers",
+  "isDefault": true
+}
+
+### 15. Set Product Price in Retail Price List
+POST {{HostAddress}}/api/inventory/pricelists/prices
+Content-Type: application/json
+
+{
+  "productId": "00000000-0000-0000-0000-000000000000",
+  "priceListId": "00000000-0000-0000-0000-000000000000",
+  "price": 44500.00,
+  "currency": "EGP"
+}
+
+### 16. Create Product Batch with Expiry Date (Pharmacy / Expiry tracking)
+POST {{HostAddress}}/api/inventory/batches
+Content-Type: application/json
+
+{
+  "productId": "00000000-0000-0000-0000-000000000000",
+  "warehouseId": "00000000-0000-0000-0000-000000000000",
+  "batchNumber": "BATCH-2026-A1",
+  "expiryDate": "2026-09-30T00:00:00Z",
+  "quantity": 50
+}
+
+### 17. Query Expiring Batches (FEFO tracking - Dapper Query)
+GET {{HostAddress}}/api/inventory/batches/expiring?daysThreshold=60
+Accept: application/json

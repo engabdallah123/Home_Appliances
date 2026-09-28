@@ -1,0 +1,701 @@
+@page "/shifts"
+@using Microsoft.AspNetCore.Authorization
+@using global::POS.Desktop.Services.Api
+@using global::POS.Desktop.Services.Auth
+@using global::POS.Desktop.Services.State
+@attribute [Authorize]
+@inject PosApiClient ApiClient
+@inject ShiftStateContainer ShiftState
+@inject CustomAuthStateProvider AuthState
+@inject IJSRuntime JS
+@inject global::POS.Desktop.Services.Sync.ICloudSyncService CloudSync
+
+<div style="max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.75rem;">
+    <div>
+        <h2 style="font-weight: 700;">إدارة وسجل الورديات (الشيفتات)</h2>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            فتح وإغلاق الورديات واستعراض سجل الورديات السابقة وتصفيتها حسب التاريخ ومطابقة رصيد الخزينة
+        </p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(shiftError))
+    {
+        <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem 1rem; border-radius: 0.5rem; font-size: 0.85rem;">
+            <i class="fa-solid fa-circle-exclamation me-1"></i> @shiftError
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(shiftSuccess))
+    {
+        <div style="background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; padding: 0.75rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 600;">
+            <i class="fa-solid fa-circle-check me-1"></i> @shiftSuccess
+        </div>
+    }
+
+    <!-- Active Shift Control Card -->
+    @if (!ShiftState.IsShiftOpen)
+    {
+        <div class="card">
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1.25rem; color: var(--accent-green);">
+                <i class="fa-solid fa-play-circle me-1"></i> فتح وردية جديدة
+            </h3>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+                <label style="font-weight: 600;">المبلغ الافتتاحي في درج النقدية (جنيه)</label>
+                <input id="starting-cash-input" type="number" step="0.01" min="0" @bind="startingCash" @onkeydown="HandleStartingCashKeyDown" class="form-control" style="max-width: 400px; font-weight: 700; font-size: 1.05rem;" />
+            </div>
+
+            <button class="btn btn-success" style="padding: 0.75rem 1.5rem; font-weight: 700;" @onclick="OpenShift">
+                <i class="fa-solid fa-cash-register me-1"></i> فتح الوردية [Enter]
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="card" style="border-color: var(--accent-green);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--accent-green);">
+                    <i class="fa-solid fa-circle-check me-1"></i> الوردية مفتوحة حالياً
+                </h3>
+                <span class="badge badge-green">رقم الوردية: #@ShiftState.ShiftId.ToString()[..8]</span>
+            </div>
+
+            <div class="grid-2" style="margin-bottom: 1.5rem;">
+                <div style="background: var(--bg-primary); padding: 1.25rem; border-radius: 0.6rem; border: 1px solid var(--border-color);">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">وقت فتح الوردية</div>
+                    <div style="font-size: 1.05rem; font-weight: 600; margin-top: 0.3rem;">@ShiftState.StartTime.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
+                <div style="background: var(--bg-primary); padding: 1.25rem; border-radius: 0.6rem; border: 1px solid var(--border-color);">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">النقدية الافتتاحية</div>
+                    <div style="font-size: 1.05rem; font-weight: 600; color: var(--accent-green); margin-top: 0.3rem;">@ShiftState.InitialCash.ToString("N2") ج.م</div>
+                </div>
+            </div>
+
+            <h4 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem;">إغلاق الوردية وجرد النقدية</h4>
+            <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                أدخل المبلغ الفعلي الموجود في الدرج واضغط <strong style="color: var(--accent-indigo);">[Enter]</strong> لمراجعة مطابقة الحسابات والخزينة قبل الإغلاق.
+            </p>
+            
+            <div class="grid-2" style="margin-bottom: 1.25rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-weight: 700;">المبلغ الفعلي المتوفر بالدرج (جنيه) <span style="color: var(--accent-red);">*</span></label>
+                    <input id="actual-cash-input" type="number" step="0.01" min="0" @bind="actualCashInDrawer" @onkeydown="HandleClosingCashKeyDown" class="form-control" placeholder="0.00" style="font-size: 1.15rem; font-weight: 700; color: var(--accent-emerald);" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>ملاحظات إغلاق الوردية (اختياري)</label>
+                    <input id="closing-notes-input" type="text" @bind="closingNotes" @onkeydown="HandleClosingNotesKeyDown" class="form-control" placeholder="أدخل أي ملاحظات إن وجدت... [Enter]" />
+                </div>
+            </div>
+
+            <button class="btn btn-danger" style="width: 100%; padding: 0.85rem; font-size: 1rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35); margin-top: 1.25rem;" @onclick="PromptCloseShift">
+                <i class="fa-solid fa-lock"></i>
+                <span>مراجعة ومطابقة رصيد الوردية وإغلاقها [Enter]</span>
+            </button>
+        </div>
+    }
+
+    <!-- Shift History & Date Filtering Section -->
+    <div class="card" style="margin-bottom: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+            <h3 style="font-size: 1.15rem; font-weight: 700;">
+                <i class="fa-solid fa-history me-1" style="color: var(--accent-indigo);"></i> سجل الورديات المسجلة
+            </h3>
+
+            <!-- Date Filter Inputs -->
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">من:</label>
+                    <input type="date" class="form-control" style="width: 150px; padding: 0.4rem 0.6rem;" @bind="filterFromDate" />
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">إلى:</label>
+                    <input type="date" class="form-control" style="width: 150px; padding: 0.4rem 0.6rem;" @bind="filterToDate" />
+                </div>
+
+                <button class="btn btn-primary" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;" @onclick="FilterShifts">
+                    <i class="fa-solid fa-filter me-1"></i> تصفية
+                </button>
+
+                <button class="btn btn-secondary" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;" @onclick="ResetFilter">
+                    <i class="fa-solid fa-rotate-left me-1"></i> إعادة ضبط
+                </button>
+            </div>
+        </div>
+
+        @if (isLoadingHistory)
+        {
+            <div style="text-align: center; padding: 2.5rem; color: var(--text-secondary);">
+                <i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--accent-indigo);"></i>
+                <p style="margin-top: 0.5rem;">جاري تحميل سجل الورديات...</p>
+            </div>
+        }
+        else if (!shiftsHistory.Any())
+        {
+            <div style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+                <i class="fa-solid fa-calendar-xmark fa-2x" style="margin-bottom: 0.5rem; display: block;"></i>
+                لا توجد ورديات مسجلة في الفترات المحددة.
+            </div>
+        }
+        else
+        {
+            <div class="table-container" style="margin-bottom: 0; box-shadow: none; border-radius: 0.5rem;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>الكاشير</th>
+                            <th>وقت الفتح</th>
+                            <th>وقت الإغلاق</th>
+                            <th>الافتتاحي</th>
+                            <th>الفعلي</th>
+                            <th>الفرق</th>
+                            <th>الفواتير</th>
+                            <th>الحالة</th>
+                            <th>التفاصيل</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in PagedShifts)
+                        {
+                            <tr>
+                                <td style="font-weight: 600;">@(string.IsNullOrWhiteSpace(s.CashierName) ? "كاشير" : s.CashierName)</td>
+                                <td>@s.OpenedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@(s.ClosedAt.HasValue ? s.ClosedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "-")</td>
+                                <td>@s.OpeningCash.ToString("N2") ج.م</td>
+                                <td>@(s.Status == "Closed" ? s.ClosingCash.ToString("N2") + " ج.م" : "-")</td>
+                                <td>
+                                    @if (s.Status == "Closed")
+                                    {
+                                        if (s.CashDifference == 0)
+                                        {
+                                            <span class="badge badge-green">مطابق</span>
+                                        }
+                                        else if (s.CashDifference > 0)
+                                        {
+                                            <span class="badge badge-indigo">+@s.CashDifference.ToString("N2") (زيادة)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-red">@s.CashDifference.ToString("N2") (عجز)</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
+                                <td>@s.TotalInvoices</td>
+                                <td>
+                                    @if (s.Status == "Open")
+                                    {
+                                        <span class="badge badge-green"><i class="fa-solid fa-lock-open me-1"></i> مفتوحة</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-secondary" style="background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border-color-light);"><i class="fa-solid fa-lock me-1"></i> مغلقة</span>
+                                    }
+                                </td>
+                                <td>
+                                    <button class="btn btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.8rem;" @onclick="() => ViewShiftDetails(s)">
+                                        <i class="fa-solid fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <Pagination CurrentPage="@currentPage" TotalItems="@shiftsHistory.Count" PageSize="@pageSize" OnPageChanged="@(p => currentPage = p)" />
+        }
+    </div>
+</div>
+
+<!-- Shift Details Modal -->
+@if (selectedShiftDetails != null)
+{
+    <div class="modal-overlay" @onclick="CloseDetailsModal">
+        <div class="modal-card" style="width: 620px;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid fa-file-invoice-dollar me-2" style="color: var(--accent-indigo);"></i>
+                    تفاصيل الوردية #@selectedShiftDetails.Id.ToString()[..8]
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseDetailsModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="grid-2" style="margin-bottom: 1.25rem;">
+                    <div style="background: var(--bg-primary); padding: 0.85rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light);">
+                        <span style="font-size: 0.78rem; color: var(--text-secondary); display: block;">اسم الكاشير</span>
+                        <strong style="font-size: 0.95rem;">@(string.IsNullOrWhiteSpace(selectedShiftDetails.CashierName) ? "غير محدد" : selectedShiftDetails.CashierName)</strong>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 0.85rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light);">
+                        <span style="font-size: 0.78rem; color: var(--text-secondary); display: block;">حالة الوردية</span>
+                        <strong style="font-size: 0.95rem;">@(selectedShiftDetails.Status == "Open" ? "مفتوحة" : "مغلقة")</strong>
+                    </div>
+                </div>
+
+                <div class="grid-2" style="margin-bottom: 1.25rem;">
+                    <div style="background: var(--bg-primary); padding: 0.85rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light);">
+                        <span style="font-size: 0.78rem; color: var(--text-secondary); display: block;">وقت الفتح</span>
+                        <span>@selectedShiftDetails.OpenedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</span>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 0.85rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light);">
+                        <span style="font-size: 0.78rem; color: var(--text-secondary); display: block;">وقت الإغلاق</span>
+                        <span>@(selectedShiftDetails.ClosedAt.HasValue ? selectedShiftDetails.ClosedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") : "لا زالت مفتوحة")</span>
+                    </div>
+                </div>
+
+                <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--accent-indigo);">ملخص مبيعات الوردية</h4>
+                <div class="grid-3" style="margin-bottom: 1.25rem;">
+                    <div style="background: var(--bg-card); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light); text-align: center;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">إجمالي المبيعات</span>
+                        <strong style="font-size: 1.05rem; color: var(--accent-emerald);">@selectedShiftDetails.TotalSales.ToString("N2") ج.م</strong>
+                    </div>
+                    <div style="background: var(--bg-card); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light); text-align: center;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">عدد الفواتير</span>
+                        <strong style="font-size: 1.05rem;">@selectedShiftDetails.TotalInvoices</strong>
+                    </div>
+                    <div style="background: var(--bg-card); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light); text-align: center;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">عدد المرتجعات</span>
+                        <strong style="font-size: 1.05rem; color: var(--accent-red);">@selectedShiftDetails.TotalReturns</strong>
+                    </div>
+                </div>
+
+                <div class="grid-2" style="margin-bottom: 1.25rem;">
+                    <div style="background: var(--bg-card); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light);">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">تحصيل نقدي (كاش)</span>
+                        <strong>@selectedShiftDetails.TotalCash.ToString("N2") ج.م</strong>
+                    </div>
+                    <div style="background: var(--bg-card); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color-light);">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">تحصيل شبكة / فيزا</span>
+                        <strong>@selectedShiftDetails.TotalCard.ToString("N2") ج.م</strong>
+                    </div>
+                </div>
+
+                <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--accent-indigo);">جرد درج النقدية</h4>
+                <div class="grid-2" style="margin-bottom: 1rem;">
+                    <div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 0.5rem;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">النقدية الافتتاحية</span>
+                        <strong>@selectedShiftDetails.OpeningCash.ToString("N2") ج.م</strong>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 0.5rem;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">النقدية المحسوبة بالسستم</span>
+                        <strong>@selectedShiftDetails.SystemCash.ToString("N2") ج.م</strong>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 0.5rem;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">النقدية الفعلية بالدرج</span>
+                        <strong>@selectedShiftDetails.ClosingCash.ToString("N2") ج.م</strong>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 0.5rem;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">فارق النقدية (الزيادة / العجز)</span>
+                        <strong style="color: @(selectedShiftDetails.CashDifference >= 0 ? "var(--accent-emerald)" : "var(--accent-red)");">
+                            @selectedShiftDetails.CashDifference.ToString("N2") ج.م
+                        </strong>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(selectedShiftDetails.ClosingNotes))
+                {
+                    <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); padding: 0.75rem; border-radius: 0.5rem; font-size: 0.85rem; color: var(--accent-amber);">
+                        <strong>ملاحظات الإغلاق:</strong> @selectedShiftDetails.ClosingNotes
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseDetailsModal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Close Shift Security & Cash Verification Modal -->
+@if (showCloseShiftConfirmModal)
+{
+    <div class="modal-overlay" @onclick="CloseConfirmModal" @onkeydown="HandleModalKeyDown" tabindex="-1">
+        <div class="modal-card" style="width: 620px; max-width: 95vw; border: 1.5px solid var(--accent-amber); box-shadow: 0 10px 30px rgba(0,0,0,0.6);" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid rgba(245, 158, 11, 0.25);">
+                <h3 class="modal-title" style="color: #fbbf24; display: flex; align-items: center; gap: 0.5rem; font-size: 1.1rem;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>تنبيه أمني: مطابقة وجرد نقدية الدرج قبل الإغلاق</span>
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseConfirmModal" disabled="@isClosing">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Security Caution Banner -->
+                <div style="background: rgba(239, 68, 68, 0.12); border: 1.5px solid rgba(239, 68, 68, 0.35); border-radius: 0.6rem; padding: 0.85rem 1rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; align-items: flex-start; gap: 0.65rem;">
+                        <div style="color: #f87171; font-size: 1.4rem; line-height: 1;">
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 800; color: #fca5a5; font-size: 0.95rem; margin-bottom: 0.25rem;">
+                                إقرار ومسؤولية الكاشير بمطابقة الخزينة (منع التلاعب والعجز):
+                            </div>
+                            <div style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.5;">
+                                يرجى التأكد التام من <strong>مطابقة الرصيد المدخل للمبلغ الفعلي الموجود في درج النقدية</strong> بعد العد الفعلي. إغلاق الوردية إجراء نهائي لا يمكن الرجوع عنه، وسيتم تسجيل أي عجز أو زيادة في النقدية فورياً في تقارير الرقابة والتدقيق ومحاسبة الكاشير.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Verification Breakdown -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 0.6rem; padding: 1rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; padding-bottom: 0.6rem; border-bottom: 1px dashed var(--border-color);">
+                        <span style="color: var(--text-secondary); font-size: 0.9rem;">المبلغ الفعلي المدخل بالدرج:</span>
+                        <strong style="color: var(--accent-emerald); font-size: 1.35rem;">@actualCashInDrawer.ToString("N2") ج.م</strong>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; font-size: 0.85rem;">
+                        <span style="color: var(--text-secondary);">النقدية الافتتاحية المسجلة:</span>
+                        <strong>@((activeShiftDto?.OpeningCash ?? ShiftState.InitialCash).ToString("N2")) ج.م</strong>
+                    </div>
+
+                    @if (activeShiftDto != null)
+                    {
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; font-size: 0.85rem;">
+                            <span style="color: var(--text-secondary);">مبيعات الكاش النقدية بالوردية:</span>
+                            <strong style="color: var(--accent-blue);">+@activeShiftDto.TotalCash.ToString("N2") ج.م</strong>
+                        </div>
+
+                        var opening = activeShiftDto.OpeningCash > 0 ? activeShiftDto.OpeningCash : ShiftState.InitialCash;
+                        var expected = opening + activeShiftDto.TotalCash;
+                        var diff = actualCashInDrawer - expected;
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; padding-bottom: 0.6rem; border-bottom: 1px dashed var(--border-color); font-size: 0.85rem;">
+                            <span style="color: var(--text-secondary);">الرصيد الدفتري المتوقع بالدرج:</span>
+                            <strong style="color: #fbbf24;">@expected.ToString("N2") ج.م</strong>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.55rem 0.85rem; border-radius: 0.4rem; background: @(diff < 0 ? "rgba(239, 68, 68, 0.15)" : (diff > 0 ? "rgba(245, 158, 11, 0.15)" : "rgba(16, 185, 129, 0.15)"));">
+                            <span style="font-weight: 700; font-size: 0.88rem;">حالة مطابقة الخزينة:</span>
+                            @if (diff < 0)
+                            {
+                                <strong style="color: #f87171; font-size: 0.95rem;">
+                                    <i class="fa-solid fa-circle-xmark me-1"></i> عجز بالدرج: -@Math.Abs(diff).ToString("N2") ج.م (سيُقيد عجزاً)
+                                </strong>
+                            }
+                            else if (diff > 0)
+                            {
+                                <strong style="color: #fbbf24; font-size: 0.95rem;">
+                                    <i class="fa-solid fa-circle-plus me-1"></i> زيادة بالدرج: +@diff.ToString("N2") ج.م
+                                </strong>
+                            }
+                            else
+                            {
+                                <strong style="color: #34d399; font-size: 0.95rem;">
+                                    <i class="fa-solid fa-circle-check me-1"></i> الرصيد مطابق تماماً بدون عجز (0.00 ج.م)
+                                </strong>
+                            }
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(closingNotes))
+                    {
+                        <div style="margin-top: 0.6rem; font-size: 0.82rem; color: var(--text-secondary);">
+                            <span>ملاحظات الإغلاق: </span>
+                            <em style="color: var(--text-primary);">@closingNotes</em>
+                        </div>
+                    }
+                </div>
+
+                <p style="font-size: 0.92rem; color: #f8fafc; text-align: center; margin-bottom: 0; font-weight: 700;">
+                    هل أنت متأكد من مطابقة النقدية وترغب في إغلاق الوردية الآن؟
+                </p>
+            </div>
+
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" class="btn btn-secondary" @onclick="CloseConfirmModal" disabled="@isClosing" style="padding: 0.6rem 1.25rem;">
+                    <i class="fa-solid fa-xmark me-1"></i> تراجع وتعديل المبلغ [Esc]
+                </button>
+                <button id="btn-confirm-close-shift" type="button" class="btn btn-danger" @onclick="ConfirmAndCloseShift" disabled="@isClosing" style="padding: 0.6rem 1.5rem; font-weight: 800; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);">
+                    @if (isClosing)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <span>جاري إغلاق الوردية...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-lock"></i>
+                        <span>تأكيد ومطابقة الإغلاق الآن [Enter]</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private decimal startingCash = 500;
+    private decimal actualCashInDrawer = 0;
+    private string closingNotes = string.Empty;
+    private string? shiftError;
+    private string? shiftSuccess;
+
+    private ShiftDto? activeShiftDto;
+    private bool showCloseShiftConfirmModal = false;
+    private bool isClosing = false;
+
+    private DateTime? filterFromDate;
+    private DateTime? filterToDate;
+
+    private List<ShiftDto> shiftsHistory = new();
+    private bool isLoadingHistory = true;
+
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private IEnumerable<ShiftDto> PagedShifts => shiftsHistory.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private ShiftDto? selectedShiftDetails;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadActiveShiftAsync();
+        await LoadShiftsHistoryAsync();
+
+        if (ShiftState.IsShiftOpen)
+        {
+            _ = FocusElementAsync("actual-cash-input", 150);
+        }
+        else
+        {
+            _ = FocusElementAsync("starting-cash-input", 150);
+        }
+    }
+
+    private async Task LoadActiveShiftAsync()
+    {
+        shiftError = null;
+
+        if (AuthState.UserId != Guid.Empty)
+        {
+            activeShiftDto = await ApiClient.GetCurrentShiftAsync(AuthState.UserId);
+            if (activeShiftDto != null && activeShiftDto.Status == "Open")
+            {
+                ShiftState.SetActiveShift(activeShiftDto.Id, activeShiftDto.OpenedAt, activeShiftDto.OpeningCash);
+            }
+        }
+    }
+
+    private async Task LoadShiftsHistoryAsync()
+    {
+        isLoadingHistory = true;
+        try
+        {
+            DateTime? from = filterFromDate?.Date;
+            DateTime? to = filterToDate?.Date.AddDays(1).AddTicks(-1);
+
+            shiftsHistory = await ApiClient.GetShiftsAsync(fromDate: from, toDate: to);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading shifts history: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingHistory = false;
+        }
+    }
+
+    private async Task FilterShifts()
+    {
+        await LoadShiftsHistoryAsync();
+    }
+
+    private async Task ResetFilter()
+    {
+        filterFromDate = null;
+        filterToDate = null;
+        await LoadShiftsHistoryAsync();
+    }
+
+    private void ViewShiftDetails(ShiftDto shift)
+    {
+        selectedShiftDetails = shift;
+    }
+
+    private void CloseDetailsModal()
+    {
+        selectedShiftDetails = null;
+    }
+
+    private async Task OpenShift()
+    {
+        shiftError = null;
+        shiftSuccess = null;
+        if (AuthState.UserId == Guid.Empty)
+        {
+            shiftError = "جلسة الكاشير غير صالحة. الرجاء تسجيل الخروج والدخول مجدداً.";
+            return;
+        }
+
+        if (startingCash < 0)
+        {
+            shiftError = "الرجاء إدخال مبلغ افتتاحي صحيح في الدرج.";
+            return;
+        }
+
+        var cmd = new OpenShiftCommand(AuthState.UserId, startingCash);
+        var (id, error) = await ApiClient.OpenShiftAsync(cmd);
+        if (id.HasValue)
+        {
+            ShiftState.SetActiveShift(id.Value, DateTime.Now, startingCash);
+            shiftSuccess = "تم فتح الوردية بنجاح، وجاهزة الآن لاستقبال المبيعات.";
+            actualCashInDrawer = 0;
+            closingNotes = string.Empty;
+            await LoadActiveShiftAsync();
+            await LoadShiftsHistoryAsync();
+            _ = FocusElementAsync("actual-cash-input", 150);
+        }
+        else
+        {
+            shiftError = !string.IsNullOrEmpty(error) ? error : "فشل فتح الوردية. قد يكون لدى الكاشير وردية مفتوحة بالفعل.";
+        }
+    }
+
+    private async Task PromptCloseShift()
+    {
+        shiftError = null;
+        shiftSuccess = null;
+
+        if (actualCashInDrawer < 0)
+        {
+            shiftError = "الرجاء إدخال مبلغ نقدي صحيح وموجب في الدرج.";
+            return;
+        }
+
+        // Fetch fresh data for the active shift to compare expected cash
+        if (AuthState.UserId != Guid.Empty)
+        {
+            activeShiftDto = await ApiClient.GetCurrentShiftAsync(AuthState.UserId);
+        }
+
+        showCloseShiftConfirmModal = true;
+        _ = FocusElementAsync("btn-confirm-close-shift", 100);
+    }
+
+    private async Task ConfirmAndCloseShift()
+    {
+        if (isClosing) return;
+        isClosing = true;
+        shiftError = null;
+
+        try
+        {
+            var shiftIdToClose = ShiftState.ShiftId;
+            var closedShiftSnapshot = activeShiftDto;
+            var cmd = new CloseShiftCommand(shiftIdToClose, actualCashInDrawer, closingNotes);
+            var success = await ApiClient.CloseShiftAsync(cmd);
+            if (success)
+            {
+                // Push Closed Shift summary to Cloud for Mobile Notification
+                try
+                {
+                    var expectedCash = (closedShiftSnapshot?.OpeningCash ?? 0) + (closedShiftSnapshot?.TotalCash ?? 0);
+                    var diff = actualCashInDrawer - expectedCash;
+                    var shiftReq = new global::POS.Desktop.Services.Sync.PushClosedShiftRequest(
+                        ShiftId: shiftIdToClose != Guid.Empty ? shiftIdToClose : (closedShiftSnapshot?.Id ?? Guid.NewGuid()),
+                        CashierName: closedShiftSnapshot?.CashierName ?? AuthState.UserFullName ?? "كاشير",
+                        OpenedAt: closedShiftSnapshot?.OpenedAt ?? DateTime.UtcNow,
+                        ClosedAt: DateTime.UtcNow,
+                        OpeningCash: closedShiftSnapshot?.OpeningCash ?? 0,
+                        ActualClosingCash: actualCashInDrawer,
+                        SystemCash: expectedCash,
+                        CashDifference: diff,
+                        TotalSales: closedShiftSnapshot?.TotalSales ?? 0,
+                        TotalCash: closedShiftSnapshot?.TotalCash ?? 0,
+                        TotalCard: closedShiftSnapshot?.TotalCard ?? 0,
+                        TotalWallet: closedShiftSnapshot?.TotalWallet ?? 0,
+                        TotalCredit: closedShiftSnapshot?.TotalCredit ?? 0,
+                        TotalInvoices: closedShiftSnapshot?.TotalInvoices ?? 0,
+                        TotalReturns: closedShiftSnapshot?.TotalReturns ?? 0,
+                        ClosingNotes: closingNotes
+                    );
+                    await CloudSync.PushClosedShiftToCloudAsync(shiftReq);
+                }
+                catch { }
+
+                showCloseShiftConfirmModal = false;
+                ShiftState.ClearShift();
+                activeShiftDto = null;
+                actualCashInDrawer = 0;
+                closingNotes = string.Empty;
+                shiftSuccess = "تم إغلاق الوردية وجرد النقدية بنجاح واعتماد مطابقة الحسابات.";
+                await LoadShiftsHistoryAsync();
+                _ = FocusElementAsync("starting-cash-input", 150);
+            }
+            else
+            {
+                shiftError = "فشل إغلاق الوردية. الرجاء مراجعة سجلات النظام أو التأكد من اتصال السيرفر.";
+                showCloseShiftConfirmModal = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            shiftError = $"حدث خطأ أثناء إغلاق الوردية: {ex.Message}";
+            showCloseShiftConfirmModal = false;
+        }
+        finally
+        {
+            isClosing = false;
+        }
+    }
+
+    private void CloseConfirmModal()
+    {
+        showCloseShiftConfirmModal = false;
+        _ = FocusElementAsync("actual-cash-input", 100);
+    }
+
+    private async Task HandleStartingCashKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await OpenShift();
+        }
+    }
+
+    private async Task HandleClosingCashKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await PromptCloseShift();
+        }
+    }
+
+    private async Task HandleClosingNotesKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await PromptCloseShift();
+        }
+    }
+
+    private async Task HandleModalKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isClosing)
+        {
+            await ConfirmAndCloseShift();
+        }
+        else if (e.Key == "Escape" && !isClosing)
+        {
+            CloseConfirmModal();
+        }
+    }
+
+    private async Task FocusElementAsync(string elementId, int delay = 50, bool select = true)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("focusElementById", elementId, delay, select);
+        }
+        catch { }
+    }
+}
