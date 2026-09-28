@@ -32,8 +32,8 @@ namespace Sales.Application.Promotions.Queries.GetOffers
                     o.DiscountPercentage, o.FixedDiscountAmount, o.BundlePrice,
                     o.StartDate, o.EndDate, o.IsActive,
                     CASE 
-                        WHEN o.IsActive = 1 AND GETUTCDATE() >= o.StartDate AND GETUTCDATE() <= o.EndDate THEN 1 
-                        ELSE 0 
+                        WHEN o.IsActive = 1 AND GETUTCDATE() >= o.StartDate AND GETUTCDATE() <= o.EndDate THEN CAST(1 AS BIT) 
+                        ELSE CAST(0 AS BIT) 
                     END AS IsCurrentlyValid,
                     o.TargetProductId, p.NameAr AS TargetProductName,
                     o.TargetCategoryId, c.NameAr AS TargetCategoryName,

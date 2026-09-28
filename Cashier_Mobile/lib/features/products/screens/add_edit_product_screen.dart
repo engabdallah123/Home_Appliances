@@ -64,7 +64,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _nameEnCtrl = TextEditingController(text: p?.nameEn ?? '');
     _barcodeCtrl = TextEditingController(text: p?.barcode ?? (_isWeighable ? _generateScalePluCode() : _generateBarcode()));
     _baseUnitCtrl = TextEditingController(text: p?.baseUnit ?? (_isWeighable ? 'كيلوجرام' : 'قطعة'));
-    _parentUnitCtrl = TextEditingController(text: p?.parentUnit ?? (_isWeighable ? '' : 'كرتونة'));
+    _parentUnitCtrl = TextEditingController(text: p?.parentUnit ?? (_isWeighable ? '' : 'قطعة'));
     _factorCtrl = TextEditingController(text: (p?.conversionFactor ?? 1).toString());
     _purchasePriceCtrl = TextEditingController(text: p != null && p.purchasePrice > 0 ? p.purchasePrice.toStringAsFixed(2) : '');
     _sellingPriceCtrl = TextEditingController(text: p != null && p.sellingPrice > 0 ? p.sellingPrice.toStringAsFixed(2) : '');
@@ -170,7 +170,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           _barcodeCtrl.text = _generateBarcode();
         }
         _baseUnitCtrl.text = "قطعة";
-        _parentUnitCtrl.text = "كرتونة";
+        _parentUnitCtrl.text = "قطعة";
         _factorCtrl.text = "1";
       }
     });
@@ -242,9 +242,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       barcode: _barcodeCtrl.text.trim(),
       nameAr: _nameArCtrl.text.trim(),
       nameEn: _nameEnCtrl.text.trim().isNotEmpty ? _nameEnCtrl.text.trim() : null,
-      baseUnit: _isWeighable ? (_baseUnitCtrl.text.trim().isNotEmpty ? _baseUnitCtrl.text.trim() : 'كيلوجرام') : (_baseUnitCtrl.text.trim().isNotEmpty ? _baseUnitCtrl.text.trim() : 'قطعة'),
-      parentUnit: _isWeighable ? null : (_parentUnitCtrl.text.trim().isNotEmpty ? _parentUnitCtrl.text.trim() : 'كرتونة'),
-      conversionFactor: _isWeighable ? 1 : (int.tryParse(_factorCtrl.text.trim()) ?? 1),
+      baseUnit: _isWeighable ? (_baseUnitCtrl.text.trim().isNotEmpty ? _baseUnitCtrl.text.trim() : 'كيلوجرام') : 'قطعة',
+      parentUnit: _isWeighable ? null : 'قطعة',
+      conversionFactor: 1,
       purchasePrice: double.tryParse(_purchasePriceCtrl.text.trim()) ?? 0.0,
       sellingPrice: double.tryParse(_sellingPriceCtrl.text.trim()) ?? 0.0,
       wholesalePrice: double.tryParse(_wholesalePriceCtrl.text.trim()) ?? 0.0,
@@ -901,64 +901,32 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     );
   }
 
-  // 4B. Regular Product Units Section (2-Tier Packaging)
+  // 4B. Regular Product Units Section (Home Appliances: Piece only)
   Widget _buildRegularUnitsSection(bool isDark) {
     return _buildSectionCard(
       isDark,
-      title: "تهيئة وحدات التعبئة (كرتونة / قطعة)",
+      title: "وحدة القياس والتعبئة",
       icon: Icons.all_inbox_rounded,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: CustomTextField(
-                controller: _baseUnitCtrl,
-                label: "الوحدة الأساسية الصغرى *",
-                hint: "قطعة / علبة / كيس",
-                prefixIcon: Icons.crop_square_rounded,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: CustomTextField(
-                controller: _parentUnitCtrl,
-                label: "الوحدة الكبرى",
-                hint: "كرتونة / باكت / شيكارة",
-                prefixIcon: Icons.layers_outlined,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        CustomTextField(
-          controller: _factorCtrl,
-          label: "معامل التحويل (كم قطعة في الكرتونة؟) *",
-          hint: "1",
-          keyboardType: TextInputType.number,
-          prefixIcon: Icons.swap_vert_rounded,
-          validator: (v) {
-            final n = int.tryParse(v ?? "");
-            if (n == null || n < 1) return "أدخل معامل تحويل صحيح (1 أو أكثر)";
-            return null;
-          },
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 10),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: isDark ? AppColors.primary.withOpacity(0.08) : const Color(0xFFEFF6FF),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppColors.primary.withOpacity(0.3)),
           ),
           child: Row(
             children: [
-              const Icon(Icons.info_outline_rounded, color: AppColors.primaryLight, size: 16),
-              const SizedBox(width: 8),
+              const Icon(Icons.check_circle_outline_rounded, color: AppColors.primaryLight, size: 20),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  "1 ${_parentUnitCtrl.text.isNotEmpty ? _parentUnitCtrl.text : 'كرتونة'} = ${_factorCtrl.text.isNotEmpty ? _factorCtrl.text : '1'} ${_baseUnitCtrl.text.isNotEmpty ? _baseUnitCtrl.text : 'قطعة'} (المخزون يُحسب بالوحدة الصغرى)",
-                  style: TextStyle(color: isDark ? AppColors.primaryLight : const Color(0xFF1E40AF), fontSize: 11),
+                  "وحدة الصنف: قطعة (الأجهزة الكهربائية والمنزلية تُباع وتُخزن بالقطعة)",
+                  style: TextStyle(
+                    color: isDark ? AppColors.primaryLight : const Color(0xFF1E40AF),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

@@ -151,19 +151,7 @@
                                 @prod.SellingPrice.ToString("N2") ج.م
                             </span>
                             <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                @if (prod.ConversionFactor > 1 || (!string.IsNullOrWhiteSpace(prod.Description) && prod.Description.Contains("[UNITS:")))
-                                {
-                                    int cartonSize = prod.ConversionFactor > 1 ? prod.ConversionFactor : PackagingUnitHelper.Parse(prod.Description).TotalPiecesPerCarton;
-                                    <button type="button" 
-                                            class="btn" 
-                                            style="padding: 0.12rem 0.4rem; font-size: 0.68rem; font-weight: 700; background: rgba(99, 102, 241, 0.15); color: var(--accent-indigo); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 4px;" 
-                                            @onclick:stopPropagation="true" 
-                                            @onclick="() => AddCartonToCart(prod)" 
-                                            title="إضافة كرتونة مباشرة (@cartonSize قطعة)">
-                                        <i class="fa-solid fa-box-archive me-1"></i> كرتونة
-                                    </button>
-                                }
-                                <i class="fa-solid fa-plus-circle"></i>
+                                <i class="fa-solid fa-plus-circle text-indigo"></i>
                             </div>
                         </div>
                     </div>
@@ -254,67 +242,10 @@
                                             <input class="form-control" @bind="item.SerialNumber" placeholder="سيريال الجهاز..." style="height: 22px; font-size: 0.72rem; padding: 0.1rem 0.35rem; max-width: 140px; font-family: monospace; font-weight: 700; color: var(--accent-cyan);" />
                                         </div>
                                     }
-                                    <div style="font-size: 0.74rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.15rem;">
-                                        @if (item.SelectedUnit == "Carton")
-                                        {
-                                            <span style="font-weight: 700; color: var(--accent-indigo); font-size: 0.78rem;">
-                                                الكرتونة: @item.CartonUnitPrice.ToString("N2") ج.م
-                                            </span>
-                                            <span style="font-size: 0.68rem; color: var(--text-muted);">
-                                                (@item.UnitPrice.ToString("N2") ج.م/@item.BaseUnit × @item.CartonPieces)
-                                            </span>
-                                        }
-                                        else
-                                        {
-                                            <span style="font-weight: 600; color: var(--accent-emerald); font-size: 0.78rem;">
-                                                @item.UnitPrice.ToString("N2") ج.م/@item.BaseUnit
-                                            </span>
-                                            @if (item.HasCarton)
-                                            {
-                                                <span style="font-size: 0.68rem; color: var(--text-muted);" title="سعر الكرتونة">
-                                                    (كرتونة: @item.CartonUnitPrice.ToString("N2") ج.م)
-                                                </span>
-                                            }
-                                        }
-
-                                        <!-- Unit Selection Buttons -->
-                                        <div style="display: inline-flex; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden; font-size: 0.68rem;">
-                                            <button type="button" 
-                                                    class="btn @(item.SelectedUnit == "Piece" ? "btn-primary" : "btn-secondary")" 
-                                                    style="padding: 0.05rem 0.35rem; border-radius: 0; font-size: 0.68rem;" 
-                                                    @onclick='() => SetItemUnit(item.ProductId, "Piece")'>
-                                                @item.BaseUnit
-                                            </button>
-                                            @if (item.PiecesPerBox > 1)
-                                            {
-                                                <button type="button" 
-                                                        class="btn @(item.SelectedUnit == "Box" ? "btn-primary" : "btn-secondary")" 
-                                                        style="padding: 0.05rem 0.35rem; border-radius: 0; font-size: 0.68rem;" 
-                                                        @onclick='() => SetItemUnit(item.ProductId, "Box")'>
-                                                    علبة (@item.PiecesPerBox)
-                                                </button>
-                                            }
-                                            @if (item.HasCarton)
-                                            {
-                                                <button type="button" 
-                                                        class="btn @(item.SelectedUnit == "Carton" ? "btn-primary" : "btn-secondary")" 
-                                                        style="padding: 0.05rem 0.35rem; border-radius: 0; font-size: 0.68rem;" 
-                                                        @onclick='() => SetItemUnit(item.ProductId, "Carton")'
-                                                        title="البيع بالكرتونة (@item.CartonPieces @item.BaseUnit)">
-                                                    @item.ParentUnit (@item.CartonPieces)
-                                                </button>
-                                            }
-                                            else
-                                            {
-                                                <button type="button" 
-                                                        class="btn btn-secondary" 
-                                                        style="padding: 0.05rem 0.35rem; border-radius: 0; font-size: 0.68rem; opacity: 0.85;" 
-                                                        @onclick='() => PromptCartonSize(item.ProductId)'
-                                                        title="تحديد معامل الكرتونة للبيع">
-                                                    + كرتونة
-                                                </button>
-                                            }
-                                        </div>
+                                    <div style="font-size: 0.76rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem; margin-top: 0.15rem;">
+                                        <span style="font-weight: 600; color: var(--accent-emerald); font-size: 0.8rem;">
+                                            @item.UnitPrice.ToString("N2") ج.م / قطعة
+                                        </span>
                                     </div>
                                 </td>
                                 <td style="text-align: center;">
@@ -339,12 +270,7 @@
                                                style="width: 44px; text-align: center; font-weight: 700; font-size: 0.85rem; color: var(--accent-amber); background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.1rem; outline: none;" />
                                         <button class="qty-btn" @onclick="() => Cart.UpdateQuantity(item.ProductId, item.UnitQuantity + 1m)" title="زيادة واحد">+</button>
                                     </div>
-                                    @if (item.SelectedUnit == "Carton")
-                                    {
-                                        <div style="font-size: 0.65rem; color: var(--accent-indigo); font-weight: 600; margin-top: 0.1rem;">
-                                            (@item.Quantity.ToString("N0") قطعة)
-                                        </div>
-                                    }
+
                                 </td>
                                 <td style="text-align: left; font-weight: 700; color: var(--accent-emerald); font-size: 0.86rem;">
                                     @item.LineTotal.ToString("N2")
@@ -1590,7 +1516,7 @@
             bpc,
             conversionFactor,
             prod.BaseUnit,
-            prod.ParentUnit ?? "كرتونة",
+            prod.ParentUnit ?? "قطعة",
             initialUnit,
             initialWholesale,
             false,
@@ -1814,7 +1740,7 @@
                             conversionFactor,
                             conversionFactor,
                             prod.BaseUnit,
-                            prod.ParentUnit ?? "كرتونة",
+                            prod.ParentUnit ?? "قطعة",
                             "Piece",
                             false,
                             false,

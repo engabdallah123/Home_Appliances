@@ -345,16 +345,8 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
   }
 
   Widget _buildProductCard(BuildContext context, bool isDark, ProductModel p, NumberFormat currencyFormatter) {
-    // Stock Breakdown formatting
-    String stockDisplay = "${p.stockQuantity.toStringAsFixed(p.isWeighable ? 2 : 0)} ${p.baseUnit}";
-    if (p.conversionFactor > 1 && p.stockQuantity >= p.conversionFactor) {
-      int cartons = p.stockQuantity ~/ p.conversionFactor;
-      double remainingPieces = p.stockQuantity % p.conversionFactor;
-      stockDisplay = "$cartons ${p.parentUnit ?? 'كرتونة'}";
-      if (remainingPieces > 0) {
-        stockDisplay += " + ${remainingPieces.toStringAsFixed(0)} ${p.baseUnit}";
-      }
-    }
+    // Stock Breakdown formatting (Home appliances: always in pieces)
+    String stockDisplay = "${p.stockQuantity.toStringAsFixed(0)} قطعة";
 
     final isLowStock = p.stockQuantity <= p.reorderLevel;
     final isAppliance = (p.brandId != null || p.brandName != null || p.modelNumber != null || p.warrantyPeriodMonths > 0);

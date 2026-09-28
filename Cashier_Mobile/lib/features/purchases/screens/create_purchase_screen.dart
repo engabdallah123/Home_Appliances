@@ -394,10 +394,10 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
     final isWeighed = product.isWeighable;
 
     // State variables
-    String unitType = (existingItem != null && existingItem.unit == (product.parentUnit ?? 'كرتونة')) ? 'carton' : 'piece';
+    String unitType = 'piece';
     double qty = existingItem?.quantity ?? (isWeighed ? 1.0 : 1.0);
     double cost = existingItem?.unitCost ?? (product.purchasePrice > 0 ? product.purchasePrice : product.sellingPrice * 0.8);
-    int factor = existingItem?.conversionFactor ?? (product.conversionFactor > 1 ? product.conversionFactor : 1);
+    int factor = 1;
     DateTime? expiryDate = existingItem?.expiryDate ?? DateTime.now().add(Duration(days: product.shelfLifeDays > 0 ? product.shelfLifeDays : 365));
     String batch = existingItem?.batchNumber ?? '';
 
@@ -420,8 +420,8 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
             final currentCost = double.tryParse(costCtrl.text) ?? 0.0;
             final currentFactor = int.tryParse(factorCtrl.text) ?? 1;
             final itemTotal = currentQty * currentCost;
-            final pieceCost = (unitType == 'carton' && currentFactor > 0) ? (currentCost / currentFactor) : currentCost;
-            final totalPieces = (unitType == 'carton') ? (currentQty * currentFactor) : currentQty;
+            final pieceCost = currentCost;
+            final totalPieces = currentQty;
 
             int daysLeft = 0;
             if (expiryDate != null) {
@@ -551,208 +551,54 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                         onChanged: (_) => setDialogState(() {}),
                       ),
                     ] else ...[
-                      // REGULAR PRODUCT SECTION (Piece vs Carton)
-                      Text("نوع وحدة التوريد *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
+                      // REGULAR PRODUCT SECTION (Always by Piece for Home Appliances)
                       Row(
                         children: [
                           Expanded(
-                            child: InkWell(
-                              onTap: () {
-                                setDialogState(() {
-                                  unitType = 'piece';
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: unitType == 'piece' ? AppColors.primary.withOpacity(0.18) : AppColors.getBackground(isDark),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: unitType == 'piece' ? AppColors.primaryLight : AppColors.getBorder(isDark), width: 1.5),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  "بالقطعة (${product.baseUnit})",
-                                  style: TextStyle(
-                                    color: unitType == 'piece' ? AppColors.primaryLight : AppColors.getTextSecondary(isDark),
-                                    fontWeight: unitType == 'piece' ? FontWeight.bold : FontWeight.normal,
-                                    fontSize: 13,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("الكمية (قطعة) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 4),
+                                TextField(
+                                  controller: qtyCtrl,
+                                  keyboardType: TextInputType.number,
+                                  style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold),
+                                  decoration: InputDecoration(
+                                    suffixText: "قطعة",
+                                    filled: true,
+                                    fillColor: AppColors.getBackground(isDark),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                                   ),
+                                  onChanged: (_) => setDialogState(() {}),
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: InkWell(
-                              onTap: () {
-                                setDialogState(() {
-                                  unitType = 'carton';
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: unitType == 'carton' ? AppColors.accent.withOpacity(0.18) : AppColors.getBackground(isDark),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: unitType == 'carton' ? AppColors.accent : AppColors.getBorder(isDark), width: 1.5),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  "بالكرتونة (${product.parentUnit ?? 'كرتونة'})",
-                                  style: TextStyle(
-                                    color: unitType == 'carton' ? AppColors.accent : AppColors.getTextSecondary(isDark),
-                                    fontWeight: unitType == 'carton' ? FontWeight.bold : FontWeight.normal,
-                                    fontSize: 13,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("سعر شراء القطعة (ج.م) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 4),
+                                TextField(
+                                  controller: costCtrl,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold),
+                                  decoration: InputDecoration(
+                                    suffixText: "ج.م",
+                                    filled: true,
+                                    fillColor: AppColors.getBackground(isDark),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                                   ),
+                                  onChanged: (_) => setDialogState(() {}),
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-
-                      if (unitType == 'carton') ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text("عدد الكراتين *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  TextField(
-                                    controller: qtyCtrl,
-                                    keyboardType: TextInputType.number,
-                                    style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold),
-                                    decoration: InputDecoration(
-                                      suffixText: product.parentUnit ?? 'كرتونة',
-                                      filled: true,
-                                      fillColor: AppColors.getBackground(isDark),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                    ),
-                                    onChanged: (_) => setDialogState(() {}),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              flex: 2,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text("قطع الكرتونة *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  TextField(
-                                    controller: factorCtrl,
-                                    keyboardType: TextInputType.number,
-                                    style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold),
-                                    decoration: InputDecoration(
-                                      suffixText: "قطعة",
-                                      filled: true,
-                                      fillColor: AppColors.getBackground(isDark),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                    ),
-                                    onChanged: (_) => setDialogState(() {}),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text("سعر شراء الكرتونة (ج.م) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 4),
-                        TextField(
-                          controller: costCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold),
-                          decoration: InputDecoration(
-                            hintText: "0.00",
-                            suffixText: "ج.م / كرتونة",
-                            filled: true,
-                            fillColor: AppColors.getBackground(isDark),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onChanged: (_) => setDialogState(() {}),
-                        ),
-                        const SizedBox(height: 8),
-
-                        // Carton Calculation Banner
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                "تكلفة القطعة المحسوبة: ${pieceCost.toStringAsFixed(2)} ج.م",
-                                style: const TextStyle(color: Colors.lightBlueAccent, fontWeight: FontWeight.bold, fontSize: 12),
-                              ),
-                              Text(
-                                "يضاف للمخزن: ${totalPieces.toStringAsFixed(0)} ${product.baseUnit}",
-                                style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ] else ...[
-                        // Piece
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text("الكمية (${product.baseUnit}) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  TextField(
-                                    controller: qtyCtrl,
-                                    keyboardType: TextInputType.number,
-                                    style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold),
-                                    decoration: InputDecoration(
-                                      suffixText: product.baseUnit,
-                                      filled: true,
-                                      fillColor: AppColors.getBackground(isDark),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                    ),
-                                    onChanged: (_) => setDialogState(() {}),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text("سعر شراء القطعة (ج.م) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  TextField(
-                                    controller: costCtrl,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold),
-                                    decoration: InputDecoration(
-                                      suffixText: "ج.م",
-                                      filled: true,
-                                      fillColor: AppColors.getBackground(isDark),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                    ),
-                                    onChanged: (_) => setDialogState(() {}),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                     ],
 
                     // EXPIRY TRACKING SECTION
@@ -884,14 +730,14 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                             if (existingItem != null) {
                               existingItem.quantity = currentQty;
                               existingItem.unitCost = currentCost;
-                              existingItem.unit = isWeighed ? (product.baseUnit) : (unitType == 'carton' ? (product.parentUnit ?? 'كرتونة') : product.baseUnit);
-                              existingItem.conversionFactor = currentFactor;
+                              existingItem.unit = isWeighed ? product.baseUnit : 'قطعة';
+                              existingItem.conversionFactor = 1;
                               existingItem.isWeighable = isWeighed;
                               existingItem.expiryDate = expiryDate;
                               existingItem.batchNumber = batchCtrl.text.trim().isNotEmpty ? batchCtrl.text.trim() : null;
                             } else {
                               // Check if item already exists in items list
-                              final idx = _items.indexWhere((i) => i.productId == product.id && i.unit == (isWeighed ? product.baseUnit : (unitType == 'carton' ? (product.parentUnit ?? 'كرتونة') : product.baseUnit)));
+                              final idx = _items.indexWhere((i) => i.productId == product.id && i.unit == (isWeighed ? product.baseUnit : 'قطعة'));
                               if (idx >= 0) {
                                 _items[idx].quantity += currentQty;
                                 _items[idx].unitCost = currentCost;
@@ -902,11 +748,11 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                   barcode: product.barcode,
                                   quantity: currentQty,
                                   unitCost: currentCost,
-                                  unit: isWeighed ? (product.baseUnit) : (unitType == 'carton' ? (product.parentUnit ?? 'كرتونة') : product.baseUnit),
+                                  unit: isWeighed ? product.baseUnit : 'قطعة',
                                   isWeighable: isWeighed,
-                                  conversionFactor: currentFactor,
-                                  parentUnit: product.parentUnit,
-                                  baseUnit: product.baseUnit,
+                                  conversionFactor: 1,
+                                  parentUnit: 'قطعة',
+                                  baseUnit: 'قطعة',
                                   shelfLifeDays: product.shelfLifeDays,
                                   expiryDate: expiryDate,
                                   batchNumber: batchCtrl.text.trim().isNotEmpty ? batchCtrl.text.trim() : null,
@@ -1316,7 +1162,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                               padding: const EdgeInsets.symmetric(vertical: 24),
                               child: Center(
                                 child: Text(
-                                  "لم تتم إضافة أصناف بعد.\nاضغط 'إضافة صنف' لاختيار الأصناف بالوزن أو بالكرتونة والقطعة.",
+                                  "لم تتم إضافة أصناف بعد.\nاضغط 'إضافة صنف' لاختيار الأجهزة.",
                                   textAlign: TextAlign.center,
                                   style: TextStyle(color: AppColors.getTextMuted(isDark), height: 1.5, fontSize: 13),
                                 ),
