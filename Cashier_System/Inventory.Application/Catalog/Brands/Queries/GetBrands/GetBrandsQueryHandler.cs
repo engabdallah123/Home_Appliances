@@ -18,7 +18,7 @@ namespace Inventory.Application.Catalog.Brands.Queries.GetBrands
         {
             using var connection = _sqlConnectionFactory.CreateConnection();
 
-            var sql = "SELECT Id, Name, Name AS NameAr, IsActive, CreatedAt FROM [Inventory].[Brands] WHERE 1 = 1";
+            var sql = "SELECT Id, Name, Name AS NameAr, Name AS NameEn, IsActive, CreatedAt FROM [Inventory].[Brands] WHERE 1 = 1";
 
             if (request.OnlyActive.HasValue && request.OnlyActive.Value)
             {
