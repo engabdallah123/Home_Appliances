@@ -26,14 +26,21 @@ namespace Inventory.Application.Catalog.Brands.Commands.UpdateBrand
                     ? $"{request.NameAr.Trim()} ({request.NameEn.Trim()})"
                     : !string.IsNullOrWhiteSpace(request.NameAr)
                         ? request.NameAr.Trim()
-                        : request.NameEn?.Trim() ?? "";
+                        : request.NameEn?.Trim() ?? brand.Name;
 
-            if (!string.IsNullOrWhiteSpace(effectiveName))
-            {
-                var updateResult = brand.Rename(effectiveName);
-                if (updateResult.IsFailure)
-                    return updateResult;
-            }
+            if (string.IsNullOrWhiteSpace(effectiveName))
+                effectiveName = brand.Name;
+
+            var updateResult = brand.Update(
+                effectiveName,
+                request.NameAr,
+                request.NameEn,
+                request.Description,
+                request.OriginCountry,
+                request.AgentContactNumber);
+
+            if (updateResult.IsFailure)
+                return updateResult;
 
             if (request.IsActive.HasValue)
             {

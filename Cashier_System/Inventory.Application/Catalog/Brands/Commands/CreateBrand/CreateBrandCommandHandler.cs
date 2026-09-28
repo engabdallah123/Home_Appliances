@@ -27,7 +27,14 @@ namespace Inventory.Application.Catalog.Brands.Commands.CreateBrand
             if (string.IsNullOrWhiteSpace(effectiveName))
                 return Result<Guid>.Failure(BrandErrors.NameRequired);
 
-            var brandResult = Brand.Create(effectiveName);
+            var brandResult = Brand.Create(
+                effectiveName,
+                request.NameAr,
+                request.NameEn,
+                request.Description,
+                request.OriginCountry,
+                request.AgentContactNumber);
+
             if (brandResult.IsFailure)
                 return Result<Guid>.Failure(brandResult.Error);
 

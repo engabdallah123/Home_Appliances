@@ -17,6 +17,21 @@ internal sealed class BrandConfiguration : IEntityTypeConfiguration<Brand>
             .IsRequired()
             .HasMaxLength(150);
 
+        builder.Property(b => b.NameAr)
+            .HasMaxLength(150);
+
+        builder.Property(b => b.NameEn)
+            .HasMaxLength(150);
+
+        builder.Property(b => b.Description)
+            .HasMaxLength(500);
+
+        builder.Property(b => b.OriginCountry)
+            .HasMaxLength(100);
+
+        builder.Property(b => b.AgentContactNumber)
+            .HasMaxLength(50);
+
         builder.HasIndex(b => b.Name).IsUnique();
         builder.HasIndex(b => b.IsActive);
     }

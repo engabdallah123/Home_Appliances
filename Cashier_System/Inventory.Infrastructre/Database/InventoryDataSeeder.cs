@@ -13,7 +13,36 @@ public static class InventoryDataSeeder
 
         await context.Database.MigrateAsync();
 
+        await EnsureBrandColumnsAsync(context);
+
         await SeedUnitsAsync(context);
+    }
+
+    private static async Task EnsureBrandColumnsAsync(InventoryDbContext context)
+    {
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('[Inventory].[Brands]') AND name = 'NameAr')
+                    ALTER TABLE [Inventory].[Brands] ADD [NameAr] NVARCHAR(150) NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('[Inventory].[Brands]') AND name = 'NameEn')
+                    ALTER TABLE [Inventory].[Brands] ADD [NameEn] NVARCHAR(150) NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('[Inventory].[Brands]') AND name = 'Description')
+                    ALTER TABLE [Inventory].[Brands] ADD [Description] NVARCHAR(500) NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('[Inventory].[Brands]') AND name = 'OriginCountry')
+                    ALTER TABLE [Inventory].[Brands] ADD [OriginCountry] NVARCHAR(100) NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('[Inventory].[Brands]') AND name = 'AgentContactNumber')
+                    ALTER TABLE [Inventory].[Brands] ADD [AgentContactNumber] NVARCHAR(50) NULL;
+            ");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[InventoryDataSeeder] EnsureBrandColumns warning: {ex.Message}");
+        }
     }
 
     private static async Task SeedUnitsAsync(InventoryDbContext context)
