@@ -25,7 +25,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.Margin(26, Unit.Point);
+                page.Margin(20, Unit.Point);
                 page.PageColor(Colors.White);
                 page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Cairo", "Segoe UI", "Tahoma", "Arial"));
 
@@ -34,7 +34,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                     // 1. Header Image (or fallback)
                     if (_receipt.HeaderImageBytes != null && _receipt.HeaderImageBytes.Length > 0)
                     {
-                        column.Item().AlignCenter().MaxHeight(105).Image(_receipt.HeaderImageBytes).FitWidth();
+                        column.Item().AlignCenter().Height(90).Image(_receipt.HeaderImageBytes).FitArea();
                     }
                     else
                     {
@@ -42,16 +42,16 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                     }
 
                     // 2. Info Row (Date & Customer Name)
-                    column.Item().PaddingTop(10).PaddingBottom(8).Row(row =>
+                    column.Item().PaddingTop(6).PaddingBottom(6).Row(row =>
                     {
                         // Left: Date
                         var dateStr = _receipt.SaleDate.ToString("yyyy / MM / dd");
-                        row.ConstantItem(170).AlignLeft().Text(FormatRtl($"التاريخ : {dateStr}")).FontSize(12).Bold();
+                        row.ConstantItem(160).AlignLeft().Text(FormatRtl($"التاريخ : {dateStr}")).FontSize(11.5f).Bold();
 
                         // Center: Invoice number badge
                         if (!string.IsNullOrWhiteSpace(_receipt.InvoiceNumber))
                         {
-                            row.RelativeItem().AlignCenter().Text(FormatRtl($"فاتورة رقم : {_receipt.InvoiceNumber}")).FontSize(10.5f).SemiBold().FontColor(Colors.Grey.Darken3);
+                            row.RelativeItem().AlignCenter().Text(FormatRtl($"فاتورة رقم : {_receipt.InvoiceNumber}")).FontSize(10f).SemiBold().FontColor(Colors.Grey.Darken3);
                         }
                         else
                         {
@@ -60,7 +60,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
 
                         // Right: Customer Name
                         var customerName = !string.IsNullOrWhiteSpace(_receipt.CustomerName) ? _receipt.CustomerName : "........................................";
-                        row.ConstantItem(260).AlignRight().Text(FormatRtl($"الإسم : {customerName}")).FontSize(12).Bold();
+                        row.ConstantItem(260).AlignRight().Text(FormatRtl($"الإسم : {customerName}")).FontSize(11.5f).Bold();
                     });
 
                     // 3. Main Table & Watermark in a Bordered Container
@@ -69,7 +69,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                         // Watermark Layer
                         if (_receipt.LogoBytes != null && _receipt.LogoBytes.Length > 0)
                         {
-                            layers.Layer().AlignCenter().AlignMiddle().Width(240).Image(_receipt.LogoBytes).FitArea();
+                            layers.Layer().AlignCenter().AlignMiddle().Width(220).Height(220).Image(_receipt.LogoBytes).FitArea();
                         }
 
                         // Table Content
@@ -154,19 +154,19 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                             });
 
                             // Bottom Summary Row inside the table box
-                            boxCol.Item().BorderTop(1.5f).BorderColor(Colors.Black).MinHeight(34).Row(bRow =>
+                            boxCol.Item().BorderTop(1.5f).BorderColor(Colors.Black).MinHeight(32).Row(bRow =>
                             {
                                 // Box with total amount (under الإجمالي)
                                 bRow.ConstantItem(85).BorderRight(1.2f).BorderColor(Colors.Black).PaddingVertical(4).AlignCenter().AlignMiddle()
-                                    .Text($"{_receipt.TotalAmount:N2}").FontSize(12.5f).ExtraBold();
+                                    .Text($"{_receipt.TotalAmount:N2}").FontSize(12f).ExtraBold();
 
                                 // Label الإجمالي النهائي (under سعر الوحدة والعدد)
                                 bRow.ConstantItem(135).BorderRight(1.2f).BorderColor(Colors.Black).PaddingVertical(4).AlignCenter().AlignMiddle()
-                                    .Text(FormatRtl("الإجمالي النهائي")).FontSize(12f).ExtraBold();
+                                    .Text(FormatRtl("الإجمالي النهائي")).FontSize(11.5f).ExtraBold();
 
                                 // Signature area (under الصنف والرقم)
                                 bRow.RelativeItem().PaddingRight(14).AlignRight().AlignMiddle()
-                                    .Text(FormatRtl("التوقيع / .....................................................")).FontSize(11.5f).Bold();
+                                    .Text(FormatRtl("التوقيع / .....................................................")).FontSize(11f).Bold();
                             });
                         });
                     });
@@ -174,7 +174,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                     // 4. Footer Section
                     if (_receipt.FooterImageBytes != null && _receipt.FooterImageBytes.Length > 0)
                     {
-                        column.Item().PaddingTop(12).AlignCenter().MaxHeight(75).Image(_receipt.FooterImageBytes).FitWidth();
+                        column.Item().PaddingTop(8).AlignCenter().Height(65).Image(_receipt.FooterImageBytes).FitArea();
                     }
                     else
                     {
@@ -197,7 +197,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                 c = c.BorderBottom(0.6f).BorderColor(Colors.Grey.Darken1);
             }
 
-            c.MinHeight(21).PaddingVertical(2).PaddingHorizontal(3).Element(content);
+            c.MinHeight(19).PaddingVertical(1.5f).PaddingHorizontal(3).Element(content);
         }
 
         private void ComposeFallbackHeader(ColumnDescriptor column)
@@ -222,7 +222,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
 
         private void ComposeFallbackFooter(ColumnDescriptor column)
         {
-            column.Item().PaddingTop(10).Column(fc =>
+            column.Item().PaddingTop(8).Column(fc =>
             {
                 // Pill 1: Store name & phone
                 fc.Item().PaddingBottom(4).Background(Colors.Black).PaddingVertical(4).PaddingHorizontal(16).Row(r =>
