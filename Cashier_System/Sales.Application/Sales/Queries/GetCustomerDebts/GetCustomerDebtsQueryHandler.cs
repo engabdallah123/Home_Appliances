@@ -35,6 +35,7 @@ namespace Sales.Application.Sales.Queries.GetCustomerDebts
                 LEFT JOIN [Sales].[Customers] c ON s.CustomerId = c.Id
                 WHERE s.Status = 1
                   AND (s.TotalAmount - s.PaidAmount) > 0.001
+                  AND ISNULL(s.IsInstallment, 0) = 0
                 """;
 
             if (!string.IsNullOrWhiteSpace(request.SearchTerm))

@@ -35,7 +35,7 @@ namespace Sales.Application.Installments.Queries.GetUpcomingInstallments
                     s.Amount,
                     s.PaidAmount,
                     (s.Amount - s.PaidAmount) AS RemainingAmount,
-                    CASE WHEN s.DueDate < CAST(GETUTCDATE() AS DATE) THEN 1 ELSE 0 END AS IsOverdue,
+                    CAST(CASE WHEN s.DueDate < CAST(GETUTCDATE() AS DATE) THEN 1 ELSE 0 END AS BIT) AS IsOverdue,
                     DATEDIFF(day, CAST(GETUTCDATE() AS DATE), s.DueDate) AS DaysOverdueOrRemaining
                 FROM [Sales].[InstallmentSchedules] s
                 INNER JOIN [Sales].[InstallmentContracts] c ON s.ContractId = c.Id

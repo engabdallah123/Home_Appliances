@@ -795,8 +795,9 @@ namespace POS.Desktop.Services.Api
                 var url = "api/sales?" + string.Join("&", queryParams);
                 return await _http.GetFromJsonAsync<List<SaleDto>>(url) ?? new();
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Error fetching sales list: {ex.Message}");
                 return new();
             }
         }
@@ -1438,8 +1439,9 @@ namespace POS.Desktop.Services.Api
                 var url = "api/debts/customers" + (queryParams.Any() ? "?" + string.Join("&", queryParams) : "");
                 return await _http.GetFromJsonAsync<List<CustomerDebtDto>>(url) ?? new();
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Error fetching customer debts: {ex.Message}");
                 return new();
             }
         }
@@ -1470,8 +1472,9 @@ namespace POS.Desktop.Services.Api
                 var url = "api/debts/suppliers" + (queryParams.Any() ? "?" + string.Join("&", queryParams) : "");
                 return await _http.GetFromJsonAsync<List<SupplierDebtDto>>(url) ?? new();
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Error fetching supplier debts: {ex.Message}");
                 return new();
             }
         }
@@ -1778,7 +1781,7 @@ namespace POS.Desktop.Services.Api
         {
             try
             {
-                var url = $"api/inventory/products/{productId}/serials" + (!string.IsNullOrWhiteSpace(status) ? $"?status={status}" : "");
+                var url = $"api/inventory/serials/product/{productId}" + (!string.IsNullOrWhiteSpace(status) ? $"?status={status}" : "");
                 var res = await _http.GetFromJsonAsync<List<ProductSerialDto>>(url);
                 return res ?? new List<ProductSerialDto>();
             }
@@ -1793,7 +1796,7 @@ namespace POS.Desktop.Services.Api
             try
             {
                 var request = new AddProductSerialsRequest(productId, serials, notes);
-                var res = await _http.PostAsJsonAsync($"api/inventory/products/{productId}/serials", request);
+                var res = await _http.PostAsJsonAsync($"api/inventory/serials", request);
                 if (res.IsSuccessStatusCode) return (true, null);
                 var err = await res.Content.ReadAsStringAsync();
                 return (false, ExtractErrorMessage(err, "فشل إضافة الأرقام التسلسلية (السيريال)."));
@@ -1808,7 +1811,7 @@ namespace POS.Desktop.Services.Api
         {
             try
             {
-                var url = $"api/inventory/products/serials/verify/{Uri.EscapeDataString(serialNumber)}" + (productId.HasValue ? $"?productId={productId.Value}" : "");
+                var url = $"api/inventory/serials/verify/{Uri.EscapeDataString(serialNumber)}" + (productId.HasValue ? $"?productId={productId.Value}" : "");
                 return await _http.GetFromJsonAsync<ProductSerialDto>(url);
             }
             catch
@@ -1960,6 +1963,21 @@ namespace POS.Desktop.Services.Api
                 if (res.IsSuccessStatusCode) return (true, null);
                 var err = await res.Content.ReadAsStringAsync();
                 return (false, ExtractErrorMessage(err, "فشل حذف العرض."));
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message);
+            }
+        }
+
+        public async Task<(bool Success, string? Error)> UpdateReservationStatusAsync(Guid saleId, int status)
+        {
+            try
+            {
+                var res = await _http.PatchAsJsonAsync($"api/sales/{saleId}/reservation-status", new { status });
+                if (res.IsSuccessStatusCode) return (true, null);
+                var err = await res.Content.ReadAsStringAsync();
+                return (false, ExtractErrorMessage(err, "فشل تحديث حالة الحجز."));
             }
             catch (Exception ex)
             {

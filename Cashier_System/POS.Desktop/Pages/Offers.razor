@@ -430,11 +430,11 @@
             if (existing != null)
             {
                 bundleItems.Remove(existing);
-                bundleItems.Add(new CreateOfferItemRequest(pId, existing.Quantity + selectedBundleQty, 0));
+                bundleItems.Add(new CreateOfferItemRequest(pId, existing.Quantity + selectedBundleQty));
             }
             else
             {
-                bundleItems.Add(new CreateOfferItemRequest(pId, selectedBundleQty, 0));
+                bundleItems.Add(new CreateOfferItemRequest(pId, selectedBundleQty));
             }
             selectedBundleProductIdString = "";
             selectedBundleQty = 1;
@@ -470,17 +470,17 @@
         {
             var req = new CreateOfferRequest(
                 formTitleAr.Trim(),
-                string.IsNullOrWhiteSpace(formTitleEn) ? null : formTitleEn.Trim(),
                 string.IsNullOrWhiteSpace(formDescription) ? null : formDescription.Trim(),
                 formOfferType,
-                formDiscountPercent,
-                formDiscountAmount,
-                formPackagePrice,
+                formOfferType == 3 ? null : (formDiscountPercent > 0 ? formDiscountPercent : null),
+                formOfferType == 3 ? null : (formDiscountAmount > 0 ? formDiscountAmount : null),
+                formOfferType == 3 ? (formPackagePrice > 0 ? formPackagePrice : null) : null,
                 formStartDate,
                 formEndDate,
                 targetCategory,
                 targetBrand,
-                formOfferType == 3 ? bundleItems : null);
+                formOfferType == 3 ? bundleItems : null,
+                TitleAr: formTitleAr.Trim());
 
             var (id, err) = await ApiClient.CreateOfferAsync(req);
             if (id == null)

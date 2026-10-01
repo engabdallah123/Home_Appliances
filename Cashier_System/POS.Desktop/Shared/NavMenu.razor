@@ -73,6 +73,11 @@
                         </NavLink>
                     </li>
                     <li>
+                        <NavLink class="nav-link" href="reservations" title="حجوزات الأجهزة واستلام جهاز العروسة">
+                            <i class="fa-solid fa-box-archive text-pink"></i> <span>حجوزات الأجهزة (العرائس)</span>
+                        </NavLink>
+                    </li>
+                    <li>
                         <NavLink class="nav-link" href="offers" title="عروض الخصم وبكجات جهاز العروسة">
                             <i class="fa-solid fa-gift text-pink"></i> <span>العروض والبكجات</span>
                         </NavLink>
@@ -279,11 +284,11 @@
     private void CheckActiveGroup()
     {
         var path = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
-        if (path.StartsWith("sales") || path.StartsWith("debts") || path.StartsWith("monthly"))
+        if (path.StartsWith("sales") || path.StartsWith("debts") || path.StartsWith("monthly") || path.StartsWith("installment") || path.StartsWith("reservation") || path.StartsWith("offer"))
         {
             isSalesGroupOpen = true;
         }
-        else if (path.StartsWith("product") || path.StartsWith("categor") || path.StartsWith("expiry") || (path.StartsWith("purchase") && !path.Contains("return")))
+        else if (path.StartsWith("product") || path.StartsWith("brand") || path.StartsWith("categor") || path.StartsWith("expiry") || (path.StartsWith("purchase") && !path.Contains("return")))
         {
             isInventoryGroupOpen = true;
         }

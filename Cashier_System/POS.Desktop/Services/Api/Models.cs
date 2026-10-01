@@ -386,22 +386,66 @@ namespace POS.Desktop.Services.Api
     }
     public record PurchaseDetailDto(Guid Id, string InvoiceNumber, string? InternalNumber, DateTime PurchaseDate, Guid SupplierId, string? SupplierName, decimal SubTotal, decimal DiscountAmount, decimal TaxAmount, decimal TotalAmount, decimal PaidAmount, decimal RemainingAmount, string Status, string? Notes, List<PurchaseDetailItemDto> Items);
 
-    public record SaleItemDto(
-        Guid Id,
-        Guid ProductId,
-        string? ProductName,
-        string? Barcode,
-        decimal Quantity,
-        decimal UnitPrice,
-        decimal Discount,
-        decimal Tax,
-        decimal Total,
-        decimal ReturnedQuantity = 0,
-        decimal RemainingQuantity = 0,
-        string? BaseUnit = "قطعة",
-        string? ParentUnit = "كرتونة",
-        int ConversionFactor = 1);
-    public record SaleDto(Guid Id, string InvoiceNumber, DateTime SaleDate, Guid CashierId, string? CashierName, Guid? CustomerId, string? CustomerName, Guid ShiftId, decimal SubTotal, decimal DiscountAmount, decimal TaxAmount, decimal TotalAmount, decimal PaidAmount, decimal ChangeAmount, string PaymentMethod, string Status, string? Notes, List<SaleItemDto>? Items);
+    public class SaleItemDto
+    {
+        public Guid Id { get; set; }
+        public Guid ProductId { get; set; }
+        public string? ProductName { get; set; }
+        public string? Barcode { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public decimal Tax { get; set; }
+        public decimal Total { get; set; }
+        public decimal ReturnedQuantity { get; set; } = 0;
+        public decimal RemainingQuantity { get; set; } = 0;
+        public string? BaseUnit { get; set; } = "قطعة";
+        public string? ParentUnit { get; set; } = "كرتونة";
+        public int ConversionFactor { get; set; } = 1;
+        public string? UnitName { get; set; }
+        public string? PriceType { get; set; }
+        public string? PackagingInfo { get; set; }
+        public string? SerialNumber { get; set; }
+        public string? BrandName { get; set; }
+        public string? ModelNumber { get; set; }
+        public int WarrantyPeriodMonths { get; set; } = 0;
+        public string? MaintenanceAgent { get; set; }
+    }
+
+    public class SaleDto
+    {
+        public Guid Id { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public DateTime SaleDate { get; set; }
+        public Guid CashierId { get; set; }
+        public string? CashierName { get; set; }
+        public Guid? CustomerId { get; set; }
+        public string? CustomerName { get; set; }
+        public Guid ShiftId { get; set; }
+        public decimal SubTotal { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal TaxAmount { get; set; }
+        public decimal DeliveryFee { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal ChangeAmount { get; set; }
+        public string PaymentMethod { get; set; } = "Cash";
+        public string Status { get; set; } = "Completed";
+        public string? Notes { get; set; }
+        public List<SaleItemDto>? Items { get; set; } = new();
+        public bool IsReserved { get; set; } = false;
+        public DateTime? TargetDeliveryDate { get; set; }
+        public int ReservationStatus { get; set; } = 0;
+        public bool IsDelivery { get; set; } = false;
+        public string? RecipientName { get; set; }
+        public string? RecipientPhone { get; set; }
+        public string? DeliveryAddress { get; set; }
+        public string? DeliveryFloor { get; set; }
+        public string? DriverName { get; set; }
+        public int DeliveryStatus { get; set; } = 0;
+        public bool IsInstallment { get; set; } = false;
+        public Guid? InstallmentContractId { get; set; }
+    }
 
     public record StoreSettingDto(
         Guid Id,
@@ -589,30 +633,34 @@ namespace POS.Desktop.Services.Api
         Guid UserId);
 
     // Debts DTOs
-    public record CustomerDebtDto(
-        Guid SaleId,
-        string InvoiceNumber,
-        DateTime SaleDate,
-        Guid? CustomerId,
-        string? CustomerName,
-        string? CustomerPhone,
-        decimal TotalAmount,
-        decimal PaidAmount,
-        decimal RemainingAmount,
-        string PaymentMethod,
-        string Status);
+    public class CustomerDebtDto
+    {
+        public Guid SaleId { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public DateTime SaleDate { get; set; }
+        public Guid? CustomerId { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerPhone { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public string PaymentMethod { get; set; } = "Cash";
+        public string Status { get; set; } = "Completed";
+    }
 
-    public record SupplierDebtDto(
-        Guid PurchaseId,
-        string InvoiceNumber,
-        DateTime PurchaseDate,
-        Guid SupplierId,
-        string? SupplierName,
-        string? SupplierPhone,
-        decimal TotalAmount,
-        decimal PaidAmount,
-        decimal RemainingAmount,
-        string Status);
+    public class SupplierDebtDto
+    {
+        public Guid PurchaseId { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public DateTime PurchaseDate { get; set; }
+        public Guid SupplierId { get; set; }
+        public string? SupplierName { get; set; }
+        public string? SupplierPhone { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public string Status { get; set; } = string.Empty;
+    }
 
     // Monthly Sales Calendar DTOs
     public record MonthlyDaySalesDto(
@@ -807,119 +855,175 @@ namespace POS.Desktop.Services.Api
         string? Name = null);
 
     // Product Serials
-    public record ProductSerialDto(
-        Guid Id,
-        Guid ProductId,
-        string? ProductName,
-        string SerialNumber,
-        string Status,
-        DateTime? SoldAt,
-        DateTime? WarrantyExpiryDate,
-        string? Notes,
-        DateTime CreatedAt);
+    public class ProductSerialDto
+    {
+        public Guid Id { get; set; }
+        public Guid ProductId { get; set; }
+        public string? ProductName { get; set; }
+        public string SerialNumber { get; set; } = string.Empty;
+        public int Status { get; set; }         // 0=InStock, 1=Sold, 2=Returned, 3=Defective
+        public string StatusText { get; set; } = string.Empty;  // Arabic label from SQL CASE
+        public DateTime? SoldAt { get; set; }
+        public DateTime? WarrantyExpiryDate { get; set; }
+        public string? Notes { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
 
     public record AddProductSerialsRequest(
         Guid ProductId,
-        List<string> Serials,
+        List<string> SerialNumbers,
         string? Notes = null);
 
     // Installments
-    public record InstallmentContractDto(
-        Guid Id,
-        string ContractNumber,
-        Guid CustomerId,
-        string CustomerName,
-        string CustomerPhone,
-        Guid SaleId,
-        string InvoiceNumber,
-        decimal TotalAmount,
-        decimal DownPayment,
-        decimal RemainingAmount,
-        decimal InterestRate,
-        decimal TotalWithInterest,
-        int NumberOfMonths,
-        decimal MonthlyAmount,
-        DateTime StartDate,
-        DateTime EndDate,
-        string Status,
-        string? GuarantorName,
-        string? GuarantorPhone,
-        string? GuarantorNationalId,
-        string? Notes,
-        List<InstallmentScheduleDto> Schedules);
+    public class InstallmentContractDto
+    {
+        public Guid Id { get; set; }
+        public string ContractNumber { get; set; } = string.Empty;
+        public Guid SaleId { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public Guid CustomerId { get; set; }
+        public string CustomerName { get; set; } = string.Empty;
+        public string CustomerPhone { get; set; } = string.Empty;
+        public string? GuarantorName { get; set; }
+        public string? GuarantorPhone { get; set; }
+        public string? GuarantorNationalId { get; set; }
+        public string? GuarantorAddress { get; set; }
+        public string? GuarantorNotes { get; set; }
+        public decimal TotalCashAmount { get; set; }
+        public decimal DownPayment { get; set; }
+        public decimal InterestPercentage { get; set; }
+        public decimal InterestAmount { get; set; }
+        public decimal TotalInstallmentAmount { get; set; }
+        public decimal MonthlyInstallmentAmount { get; set; }
+        public decimal TotalPaidAmount { get; set; }
+        public decimal RemainingBalance { get; set; }
+        public int NumberOfMonths { get; set; }
+        public DateTime StartDate { get; set; }
+        public int Status { get; set; }
+        public string StatusText { get; set; } = string.Empty;
+        public string? Notes { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public List<InstallmentScheduleDto> Schedules { get; set; } = new();
 
-    public record InstallmentScheduleDto(
-        Guid Id,
-        Guid ContractId,
-        int InstallmentNumber,
-        decimal Amount,
-        DateTime DueDate,
-        DateTime? PaidDate,
-        decimal PaidAmount,
-        string Status,
-        string? ReceiptNumber,
-        string? Notes);
+        // Convenience / Compatibility getters
+        public decimal TotalAmount => TotalCashAmount > 0 ? TotalCashAmount : TotalInstallmentAmount;
+        public decimal TotalWithInterest => TotalInstallmentAmount;
+        public decimal RemainingAmount => RemainingBalance;
+        public decimal MonthlyAmount => MonthlyInstallmentAmount;
+        public decimal InterestRate => InterestPercentage;
+    }
+
+    public class InstallmentScheduleDto
+    {
+        public Guid Id { get; set; }
+        public Guid ContractId { get; set; }
+        public int InstallmentNumber { get; set; }
+        public DateTime DueDate { get; set; }
+        public decimal Amount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public DateTime? PaidDate { get; set; }
+        public int Status { get; set; }
+        public string StatusText { get; set; } = string.Empty;
+        public string? PaymentMethod { get; set; }
+        public string? ReceiptNumber { get; set; }
+        public string? Notes { get; set; }
+    }
 
     public record PayInstallmentRequest(
+        Guid ContractId,
         Guid ScheduleId,
-        decimal PaidAmount,
+        decimal Amount,
         string PaymentMethod = "Cash",
+        Guid? CashierId = null,
+        Guid? ShiftId = null,
         string? Notes = null);
 
-    public record UpcomingInstallmentDto(
-        Guid ScheduleId,
-        Guid ContractId,
-        string ContractNumber,
-        string CustomerName,
-        string CustomerPhone,
-        int InstallmentNumber,
-        decimal Amount,
-        DateTime DueDate,
-        int DaysRemaining,
-        bool IsOverdue);
+    public class UpcomingInstallmentDto
+    {
+        public Guid ScheduleId { get; set; }
+        public Guid ContractId { get; set; }
+        public string ContractNumber { get; set; } = string.Empty;
+        public string CustomerName { get; set; } = string.Empty;
+        public string CustomerPhone { get; set; } = string.Empty;
+        public string? GuarantorName { get; set; }
+        public string? GuarantorPhone { get; set; }
+        public int InstallmentNumber { get; set; }
+        public DateTime DueDate { get; set; }
+        public decimal Amount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public bool IsOverdue { get; set; }
+        public int DaysOverdueOrRemaining { get; set; }
+        public int DaysRemaining => DaysOverdueOrRemaining;
+    }
 
     // Offers & Bundles
     public record OfferItemDto(
         Guid Id,
         Guid ProductId,
         string ProductName,
-        string ProductBarcode,
-        decimal OriginalPrice,
-        int Quantity,
-        decimal SpecialPrice);
+        string? ProductBarcode,
+        decimal Quantity,
+        decimal OriginalUnitPrice)
+    {
+        public decimal OriginalPrice => OriginalUnitPrice;
+        public decimal SpecialPrice => OriginalUnitPrice;
+    }
 
     public record OfferDto(
         Guid Id,
-        string TitleAr,
-        string? TitleEn,
+        string Title,
         string? Description,
-        string OfferType,
-        decimal DiscountPercent,
-        decimal DiscountAmount,
-        decimal PackagePrice,
+        int Type,
+        string TypeText,
+        decimal? DiscountPercentage,
+        decimal? FixedDiscountAmount,
+        decimal? BundlePrice,
         DateTime StartDate,
         DateTime EndDate,
         bool IsActive,
         bool IsCurrentlyValid,
-        List<OfferItemDto> Items);
+        Guid? TargetProductId,
+        string? TargetProductName,
+        Guid? TargetCategoryId,
+        string? TargetCategoryName,
+        Guid? TargetBrandId,
+        string? TargetBrandName,
+        DateTime CreatedAt,
+        List<OfferItemDto>? Items)
+    {
+        public string TitleAr => Title;
+        public string? TitleEn => null;
+        public string OfferType => Type switch
+        {
+            0 => "ProductDiscount",
+            1 => "CategoryDiscount",
+            2 => "BrandDiscount",
+            3 => "BundlePackage",
+            _ => "Unknown"
+        };
+        public decimal DiscountPercent => DiscountPercentage ?? 0;
+        public decimal DiscountAmount => FixedDiscountAmount ?? 0;
+        public decimal PackagePrice => BundlePrice ?? 0;
+    }
 
     public record CreateOfferItemRequest(
         Guid ProductId,
-        int Quantity,
-        decimal SpecialPrice);
+        decimal Quantity = 1);
 
     public record CreateOfferRequest(
-        string TitleAr,
-        string? TitleEn,
+        string Title,
         string? Description,
-        int OfferType,
-        decimal DiscountPercent,
-        decimal DiscountAmount,
-        decimal PackagePrice,
+        int Type,
+        decimal? DiscountPercentage,
+        decimal? FixedDiscountAmount,
+        decimal? BundlePrice,
         DateTime StartDate,
         DateTime EndDate,
         Guid? TargetCategoryId = null,
         Guid? TargetBrandId = null,
-        List<CreateOfferItemRequest>? Items = null);
+        List<CreateOfferItemRequest>? Items = null,
+        string? TitleAr = null);
 }
 

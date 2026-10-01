@@ -41,8 +41,8 @@ namespace Sales.Application.Installments.Queries.GetInstallmentContracts
                     END AS StatusText,
                     c.Notes, c.CreatedAt
                 FROM [Sales].[InstallmentContracts] c
-                INNER JOIN [Sales].[Sales] s ON c.SaleId = s.Id
-                INNER JOIN [Sales].[Customers] cust ON c.CustomerId = cust.Id
+                LEFT JOIN [Sales].[Sales] s ON c.SaleId = s.Id
+                LEFT JOIN [Sales].[Customers] cust ON c.CustomerId = cust.Id
                 OUTER APPLY (
                     SELECT SUM(PaidAmount) AS TotalPaid
                     FROM [Sales].[InstallmentSchedules]
@@ -68,14 +68,47 @@ namespace Sales.Application.Installments.Queries.GetInstallmentContracts
 
             sql += " ORDER BY c.CreatedAt DESC";
 
-            var contracts = await connection.QueryAsync<InstallmentContractDto>(sql, new
+            var contractList = (await connection.QueryAsync<InstallmentContractDto>(sql, new
             {
                 request.CustomerId,
                 Status = request.Status.HasValue ? (int)request.Status.Value : (int?)null,
                 Search = $"%{request.SearchTerm}%"
-            });
+            })).ToList();
 
-            return Result<IReadOnlyList<InstallmentContractDto>>.Success(contracts.ToList());
+            if (contractList.Any())
+            {
+                var contractIds = contractList.Select(c => c.Id).ToList();
+                var schedulesSql = """
+                    SELECT 
+                        Id, ContractId, InstallmentNumber, DueDate, Amount, PaidAmount,
+                        CASE WHEN (Amount - PaidAmount) < 0 THEN 0 ELSE (Amount - PaidAmount) END AS RemainingAmount,
+                        PaidDate, Status,
+                        CASE Status
+                            WHEN 0 THEN N'قيد الانتظار'
+                            WHEN 1 THEN N'مسدد جزئياً'
+                            WHEN 2 THEN N'مسدد بالكامل'
+                            WHEN 3 THEN N'متأخر'
+                            ELSE N'غير معروف'
+                        END AS StatusText,
+                        PaymentMethod, Notes
+                    FROM [Sales].[InstallmentSchedules]
+                    WHERE ContractId IN @ContractIds
+                    ORDER BY InstallmentNumber ASC
+                    """;
+
+                var schedules = await connection.QueryAsync<InstallmentScheduleDto>(schedulesSql, new { ContractIds = contractIds });
+                var groupedSchedules = schedules.GroupBy(s => s.ContractId).ToDictionary(g => g.Key, g => g.ToList());
+
+                for (int i = 0; i < contractList.Count; i++)
+                {
+                    if (groupedSchedules.TryGetValue(contractList[i].Id, out var schedList))
+                    {
+                        contractList[i].Schedules = schedList;
+                    }
+                }
+            }
+
+            return Result<IReadOnlyList<InstallmentContractDto>>.Success(contractList);
         }
     }
 }

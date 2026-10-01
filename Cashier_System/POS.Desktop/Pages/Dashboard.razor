@@ -70,74 +70,6 @@
     }
     else if (data is not null)
     {
-        <!-- Urgent Expiry Notifications Banner -->
-        @if (activeExpiryNotifications.Any())
-        {
-            <div class="expiry-alerts-banner" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.75rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-red); font-size: 1.2rem;"></i>
-                        <h3 style="margin: 0; font-size: 1rem; font-weight: 700; color: var(--text-primary);">
-                            تنبيهات الصلاحية العاجلة بالمخزن (@activeExpiryNotifications.Count دفعة بحاجة لمتابعتك)
-                        </h3>
-                    </div>
-                    <span style="font-size: 0.78rem; color: var(--text-secondary);">التنبيه لا يخصم من المخزون تلقائياً حتى تتخذ الإجراء المطلوب</span>
-                </div>
-
-                <div class="table-container" style="background: var(--bg-card); border-radius: 0.5rem; overflow-x: auto;">
-                    <table class="data-table" style="font-size: 0.85rem;">
-                        <thead>
-                            <tr>
-                                <th>اسم الصنف</th>
-                                <th>رقم التشغيلة</th>
-                                <th>الكمية المتبقية</th>
-                                <th>تاريخ الصلاحية</th>
-                                <th>الحالة</th>
-                                <th style="text-align: center; width: 290px;">الإجراءات المطلوبة</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var n in activeExpiryNotifications)
-                            {
-                                <tr>
-                                    <td style="font-weight: 700;">@n.ProductName</td>
-                                    <td><code>@(string.IsNullOrWhiteSpace(n.BatchNumber) ? "افتراضي" : n.BatchNumber)</code></td>
-                                    <td><strong style="color: var(--accent-amber);">@n.RemainingQuantity.ToString("N0")</strong> قطعة</td>
-                                    <td style="color: @(n.IsExpired ? "var(--accent-red)" : "var(--accent-amber)"); font-weight: 600;">
-                                        @(n.ExpiryDate?.ToString("dd/MM/yyyy") ?? "-")
-                                    </td>
-                                    <td>
-                                        @if (n.IsExpired)
-                                        {
-                                            <span class="badge badge-red"><i class="fa-solid fa-triangle-exclamation me-1"></i> منتهي الصلاحية</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge badge-amber"><i class="fa-solid fa-clock me-1"></i> ينتهي خلال @n.DaysRemaining يوم</span>
-                                        }
-                                    </td>
-                                    <td style="text-align: center; white-space: nowrap;">
-                                        <button type="button" class="btn btn-sm btn-secondary me-1" style="color: var(--accent-emerald); border-color: rgba(16, 185, 129, 0.3); font-size: 0.75rem; padding: 0.25rem 0.5rem;" title="تأكيد أن البضاعة سليمة ولا يوجد هالك" @onclick="() => ResolveNotification(n)">
-                                            <i class="fa-solid fa-check me-1"></i> صلاحيةالمخزون تمام 
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-info me-1" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" title="استبدال البضاعة من المورد بتاريخ إنتاج وصلاحية جديد" @onclick="() => OpenSupplierReplacementModal(n)">
-                                            <i class="fa-solid fa-arrows-rotate me-1"></i> تبديل من المورد
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-secondary me-1" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" title="تأجيل هذا التنبيه لمدة 24 ساعة" @onclick="() => SnoozeNotification(n)">
-                                            <i class="fa-solid fa-clock-rotate-left me-1"></i> Skip (24h)
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-danger" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" title="تسجيل كمية هالك وخصمها من المخزون" @onclick="() => OpenWasteModal(n)">
-                                            <i class="fa-solid fa-trash-can me-1"></i> أيوه انتهت الصلاحية
-                                        </button>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        }
-
         <!-- Section 1: Today vs Month vs Year Instant Overview -->
         <div class="period-cards-grid">
             <!-- Today Card -->
@@ -367,61 +299,135 @@
             </div>
         </div>
 
-        <!-- Waste & Losses Section (Valued strictly at Purchase Cost) -->
-        <div class="waste-losses-section" style="margin-bottom: 1.5rem; background: var(--bg-card); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 0.75rem; padding: 1.25rem;">
+        <!-- Installments & Financing Overview Section -->
+        <div class="installments-section" style="margin-bottom: 1.5rem; background: var(--bg-card); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 0.75rem; padding: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <i class="fa-solid fa-trash-can" style="color: var(--accent-red); font-size: 1.2rem;"></i>
-                    <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">
-                        تقرير خسائر وتوالف المخزون (محسوبة بسعر الشراء)
-                    </h3>
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(16, 185, 129, 0.12); display: flex; align-items: center; justify-content: center; color: var(--accent-emerald); font-size: 1.1rem;">
+                        <i class="fa-solid fa-file-invoice-dollar"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">
+                            موديول وعقود تقسيط الأجهزة الكهربائية (التمويل الاستهلاكي)
+                        </h3>
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">متابعة العقود النشطة، الأقساط القادمة، والتحصيل الشهري</span>
+                    </div>
                 </div>
-                <NavLink href="expiry" class="btn btn-sm btn-secondary" style="font-size: 0.78rem;">
-                    <i class="fa-solid fa-list-check me-1"></i> إدارة الهالك وسجل الصلاحية
+                <NavLink href="installments" class="btn btn-primary-custom" style="font-size: 0.82rem; padding: 0.4rem 0.9rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    <span>شاشة عقود وجداول التقسيط</span>
                 </NavLink>
             </div>
-            <div class="period-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
-                <div class="period-card" style="border-right: 4px solid var(--accent-amber);">
-                    <div class="period-header">
-                        <div class="period-title"><i class="fa-solid fa-calendar-day me-1"></i> خسائر اليوم</div>
+
+            <div class="period-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <!-- 1. Total Contracts -->
+                <div class="period-card" style="border-right: 4px solid var(--accent-indigo); padding: 1rem;">
+                    <div class="period-header" style="margin-bottom: 0.4rem;">
+                        <div class="period-title" style="font-size: 0.82rem; color: var(--text-secondary);"><i class="fa-solid fa-file-contract me-1 text-indigo"></i> إجمالي العقود</div>
                     </div>
                     <div class="period-body">
                         <div class="period-stat">
-                            <span class="val text-red">@((data.WasteLosses?.TodayLoss ?? 0).ToString("N2")) ج.م</span>
+                            <span class="val text-indigo" style="font-size: 1.4rem; font-weight: 800;">@installmentContracts.Count</span>
                         </div>
+                        <div style="font-size: 0.74rem; color: var(--text-muted);">عقد تقسيط مسجل بالنظام</div>
                     </div>
                 </div>
-                <div class="period-card" style="border-right: 4px solid #f97316;">
-                    <div class="period-header">
-                        <div class="period-title"><i class="fa-solid fa-calendar-week me-1"></i> خسائر هذا الأسبوع</div>
+
+                <!-- 2. Remaining Balance -->
+                <div class="period-card" style="border-right: 4px solid var(--accent-emerald); padding: 1rem;">
+                    <div class="period-header" style="margin-bottom: 0.4rem;">
+                        <div class="period-title" style="font-size: 0.82rem; color: var(--text-secondary);"><i class="fa-solid fa-coins me-1 text-emerald"></i> إجمالي المبالغ القائمة</div>
                     </div>
                     <div class="period-body">
                         <div class="period-stat">
-                            <span class="val text-red">@((data.WasteLosses?.WeekLoss ?? 0).ToString("N2")) ج.م</span>
+                            <span class="val text-emerald" style="font-size: 1.4rem; font-weight: 800;">@installmentContracts.Sum(c => c.RemainingAmount).ToString("N2") <small style="font-size: 0.75rem;">ج.م</small></span>
                         </div>
+                        <div style="font-size: 0.74rem; color: var(--text-muted);">مستحقات آجلة لدى العملاء</div>
                     </div>
                 </div>
-                <div class="period-card" style="border-right: 4px solid #ef4444;">
-                    <div class="period-header">
-                        <div class="period-title"><i class="fa-solid fa-calendar-days me-1"></i> خسائر هذا الشهر</div>
+
+                <!-- 3. Upcoming Installments -->
+                <div class="period-card" style="border-right: 4px solid var(--accent-amber); padding: 1rem;">
+                    <div class="period-header" style="margin-bottom: 0.4rem;">
+                        <div class="period-title" style="font-size: 0.82rem; color: var(--text-secondary);"><i class="fa-solid fa-clock me-1 text-amber"></i> أقساط مستحقة قريباً</div>
                     </div>
                     <div class="period-body">
                         <div class="period-stat">
-                            <span class="val text-red">@((data.WasteLosses?.MonthLoss ?? 0).ToString("N2")) ج.م</span>
+                            <span class="val text-amber" style="font-size: 1.4rem; font-weight: 800;">@upcomingInstallments.Count</span>
                         </div>
+                        <div style="font-size: 0.74rem; color: var(--text-muted);">خلال 7 أيام القادمة</div>
                     </div>
                 </div>
-                <div class="period-card" style="border-right: 4px solid #991b1b;">
-                    <div class="period-header">
-                        <div class="period-title"><i class="fa-solid fa-boxes-packing me-1"></i> إجمالي الخسائر التراكمي</div>
+
+                <!-- 4. Overdue Installments -->
+                <div class="period-card" style="border-right: 4px solid var(--accent-red); padding: 1rem;">
+                    <div class="period-header" style="margin-bottom: 0.4rem;">
+                        <div class="period-title" style="font-size: 0.82rem; color: var(--text-secondary);"><i class="fa-solid fa-triangle-exclamation me-1 text-red"></i> أقساط متأخرة الدفع</div>
                     </div>
                     <div class="period-body">
                         <div class="period-stat">
-                            <span class="val text-red">@((data.WasteLosses?.TotalLoss ?? 0).ToString("N2")) ج.م</span>
+                            <span class="val text-red" style="font-size: 1.4rem; font-weight: 800;">@upcomingInstallments.Count(u => u.IsOverdue)</span>
                         </div>
+                        <div style="font-size: 0.74rem; color: var(--text-muted);">تجاوزت تاريخ الاستحقاق</div>
                     </div>
                 </div>
             </div>
+
+            @if (installmentContracts.Any())
+            {
+                <div class="table-container" style="margin-top: 1rem;">
+                    <table class="data-table" style="font-size: 0.84rem;">
+                        <thead>
+                            <tr>
+                                <th>رقم العقد</th>
+                                <th>اسم العميل</th>
+                                <th>الهاتف</th>
+                                <th>إجمالي المبلغ</th>
+                                <th>المتبقي</th>
+                                <th>القسط الشهري</th>
+                                <th>المدة</th>
+                                <th>الحالة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in installmentContracts.Take(5))
+                            {
+                                <tr>
+                                    <td><strong style="color: var(--accent-indigo);">@c.ContractNumber</strong></td>
+                                    <td><strong>@c.CustomerName</strong></td>
+                                    <td style="direction: ltr; text-align: right;">@(string.IsNullOrWhiteSpace(c.CustomerPhone) ? "-" : c.CustomerPhone)</td>
+                                    <td>@c.TotalWithInterest.ToString("N2") ج.م</td>
+                                    <td><strong style="color: @(c.RemainingAmount > 0 ? "var(--accent-red)" : "var(--accent-emerald)");">@c.RemainingAmount.ToString("N2") ج.م</strong></td>
+                                    <td><strong style="color: var(--accent-blue);">@c.MonthlyAmount.ToString("N2") ج.م</strong></td>
+                                    <td>@c.NumberOfMonths شهر</td>
+                                    <td>
+                                        @if (c.Status == 1 || c.StatusText == "ساري" || c.StatusText == "Active")
+                                        {
+                                            <span class="badge badge-indigo">ساري / جاري السداد</span>
+                                        }
+                                        else if (c.Status == 2 || c.StatusText == "مكتمل" || c.StatusText == "Completed")
+                                        {
+                                            <span class="badge badge-success">مسدد بالكامل</span>
+                                        }
+                                        else if (c.Status == 3 || c.StatusText == "متعثر" || c.StatusText == "Defaulted")
+                                        {
+                                            <span class="badge badge-warning">متعثر في السداد</span>
+                                        }
+                                        else if (c.Status == 4 || c.StatusText == "ملغي" || c.StatusText == "Cancelled")
+                                        {
+                                            <span class="badge badge-danger">ملغي</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-neutral">@(string.IsNullOrWhiteSpace(c.StatusText) ? "غير معروف" : c.StatusText)</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
         </div>
 
         <!-- Section 2.5: Customer Receivables & Debts Summary -->
@@ -821,178 +827,6 @@
     </div>
 }
 
-<!-- Record Waste Modal (from Expiry Notification) -->
-@if (showWasteModal && wasteNotificationTarget != null)
-{
-    <div class="modal-overlay" @onclick="CloseWasteModal">
-        <div class="modal-card" style="width: 520px; max-width: 95vw;" @onclick:stopPropagation="true">
-            <div class="modal-header">
-                <h3 class="modal-title" style="color: var(--accent-red);">
-                    <i class="fa-solid fa-trash-can me-2"></i>
-                    تسجيل هالك من دفعة منتهية
-                </h3>
-                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseWasteModal">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="modal-body">
-                @if (!string.IsNullOrEmpty(wasteError))
-                {
-                    <div class="alert alert-danger" style="margin-bottom: 1rem;">
-                        <i class="fa-solid fa-circle-exclamation me-1"></i> @wasteError
-                    </div>
-                }
-
-                <div style="background: rgba(239, 68, 68, 0.08); border-radius: 0.5rem; padding: 0.85rem; margin-bottom: 1.25rem;">
-                    <div style="font-weight: 700; color: var(--text-primary); font-size: 1.05rem;">
-                        @wasteNotificationTarget.ProductName
-                    </div>
-                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                        رقم التشغيلة: <code>@(string.IsNullOrWhiteSpace(wasteNotificationTarget.BatchNumber) ? "افتراضي" : wasteNotificationTarget.BatchNumber)</code> |
-                        المتبقي بالدفعة: <strong style="color: var(--accent-amber);">@wasteNotificationTarget.RemainingQuantity.ToString("N0")</strong> قطعة
-                    </div>
-                    <div style="font-size: 0.82rem; color: var(--accent-red); margin-top: 0.25rem;">
-                        تاريخ الصلاحية: @(wasteNotificationTarget.ExpiryDate?.ToString("dd/MM/yyyy") ?? "-")
-                    </div>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label class="form-label" style="font-weight: 600;">الكمية التالفة المراد إهلاكها (قطعة) <span class="text-red">*</span></label>
-                    <input type="number" step="1" min="1" max="@wasteNotificationTarget.RemainingQuantity"
-                           class="form-control" style="font-size: 1.1rem; font-weight: 700;"
-                           @bind="wasteQuantity" />
-                    <small style="color: var(--text-muted); font-size: 0.78rem;">
-                        الحد الأقصى المتاح للإهلاك من هذه الدفعة: @wasteNotificationTarget.RemainingQuantity قطعة. سيتم خصمها من المخزون وحساب الخسارة بسعر الشراء.
-                    </small>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label class="form-label" style="font-weight: 600;">سبب الهالك</label>
-                    <select class="form-control" @bind="wasteReason">
-                        <option value="انتهاء صلاحية">انتهاء صلاحية (Expired)</option>
-                        <option value="تلف سوء تخزين">تلف سوء تخزين</option>
-                        <option value="كسر أو تلف أثناء النقل">كسر أو تلف أثناء النقل</option>
-                        <option value="تالف تصنيع / عيب منتج">تالف تصنيع / عيب منتج</option>
-                        <option value="أخرى">أخرى</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" style="font-weight: 600;">ملاحظات وتفاصيل إضافية</label>
-                    <textarea class="form-control" rows="2" placeholder="اكتب أي تفاصيل أخرى تخص عملية الإهلاك..." @bind="wasteNotes"></textarea>
-                </div>
-            </div>
-
-            <div class="modal-footer" style="display: flex; justify-content: space-between;">
-                <button type="button" class="btn btn-secondary" @onclick="CloseWasteModal" disabled="@isSubmittingWaste">
-                    إلغاء
-                </button>
-                <button type="button" class="btn btn-danger" @onclick="ExecuteRecordWaste" disabled="@(isSubmittingWaste || wasteQuantity <= 0 || wasteQuantity > wasteNotificationTarget.RemainingQuantity)">
-                    @if (isSubmittingWaste)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1"></span>
-                        <span>جاري التسجيل والخصم...</span>
-                    }
-                    else
-                    {
-                        <i class="fa-solid fa-trash-can me-1"></i>
-                        <span>تأكيد إهلاك (@wasteQuantity قطعة)</span>
-                    }
-                </button>
-            </div>
-        </div>
-    </div>
-}
-
-<!-- Supplier Replacement Modal (from Expiry Notification) -->
-@if (showSupplierReplacementModal && supplierReplacementTarget != null)
-{
-    <div class="modal-overlay" @onclick="CloseSupplierReplacementModal">
-        <div class="modal-card" style="width: 520px; max-width: 95vw;" @onclick:stopPropagation="true">
-            <div class="modal-header">
-                <h3 class="modal-title" style="color: var(--accent-blue);">
-                    <i class="fa-solid fa-arrows-rotate me-2"></i>
-                    استبدال بضاعة من المورد (تحديث الصلاحية والتشغيلة)
-                </h3>
-                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseSupplierReplacementModal">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="modal-body">
-                @if (!string.IsNullOrEmpty(supplierReplacementError))
-                {
-                    <div class="alert alert-danger" style="margin-bottom: 1rem;">
-                        <i class="fa-solid fa-circle-exclamation me-1"></i> @supplierReplacementError
-                    </div>
-                }
-
-                <div style="background: rgba(59, 130, 246, 0.08); border-radius: 0.5rem; padding: 0.85rem; margin-bottom: 1.25rem;">
-                    <div style="font-weight: 700; color: var(--text-primary); font-size: 1.05rem;">
-                        @supplierReplacementTarget.ProductName
-                    </div>
-                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                        رقم التشغيلة الحالية: <code>@(string.IsNullOrWhiteSpace(supplierReplacementTarget.BatchNumber) ? "افتراضي" : supplierReplacementTarget.BatchNumber)</code> |
-                        الكمية المستبدلة: <strong style="color: var(--accent-amber);">@supplierReplacementTarget.RemainingQuantity.ToString("N0")</strong> قطعة
-                    </div>
-                    <div style="font-size: 0.82rem; color: var(--accent-blue); margin-top: 0.25rem;">
-                        <i class="fa-solid fa-info-circle me-1"></i> الاستبدال من المورد لا يسبب أي خسارة مالية ويقوم بتحديث تاريخ الصلاحية ورقم التشغيلة للبضاعة المتبقية.
-                    </div>
-                </div>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label class="form-label" style="font-weight: 600;">تاريخ الإنتاج الجديد <span style="color: var(--accent-blue);">*</span></label>
-                        <input type="date" class="form-control" style="font-size: 0.95rem; font-weight: 600;"
-                               value="@(newSupplierProductionDate.ToString("yyyy-MM-dd"))"
-                               @onchange="OnSupplierProductionDateChanged" />
-                        <small style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; display: block;">
-                            تاريخ إنتاج البضاعة الموردة
-                        </small>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label class="form-label" style="font-weight: 600;">تاريخ الانتهاء الجديد <span class="text-red">*</span></label>
-                        <input type="date" class="form-control" style="font-size: 0.95rem; font-weight: 600; color: var(--accent-emerald);"
-                               @bind="newSupplierExpiryDate" />
-                        <small style="font-size: 0.75rem; color: var(--accent-blue); margin-top: 2px; display: block;">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> محسوب تلقائياً (صلاحية: @supplierTargetProductShelfDays يوم)
-                        </small>
-                    </div>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label class="form-label" style="font-weight: 600;">رقم التشغيلة الجديد (Batch Number)</label>
-                    <input type="text" class="form-control" placeholder="اختياري - مثلاً BATCH-2026-X"
-                           @bind="newSupplierBatchNumber" />
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" style="font-weight: 600;">ملاحظات الاستبدال</label>
-                    <textarea class="form-control" rows="2" placeholder="ملاحظات حول إذن الاستبدال أو اسم المورد..." @bind="supplierReplacementNotes"></textarea>
-                </div>
-            </div>
-
-            <div class="modal-footer" style="display: flex; justify-content: space-between;">
-                <button type="button" class="btn btn-secondary" @onclick="CloseSupplierReplacementModal" disabled="@isSubmittingSupplierReplacement">
-                    إلغاء
-                </button>
-                <button type="button" class="btn btn-primary" @onclick="ExecuteSupplierReplacement" disabled="@isSubmittingSupplierReplacement">
-                    @if (isSubmittingSupplierReplacement)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1"></span>
-                        <span>جاري تسجيل الاستبدال...</span>
-                    }
-                    else
-                    {
-                        <i class="fa-solid fa-check me-1"></i>
-                        <span>تأكيد الاستبدال بالصلاحية الجديدة</span>
-                    }
-                </button>
-            </div>
-        </div>
-    </div>
 }
 
 
@@ -1554,27 +1388,9 @@
     private bool showTopProductsModal = false;
     private string topProductsSearch = string.Empty;
 
-    // Expiry Notifications and Waste Modal State
-    private List<ExpiryNotificationDto> activeExpiryNotifications = new();
-    private bool showWasteModal = false;
-    private ExpiryNotificationDto? wasteNotificationTarget;
-    private decimal wasteQuantity = 1;
-    private string wasteReason = "انتهاء صلاحية";
-    private string wasteNotes = string.Empty;
-    private bool isSubmittingWaste = false;
-    private string? wasteError = null;
-
-    // Supplier Replacement Modal State
-    private bool showSupplierReplacementModal = false;
-    private ExpiryNotificationDto? supplierReplacementTarget;
-    private DateTime newSupplierProductionDate = DateTime.Today;
-    private DateTime newSupplierExpiryDate = DateTime.Today.AddMonths(6);
-    private int supplierTargetProductShelfDays = 180;
-    private string? newSupplierBatchNumber;
-    private string? supplierReplacementNotes;
-    private bool isSubmittingSupplierReplacement = false;
-    private string? supplierReplacementError;
-    private List<ProductDto>? cachedProductsForReplacement;
+    // Installments Module State
+    private List<InstallmentContractDto> installmentContracts = new();
+    private List<UpcomingInstallmentDto> upcomingInstallments = new();
 
     private void OpenTopProductsModal()
     {
@@ -1648,213 +1464,29 @@
     {
         isLoading = true;
         StateHasChanged();
-        data = await ApiClient.GetDashboardAsync(filterFromDate, filterToDate);
-        await LoadExpiryNotificationsAsync();
-        isLoading = false;
-        StateHasChanged();
-    }
-
-    private async Task LoadExpiryNotificationsAsync()
-    {
-        try
-        {
-            activeExpiryNotifications = await ApiClient.GetExpiryNotificationsAsync(includeSnoozed: false);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading expiry notifications: {ex.Message}");
-            activeExpiryNotifications = new();
-        }
-    }
-
-    private async Task ResolveNotification(ExpiryNotificationDto notification)
-    {
-        try
-        {
-            var (success, _) = await ApiClient.ResolveNotificationAsync(notification.Id);
-            if (success)
-            {
-                activeExpiryNotifications.RemoveAll(n => n.Id == notification.Id);
-                StateHasChanged();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error resolving notification: {ex.Message}");
-        }
-    }
-
-    private async Task SnoozeNotification(ExpiryNotificationDto notification)
-    {
-        try
-        {
-            var (success, _) = await ApiClient.SnoozeNotificationAsync(notification.Id, 24);
-            if (success)
-            {
-                activeExpiryNotifications.RemoveAll(n => n.Id == notification.Id);
-                StateHasChanged();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error snoozing notification: {ex.Message}");
-        }
-    }
-
-    private void OpenWasteModal(ExpiryNotificationDto notification)
-    {
-        wasteNotificationTarget = notification;
-        wasteQuantity = notification.RemainingQuantity;
-        wasteReason = "انتهاء صلاحية";
-        wasteNotes = $"تم التسجيل من تنبيه الصلاحية للدفعة {notification.BatchNumber}";
-        wasteError = null;
-        showWasteModal = true;
-    }
-
-    private void CloseWasteModal()
-    {
-        showWasteModal = false;
-        wasteNotificationTarget = null;
-        wasteError = null;
-        isSubmittingWaste = false;
-    }
-
-    private async Task ExecuteRecordWaste()
-    {
-        if (wasteNotificationTarget == null || wasteQuantity <= 0 || wasteQuantity > wasteNotificationTarget.RemainingQuantity)
-        {
-            wasteError = "يرجى تحديد كمية صحيحة لا تتجاوز الكمية المتبقية بالدفعة.";
-            return;
-        }
-
-        isSubmittingWaste = true;
-        wasteError = null;
-        StateHasChanged();
 
         try
         {
-            var req = new RecordWasteRequest(
-                wasteNotificationTarget.ProductId,
-                wasteNotificationTarget.BatchId,
-                wasteQuantity,
-                "piece",
-                wasteReason,
-                wasteNotes
-            );
+            var dashTask = ApiClient.GetDashboardAsync(filterFromDate, filterToDate);
+            var contractsTask = ApiClient.GetInstallmentContractsAsync();
+            var upcomingTask = ApiClient.GetUpcomingInstallmentsAsync(daysAhead: 7);
 
-            var (success, _, error) = await ApiClient.RecordWasteAsync(req);
-            if (success)
-            {
-                // Auto resolve notification since waste action taken
-                await ApiClient.ResolveNotificationAsync(wasteNotificationTarget.Id);
-                CloseWasteModal();
-                // Refresh dashboard to reflect new waste losses and updated notification list
-                await LoadDashboardDataAsync();
-            }
-            else
-            {
-                wasteError = error ?? "تعذر تسجيل الهالك. يرجى المحاولة مرة أخرى.";
-            }
+            await Task.WhenAll(dashTask, contractsTask, upcomingTask);
+
+            data = dashTask.Result;
+            installmentContracts = contractsTask.Result ?? new();
+            upcomingInstallments = upcomingTask.Result ?? new();
         }
         catch (Exception ex)
         {
-            wasteError = $"حدث خطأ غير متوقع: {ex.Message}";
+            Console.WriteLine($"Error loading dashboard data: {ex.Message}");
         }
         finally
         {
-            isSubmittingWaste = false;
+            isLoading = false;
             StateHasChanged();
         }
     }
-
-    private async Task OpenSupplierReplacementModal(ExpiryNotificationDto notification)
-    {
-        supplierReplacementTarget = notification;
-        newSupplierProductionDate = DateTime.Today;
-        newSupplierBatchNumber = string.Empty;
-        supplierReplacementNotes = $"تبديل من المورد للدفعة {notification.BatchNumber}";
-        supplierReplacementError = null;
-
-        supplierTargetProductShelfDays = 180;
-        try
-        {
-            if (cachedProductsForReplacement == null || !cachedProductsForReplacement.Any())
-            {
-                cachedProductsForReplacement = await ApiClient.GetProductsAsync();
-            }
-            var matched = cachedProductsForReplacement?.FirstOrDefault(p => p.Id == notification.ProductId);
-            if (matched != null && matched.ShelfLifeDays > 0)
-            {
-                supplierTargetProductShelfDays = matched.ShelfLifeDays;
-            }
-        }
-        catch { }
-
-        newSupplierExpiryDate = newSupplierProductionDate.AddDays(supplierTargetProductShelfDays);
-        showSupplierReplacementModal = true;
-    }
-
-    private void OnSupplierProductionDateChanged(ChangeEventArgs e)
-    {
-        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
-        {
-            newSupplierProductionDate = dt.Date;
-            newSupplierExpiryDate = newSupplierProductionDate.AddDays(supplierTargetProductShelfDays > 0 ? supplierTargetProductShelfDays : 180);
-        }
-    }
-
-    private void CloseSupplierReplacementModal()
-    {
-        showSupplierReplacementModal = false;
-        supplierReplacementTarget = null;
-        supplierReplacementError = null;
-        isSubmittingSupplierReplacement = false;
-    }
-
-    private async Task ExecuteSupplierReplacement()
-    {
-        if (supplierReplacementTarget == null) return;
-        if (newSupplierExpiryDate <= DateTime.Today)
-        {
-            supplierReplacementError = "تاريخ الصلاحية الجديد يجب أن يكون في المستقبل.";
-            return;
-        }
-
-        isSubmittingSupplierReplacement = true;
-        supplierReplacementError = null;
-        StateHasChanged();
-
-        try
-        {
-            var (success, error) = await ApiClient.ReplaceBatchWithSupplierAsync(
-                supplierReplacementTarget.BatchId,
-                newSupplierExpiryDate,
-                newSupplierBatchNumber,
-                supplierReplacementNotes,
-                supplierReplacementTarget.Id);
-
-            if (success)
-            {
-                await ApiClient.ResolveNotificationAsync(supplierReplacementTarget.Id);
-                CloseSupplierReplacementModal();
-                await LoadDashboardDataAsync();
-            }
-            else
-            {
-                supplierReplacementError = error ?? "تعذر تسجيل تبديل التشغيلة من المورد.";
-            }
-        }
-        catch (Exception ex)
-        {
-            supplierReplacementError = $"حدث خطأ غير متوقع: {ex.Message}";
-        }
-        finally
-        {
-            isSubmittingSupplierReplacement = false;
-            StateHasChanged();
-        }
-    }
-
 
     private string GetPeriodTitle()
     {

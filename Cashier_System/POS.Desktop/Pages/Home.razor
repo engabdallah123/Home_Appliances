@@ -261,104 +261,42 @@
                 <div class="shortcuts-card-header" style="padding-bottom: 0.5rem; margin-bottom: 0.75rem;">
                     <div class="shortcuts-card-title" style="font-size: 0.95rem;">
                         <i class="fa-solid fa-bolt" style="color: var(--accent-amber);"></i>
-                        <span>الشاشات الرئيسية والبيع</span>
+                        <span>عمليات البيع والعملاء والتقسيط</span>
                     </div>
                     <span class="badge badge-indigo" style="font-size: 0.7rem;">أوامر فورية</span>
                 </div>
 
                 <div class="shortcuts-list" style="gap: 0.5rem;">
-                    <!-- Monthly Sales Report Shortcut Item (Clickable) -->
-                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("monthly-report")' title="انقر لفتح تقرير ونتيجة المبيعات الشهرية">
-                        <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-calendar-days" style="color: var(--accent-amber);"></i>
-                            <span>نتيجة المبيعات الشهرية (Monthly Report)</span>
-                        </div>
-                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>Y</kbd></div>
-                    </div>
-
                     <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("pos")' title="انقر لفتح شاشة البيع">
                         <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-cash-register" style="color: var(--accent-blue);"></i>
+                            <i class="fa-solid fa-cash-register" style="color: var(--accent-emerald);"></i>
                             <span>شاشة البيع والمبيعات (POS)</span>
                         </div>
                         <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>P</kbd></div>
                     </div>
 
-                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("products")' title="انقر لفتح المنتجات">
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("installments")' title="انقر لفتح عقود وجداول التقسيط">
                         <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-boxes-stacked" style="color: var(--accent-indigo);"></i>
-                            <span>المنتجات والمخزون (Montajat)</span>
+                            <i class="fa-solid fa-file-invoice-dollar" style="color: var(--accent-emerald);"></i>
+                            <span>عقود وجداول التقسيط (Installments)</span>
                         </div>
-                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>M</kbd></div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>I</kbd></div>
                     </div>
 
-                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("price-check")' title="انقر لاستعلام الأسعار">
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("reservations")' title="انقر لفتح حجوزات جهاز العروسة">
                         <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-barcode" style="color: var(--accent-purple);"></i>
-                            <span>استعلام الأسعار (Barcode / Price Check)</span>
+                            <i class="fa-solid fa-box-archive" style="color: #ec4899;"></i>
+                            <span>حجوزات جهاز العروسة (Reservations)</span>
                         </div>
-                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>B</kbd></div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>Z</kbd></div>
                     </div>
 
-                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("shifts")' title="انقر لفتح الورديات">
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("offers")' title="انقر لفتح العروض وبكجات العروسة">
                         <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-amber);"></i>
-                            <span>إدارة الورديات الخزينة (Shifts)</span>
+                            <i class="fa-solid fa-gift" style="color: #ec4899;"></i>
+                            <span>العروض وبكجات العروسة (Offers)</span>
                         </div>
-                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>S</kbd></div>
-                    </div>
-
-                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("returns/sales")' title="انقر لفتح مرتجع المبيعات">
-                        <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-rotate-left" style="color: var(--accent-purple);"></i>
-                            <span>مرتجع المبيعات (Sales Returns)</span>
-                        </div>
-                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>R</kbd></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- More Navigation Shortcuts Card (Left - 6 Items) -->
-            <div class="shortcuts-card" style="padding: 1rem;">
-                <div class="shortcuts-card-header" style="padding-bottom: 0.5rem; margin-bottom: 0.75rem;">
-                    <div class="shortcuts-card-title" style="font-size: 0.95rem;">
-                        <i class="fa-solid fa-truck-ramp-box" style="color: var(--accent-blue);"></i>
-                        <span>بقية الأقسام والتحكم</span>
-                    </div>
-                    <span class="badge badge-green" style="font-size: 0.7rem;">عمليات سريعة</span>
-                </div>
-
-                <div class="shortcuts-list" style="gap: 0.5rem;">
-                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("sales")' title="انقر لفتح سجل المبيعات">
-                        <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-receipt" style="color: var(--accent-blue);"></i>
-                            <span>سجل المبيعات (Sales List)</span>
-                        </div>
-                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>L</kbd></div>
-                    </div>
-
-                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("purchases")' title="انقر لفتح شاشة المشتريات">
-                        <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-truck-field" style="color: var(--accent-emerald);"></i>
-                            <span>شاشة المشتريات (Purchases)</span>
-                        </div>
-                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>U</kbd></div>
-                    </div>
-
-                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("expenses")' title="انقر لفتح المصروفات">
-                        <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-wallet" style="color: var(--accent-red);"></i>
-                            <span>شاشة المصروفات (Expenses)</span>
-                        </div>
-                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>E</kbd></div>
-                    </div>
-
-                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("returns/purchases")' title="انقر لفتح مرتجع المشتريات">
-                        <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-truck-arrow-right" style="color: var(--accent-blue);"></i>
-                            <span>مرتجع المشتريات (Purchase Returns)</span>
-                        </div>
-                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>T</kbd></div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>O</kbd></div>
                     </div>
 
                     <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("debts")' title="انقر لفتح فواتير الديون">
@@ -369,12 +307,73 @@
                         <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>D</kbd></div>
                     </div>
 
-                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("home")' title="انقر للعودة للرئيسية">
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("sales")' title="انقر لفتح سجل المبيعات">
                         <div class="shortcut-desc" style="font-size: 0.85rem;">
-                            <i class="fa-solid fa-house" style="color: var(--text-secondary);"></i>
-                            <span>العودة للرئيسية (Home)</span>
+                            <i class="fa-solid fa-receipt" style="color: var(--accent-blue);"></i>
+                            <span>سجل فواتير المبيعات (Sales List)</span>
                         </div>
-                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>H</kbd></div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>L</kbd></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- More Navigation Shortcuts Card (Left - 6 Items) -->
+            <div class="shortcuts-card" style="padding: 1rem;">
+                <div class="shortcuts-card-header" style="padding-bottom: 0.5rem; margin-bottom: 0.75rem;">
+                    <div class="shortcuts-card-title" style="font-size: 0.95rem;">
+                        <i class="fa-solid fa-boxes-stacked" style="color: var(--accent-indigo);"></i>
+                        <span>المخزون والمالية والتقارير</span>
+                    </div>
+                    <span class="badge badge-green" style="font-size: 0.7rem;">عمليات سريعة</span>
+                </div>
+
+                <div class="shortcuts-list" style="gap: 0.5rem;">
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("products")' title="انقر لفتح المنتجات">
+                        <div class="shortcut-desc" style="font-size: 0.85rem;">
+                            <i class="fa-solid fa-boxes-stacked" style="color: var(--accent-indigo);"></i>
+                            <span>المنتجات والمخزون (Products)</span>
+                        </div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>M</kbd></div>
+                    </div>
+
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("purchases")' title="انقر لفتح شاشة المشتريات">
+                        <div class="shortcut-desc" style="font-size: 0.85rem;">
+                            <i class="fa-solid fa-truck-field" style="color: var(--accent-emerald);"></i>
+                            <span>شاشة المشتريات والوارد (Purchases)</span>
+                        </div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>U</kbd></div>
+                    </div>
+
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("shifts")' title="انقر لفتح الورديات">
+                        <div class="shortcut-desc" style="font-size: 0.85rem;">
+                            <i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-amber);"></i>
+                            <span>إدارة الورديات والخزينة (Shifts)</span>
+                        </div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>S</kbd></div>
+                    </div>
+
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("expenses")' title="انقر لفتح المصروفات">
+                        <div class="shortcut-desc" style="font-size: 0.85rem;">
+                            <i class="fa-solid fa-wallet" style="color: var(--accent-red);"></i>
+                            <span>شاشة المصروفات العامة (Expenses)</span>
+                        </div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>E</kbd></div>
+                    </div>
+
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("monthly-report")' title="انقر لفتح تقرير ونتيجة المبيعات الشهرية">
+                        <div class="shortcut-desc" style="font-size: 0.85rem;">
+                            <i class="fa-solid fa-calendar-days" style="color: var(--accent-amber);"></i>
+                            <span>نتيجة المبيعات الشهرية (Monthly)</span>
+                        </div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>Y</kbd></div>
+                    </div>
+
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("returns/sales")' title="انقر لفتح مرتجع المبيعات">
+                        <div class="shortcut-desc" style="font-size: 0.85rem;">
+                            <i class="fa-solid fa-rotate-left" style="color: var(--accent-purple);"></i>
+                            <span>مرتجع مبيعات العملاء (Returns)</span>
+                        </div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>R</kbd></div>
                     </div>
                 </div>
             </div>

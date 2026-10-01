@@ -159,8 +159,8 @@
                             <td>@sale.SaleDate.ToLocalTime().ToString("dd/MM/yyyy hh:mm tt", ArabicCulture)</td>
                             <td>@(string.IsNullOrWhiteSpace(sale.CashierName) ? "مستخدم كاشير" : sale.CashierName)</td>
                             <td>
-                                <span class="badge @(sale.PaymentMethod == "Cash" ? "badge-green" : (sale.PaymentMethod == "Credit" || sale.PaymentMethod == "آجل") ? "badge-amber" : "badge-indigo")">
-                                    @(sale.PaymentMethod == "Cash" ? "نقداً (كاش)" : (sale.PaymentMethod == "Credit" || sale.PaymentMethod == "آجل") ? "آجل" : sale.PaymentMethod)
+                                <span class="badge @(sale.PaymentMethod == "Cash" ? "badge-green" : (sale.PaymentMethod == "Credit" || sale.PaymentMethod == "آجل") ? "badge-amber" : (sale.PaymentMethod == "Installment" || sale.PaymentMethod == "تقسيط" || sale.IsInstallment) ? "badge-indigo" : "badge-secondary")">
+                                    @(sale.PaymentMethod == "Cash" ? "نقداً (كاش)" : (sale.PaymentMethod == "Credit" || sale.PaymentMethod == "آجل") ? "آجل" : (sale.PaymentMethod == "Installment" || sale.PaymentMethod == "تقسيط" || sale.IsInstallment) ? "تقسيط" : (sale.PaymentMethod == "Visa" || sale.PaymentMethod == "Card") ? "فيزا" : sale.PaymentMethod)
                                 </span>
                             </td>
                             <td style="color: var(--accent-amber);">@sale.DiscountAmount.ToString("N2") ج.م</td>
@@ -236,8 +236,8 @@
                     <div><span style="color: var(--text-secondary);">العميل:</span> <strong style="color: var(--accent-blue);">@(detailedSaleInvoice.CustomerName ?? "عميل نقدي عام")</strong></div>
                     <div>
                         <span style="color: var(--text-secondary);">طريقة الدفع:</span> 
-                        <span class="badge @(detailedSaleInvoice.PaymentMethod == "Cash" ? "badge-green" : (detailedSaleInvoice.PaymentMethod == "Credit" || detailedSaleInvoice.PaymentMethod == "آجل") ? "badge-amber" : "badge-indigo")">
-                            @(detailedSaleInvoice.PaymentMethod == "Cash" ? "نقداً (كاش)" : (detailedSaleInvoice.PaymentMethod == "Credit" || detailedSaleInvoice.PaymentMethod == "آجل") ? "آجل" : detailedSaleInvoice.PaymentMethod)
+                        <span class="badge @(detailedSaleInvoice.PaymentMethod == "Cash" ? "badge-green" : (detailedSaleInvoice.PaymentMethod == "Credit" || detailedSaleInvoice.PaymentMethod == "آجل") ? "badge-amber" : (detailedSaleInvoice.PaymentMethod == "Installment" || detailedSaleInvoice.PaymentMethod == "تقسيط" || detailedSaleInvoice.IsInstallment) ? "badge-indigo" : "badge-secondary")">
+                            @(detailedSaleInvoice.PaymentMethod == "Cash" ? "نقداً (كاش)" : (detailedSaleInvoice.PaymentMethod == "Credit" || detailedSaleInvoice.PaymentMethod == "آجل") ? "آجل" : (detailedSaleInvoice.PaymentMethod == "Installment" || detailedSaleInvoice.PaymentMethod == "تقسيط" || detailedSaleInvoice.IsInstallment) ? "تقسيط" : (detailedSaleInvoice.PaymentMethod == "Visa" || detailedSaleInvoice.PaymentMethod == "Card") ? "فيزا" : detailedSaleInvoice.PaymentMethod)
                         </span>
                     </div>
                     <div>

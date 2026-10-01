@@ -329,9 +329,9 @@
 @if (showPaymentModal)
 {
     <div class="modal-overlay" @onclick="ClosePaymentModal">
-        <div class="modal-card" style="width: 840px; max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; padding: 0;" @onclick:stopPropagation="true">
-            <div class="modal-header" style="padding: 0.65rem 1.25rem; border-bottom: 1px solid var(--border-color);">
-                <h3 class="modal-title" style="font-size: 1.15rem; font-weight: 700;">
+        <div class="modal-card" style="width: 1100px; max-width: 96vw; max-height: 94vh; display: flex; flex-direction: column; overflow: hidden; padding: 0;" @onclick:stopPropagation="true">
+            <div class="modal-header" style="padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border-color);">
+                <h3 class="modal-title" style="font-size: 1.25rem; font-weight: 800;">
                     <i class="fa-solid fa-cash-register me-2" style="color: var(--accent-emerald);"></i>
                     الدفع وإنهاء الفاتورة
                 </h3>
@@ -432,12 +432,31 @@
                         <div class="form-group" style="margin: 0;">
                             <label style="font-size: 0.78rem; font-weight: 600; margin-bottom: 0.25rem; display: block;">طريقة الدفع</label>
                             <select class="form-select" style="padding: 0.3rem 0.5rem; font-size: 0.82rem; height: 34px;" value="@Cart.PaymentMethod" @onchange="OnPaymentMethodChanged">
-                                <option value="Cash">نقداً (كاش)</option>
-                                <option value="Visa">بطاقة (فيزا / كارت)</option>
-                                <option value="Credit">آجل (ديون)</option>
-                                <option value="Installment">💳 بيع بالتقسيط (عقد تمويل)</option>
+                                <option value="Cash">💵 نقداً (كاش)</option>
+                                <option value="Visa">💳 بطاقة (فيزا / كارت)</option>
+                                <option value="Credit">📋 آجل — بيع بالدين (مبلغ ناقص فقط)</option>
+                                <option value="Installment">📃 تقسيط — عقد تمويل بأقساط شهرية</option>
                             </select>
                         </div>
+
+                        @if (Cart.PaymentMethod == "Credit")
+                        {
+                            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.45rem; padding: 0.5rem 0.75rem; font-size: 0.78rem; color: #fca5a5; display: flex; gap: 0.5rem; align-items: flex-start;">
+                                <i class="fa-solid fa-circle-info" style="margin-top: 0.1rem; flex-shrink: 0;"></i>
+                                <div>
+                                    <strong style="color: #f87171;">الآجل (دين):</strong> العميل يستلم البضاعة الآن ويدفع المبلغ لاحقاً دفعة واحدة. يُسجَّل في صفحة <strong>فواتير الديون</strong>. لا يوجد جدول أقساط.
+                                </div>
+                            </div>
+                        }
+                        else if (Cart.PaymentMethod == "Installment")
+                        {
+                            <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 0.45rem; padding: 0.5rem 0.75rem; font-size: 0.78rem; color: #a5b4fc; display: flex; gap: 0.5rem; align-items: flex-start;">
+                                <i class="fa-solid fa-circle-info" style="margin-top: 0.1rem; flex-shrink: 0;"></i>
+                                <div>
+                                    <strong style="color: #818cf8;">التقسيط (عقد تمويل):</strong> يُنشأ جدول أقساط شهرية بفائدة محددة. يُتابَع من صفحة <strong>عقود التقسيط</strong>. يتطلب بيانات عميل مسجل.
+                                </div>
+                            </div>
+                        }
                     </div>
 
                     <!-- LEFT COLUMN: Paid Amount Input, Quick Denominations, Change/Debt Display -->
@@ -612,23 +631,27 @@
 
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; font-size: 0.82rem;">
                             <div>
-                                <label style="font-size: 0.76rem; font-weight: 700; margin-bottom: 0.25rem; display: block;">مدة التقسيط (أشهر)</label>
-                                <select class="form-select" @bind="installmentMonths" style="height: 34px; font-size: 0.82rem; font-weight: 700;">
-                                    <option value="3">3 أشهر</option>
-                                    <option value="6">6 أشهر</option>
-                                    <option value="12">12 شهر (سنة)</option>
-                                    <option value="18">18 شهر</option>
-                                    <option value="24">24 شهر (سنتين)</option>
-                                    <option value="36">36 شهر (3 سنوات)</option>
+                                <label style="font-size: 0.76rem; font-weight: 700; margin-bottom: 0.25rem; display: block; color: var(--text-primary);">مدة التقسيط (أشهر)</label>
+                                <select class="form-select" @bind="installmentMonths" style="height: 36px; padding: 0.25rem 0.6rem; font-size: 0.85rem; font-weight: 700; background-color: var(--bg-card); color: var(--text-primary); border: 1.5px solid var(--accent-indigo); border-radius: 0.4rem; cursor: pointer;">
+                                    <option value="3" style="background-color: var(--bg-card); color: var(--text-primary);">3 أشهر</option>
+                                    <option value="6" style="background-color: var(--bg-card); color: var(--text-primary);">6 أشهر</option>
+                                    <option value="9" style="background-color: var(--bg-card); color: var(--text-primary);">9 أشهر</option>
+                                    <option value="12" style="background-color: var(--bg-card); color: var(--text-primary);">12 شهر (سنة)</option>
+                                    <option value="18" style="background-color: var(--bg-card); color: var(--text-primary);">18 شهر (سنة ونصف)</option>
+                                    <option value="24" style="background-color: var(--bg-card); color: var(--text-primary);">24 شهر (سنتين)</option>
+                                    <option value="30" style="background-color: var(--bg-card); color: var(--text-primary);">30 شهر (سنتين ونصف)</option>
+                                    <option value="36" style="background-color: var(--bg-card); color: var(--text-primary);">36 شهر (3 سنوات)</option>
+                                    <option value="48" style="background-color: var(--bg-card); color: var(--text-primary);">48 شهر (4 سنوات)</option>
+                                    <option value="60" style="background-color: var(--bg-card); color: var(--text-primary);">60 شهر (5 سنوات)</option>
                                 </select>
                             </div>
                             <div>
-                                <label style="font-size: 0.76rem; font-weight: 700; margin-bottom: 0.25rem; display: block;">نسبة الفائدة السنوية (%)</label>
-                                <input type="number" step="0.5" min="0" class="form-control" @bind="interestPercentage" style="height: 34px; font-size: 0.85rem; font-weight: 700; text-align: center; color: var(--accent-amber);" />
+                                <label style="font-size: 0.76rem; font-weight: 700; margin-bottom: 0.25rem; display: block; color: var(--text-primary);">نسبة الفائدة السنوية (%)</label>
+                                <input type="number" step="0.5" min="0" class="form-control" @bind="interestPercentage" style="height: 36px; padding: 0.25rem 0.6rem; font-size: 0.85rem; font-weight: 700; text-align: center; color: var(--accent-amber); background-color: var(--bg-card); border: 1.5px solid var(--accent-indigo); border-radius: 0.4rem;" />
                             </div>
                             <div>
-                                <label style="font-size: 0.76rem; font-weight: 700; margin-bottom: 0.25rem; display: block;">تاريخ استحقاق أول قسط</label>
-                                <input type="date" class="form-control" @bind="installmentStartDate" style="height: 34px; font-size: 0.82rem; font-weight: 700;" />
+                                <label style="font-size: 0.76rem; font-weight: 700; margin-bottom: 0.25rem; display: block; color: var(--text-primary);">تاريخ استحقاق أول قسط</label>
+                                <input type="date" class="form-control" @bind="installmentStartDate" style="height: 36px; padding: 0.25rem 0.6rem; font-size: 0.82rem; font-weight: 700; background-color: var(--bg-card); color: var(--text-primary); border: 1.5px solid var(--accent-indigo); border-radius: 0.4rem;" />
                             </div>
                         </div>
 
@@ -794,10 +817,20 @@
                                         }
                                     </div>
 
-                                    <button class="btn btn-primary" style="background: linear-gradient(135deg, #ec4899, #db2777); border: none; font-weight: 700; font-size: 0.85rem; padding: 0.45rem 0.9rem;" @onclick="() => ApplyOfferToCart(offer)">
-                                        <i class="fa-solid fa-cart-plus me-1"></i>
-                                        <span>إضافة للسلة</span>
-                                    </button>
+                                    @if (offer.OfferType == "BundlePackage")
+                                    {
+                                        <button class="btn btn-primary" style="background: linear-gradient(135deg, #ec4899, #db2777); border: none; font-weight: 700; font-size: 0.85rem; padding: 0.45rem 0.9rem;" @onclick="() => ApplyOfferToCart(offer)">
+                                            <i class="fa-solid fa-cart-plus me-1"></i>
+                                            <span>إضافة الباكدج للسلة وتطبيق السعر</span>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-primary" style="background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; font-weight: 700; font-size: 0.85rem; padding: 0.45rem 0.9rem;" @onclick="() => ApplyOfferToCart(offer)">
+                                            <i class="fa-solid fa-tags me-1"></i>
+                                            <span>تطبيق الخصم على السلة</span>
+                                        </button>
+                                    }
                                 </div>
                             </div>
                         }
@@ -1037,120 +1070,6 @@
     </div>
 }
 
-<!-- Depleted Batches Stock Alert & Replenishment Modal -->
-@if (showDepletedBatchesModal)
-{
-    <div class="modal-overlay" style="z-index: 1200; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px);">
-        <div class="modal-card" style="width: 820px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; border: 1.5px solid var(--accent-amber);" @onclick:stopPropagation="true">
-            <div class="modal-header" style="background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid rgba(245, 158, 11, 0.25);">
-                <h3 class="modal-title" style="color: #f59e0b; display: flex; align-items: center; gap: 0.5rem;">
-                    <i class="fa-solid fa-boxes-stacked"></i>
-                    <span>تنبيه هام: نفاد كمية تشغيلة/دفعة ومطابقة الجرد الفعلي</span>
-                </h3>
-                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseDepletedBatchesModal">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="modal-body" style="overflow-y: auto; flex: 1; padding: 1.25rem;">
-                <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 0.5rem; padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; line-height: 1.6; color: #fbbf24;">
-                    <i class="fa-solid fa-circle-info me-2"></i>
-                    <strong>تم استهلاك كمية الدفعة التالية بالكامل في النظام طبقاً لنظام الصرف (FIFO).</strong>
-                    <br />
-                    يرجى التوجه إلى المخزن أو الرف للتأكد من وجود كميات فعلية متبقية من هذه الدفعة قبل الانتقال لصرف الدفعة التالية. إذا وُجدت كمية متبقية في المخزن، يمكنك إدخالها أدناه لتجديد رصيد هذه الدفعة وتحديث رصيد المخزن فوراً.
-                </div>
-
-                <div style="display: flex; flex-direction: column; gap: 1rem;">
-                    @foreach (var item in depletedBatchesList)
-                    {
-                        <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 0.65rem; padding: 1rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                                <div>
-                                    <div style="font-size: 1.1rem; font-weight: 800; color: var(--text-primary);">
-                                        @item.Batch.ProductName
-                                    </div>
-                                    <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
-                                        رقم الدفعة (Batch): <code style="background: rgba(255,255,255,0.06); padding: 0.15rem 0.4rem; border-radius: 0.25rem; color: var(--accent-blue);">@item.Batch.BatchNumber</code>
-                                    </div>
-                                </div>
-                                <div>
-                                    <span class="badge badge-amber" style="font-size: 0.82rem; padding: 0.3rem 0.6rem;">
-                                        <i class="fa-solid fa-triangle-exclamation me-1"></i> الرصيد بالنظام: 0 @item.Batch.OriginalUnit
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; background: var(--bg-card); padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 0.75rem; font-size: 0.85rem;">
-                                <div>
-                                    <span style="color: var(--text-secondary); display: block;">الكمية الأصلية:</span>
-                                    <strong style="color: var(--text-primary);">@item.Batch.OriginalQuantity.ToString("G29") @item.Batch.OriginalUnit</strong>
-                                </div>
-                                <div>
-                                    <span style="color: var(--text-secondary); display: block;">تاريخ الشراء:</span>
-                                    <strong style="color: var(--text-primary);">@item.Batch.PurchaseDate.ToString("dd/MM/yyyy")</strong>
-                                </div>
-                                <div>
-                                    <span style="color: var(--text-secondary); display: block;">تاريخ الانتهاء:</span>
-                                    <strong style="color: @(item.Batch.ExpiryDate.HasValue ? "var(--accent-amber)" : "var(--text-muted)");">
-                                        @(item.Batch.ExpiryDate.HasValue ? item.Batch.ExpiryDate.Value.ToString("dd/MM/yyyy") : "بدون صلاحية")
-                                    </strong>
-                                </div>
-                            </div>
-
-                            @if (item.IsReplenished)
-                            {
-                                <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.45rem; padding: 0.6rem 0.85rem; color: #10b981; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
-                                    <i class="fa-solid fa-circle-check"></i>
-                                    <span>@item.SuccessMessage</span>
-                                </div>
-                            }
-                            else
-                            {
-                                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; background: rgba(255,255,255,0.02); padding: 0.6rem 0.75rem; border-radius: 0.45rem;">
-                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 260px;">
-                                        <label style="margin: 0; font-size: 0.85rem; font-weight: 700; white-space: nowrap; color: var(--text-primary);">
-                                            الكمية الفعلية الموجودة بالمخزن:
-                                        </label>
-                                        <input type="number" step="any" min="0.01" class="form-control" style="width: 120px; text-align: center; font-weight: 700;"
-                                               @bind="item.EnteredRemainingQty" placeholder="0" />
-                                        <span style="font-size: 0.82rem; color: var(--text-secondary);">@item.Batch.OriginalUnit</span>
-                                    </div>
-                                    <button class="btn btn-warning" style="padding: 0.4rem 0.85rem; font-size: 0.85rem; font-weight: 700;"
-                                            disabled="@item.IsReplenishing"
-                                            @onclick="() => ReplenishBatchItemAsync(item)">
-                                        @if (item.IsReplenishing)
-                                        {
-                                            <i class="fa-solid fa-spinner fa-spin me-1"></i>
-                                            <span>جاري التجديد...</span>
-                                        }
-                                        else
-                                        {
-                                            <i class="fa-solid fa-arrows-rotate me-1"></i>
-                                            <span>تجديد رصيد الدفعة والمخزن</span>
-                                        }
-                                    </button>
-                                </div>
-
-                                @if (!string.IsNullOrEmpty(item.ErrorMessage))
-                                {
-                                    <div style="color: #ef4444; font-size: 0.8rem; margin-top: 0.4rem;">
-                                        <i class="fa-solid fa-circle-exclamation me-1"></i> @item.ErrorMessage
-                                    </div>
-                                }
-                            }
-                        </div>
-                    }
-                </div>
-            </div>
-
-            <div class="modal-footer" style="padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 0.75rem;">
-                <button class="btn btn-secondary" style="padding: 0.5rem 1.25rem;" @onclick="CloseDepletedBatchesModal">
-                    تأكيد وإغلاق النافذة
-                </button>
-            </div>
-        </div>
-    </div>
-}
 
 @code {
     public class PosAlertNotification
@@ -1725,7 +1644,8 @@
                         ? prod.ConversionFactor 
                         : (pkg.TotalPiecesPerCarton > 1 ? pkg.TotalPiecesPerCarton : 1);
                     
-                    decimal priceToUse = itm.SpecialPrice > 0 ? itm.SpecialPrice : prod.SellingPrice;
+                    // For bundle packages we use normal selling price (discount applied at subtotal level)
+                    decimal priceToUse = prod.SellingPrice;
 
                     for (int q = 0; q < itm.Quantity; q++)
                     {
@@ -1753,7 +1673,26 @@
             }
         }
 
-        if (offer.DiscountPercent > 0)
+        // Apply pricing/discount after all items are added
+        if (offer.PackagePrice > 0)
+        {
+            // Bundle package: discount = (SubTotal of items) - packagePrice
+            var subTotalAfterAdd = Cart.SubTotal;
+            if (subTotalAfterAdd > offer.PackagePrice)
+            {
+                Cart.OverallDiscount = Math.Round(subTotalAfterAdd - offer.PackagePrice, 2);
+                discountPercentage = Cart.SubTotal > 0
+                    ? Math.Round((Cart.OverallDiscount / Cart.SubTotal) * 100m, 1)
+                    : 0;
+            }
+            else
+            {
+                // Package price >= sum of items, no discount needed
+                Cart.OverallDiscount = 0;
+                discountPercentage = 0;
+            }
+        }
+        else if (offer.DiscountPercent > 0)
         {
             discountPercentage = offer.DiscountPercent;
             ApplyDiscountPercent(offer.DiscountPercent);
@@ -1761,16 +1700,22 @@
         else if (offer.DiscountAmount > 0)
         {
             Cart.OverallDiscount = offer.DiscountAmount;
+            discountPercentage = Cart.SubTotal > 0
+                ? Math.Round((Cart.OverallDiscount / Cart.SubTotal) * 100m, 1)
+                : 0;
         }
 
+        paidAmount = Cart.GrandTotal;
         CloseBundlesModal();
         TriggerAlert(
             title: "🎁 تم تطبيق العرض بنجاح",
-            message: $"تمت إضافة أصناف بكج <strong>{offer.TitleAr}</strong> إلى السلة بنجاح.",
+            message: $"تمت إضافة أصناف بكج <strong>{offer.TitleAr}</strong> إلى السلة بنجاح." +
+                     (offer.PackagePrice > 0 ? $" سعر الباقة: <strong>{offer.PackagePrice:N2} ج.م</strong>" : ""),
             alertType: "warning",
             icon: "fa-gift",
             dedupKey: $"offer_{offer.Id}");
     }
+
 
     private async Task SubmitSale()
     {

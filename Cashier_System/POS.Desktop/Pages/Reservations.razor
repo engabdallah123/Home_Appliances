@@ -1,0 +1,627 @@
+@page "/reservations"
+@using Microsoft.AspNetCore.Authorization
+@using System.Globalization
+@using global::POS.Desktop.Services.Api
+@using global::POS.Desktop.Services.Printing
+@attribute [Authorize]
+@inject PosApiClient ApiClient
+@inject IInvoicePrinterService Printer
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject global::POS.Desktop.Services.Sync.ICloudSyncService CloudSync
+@implements IDisposable
+
+<div>
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">
+                <i class="fa-solid fa-box-archive text-pink me-2"></i> حجوزات الأجهزة الكهربائية (جهاز العروسة)
+            </h2>
+            <p class="page-subtitle">متابعة وإدارة الأجهزة المحجوزة في المخزن لحين موعد الفرح أو التسليم، وتحديث حالات الصرف</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="button" class="btn btn-secondary" style="font-size: 0.85rem; font-weight: 700;" @onclick="() => LoadReservations()" title="تحديث الحجوزات">
+                <i class="fa-solid fa-arrows-rotate @(isLoading ? "fa-spin" : "") text-blue me-1"></i>
+                <span>تحديث</span>
+            </button>
+            <NavLink href="pos" class="btn btn-primary" style="font-size: 0.85rem; font-weight: 700;">
+                <i class="fa-solid fa-cash-register me-1"></i>
+                <span>تسجيل حجز جديد (POS)</span>
+            </NavLink>
+        </div>
+    </div>
+
+    <!-- KPI Statistics Cards -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+        <div class="card" style="padding: 1rem 1.25rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                <i class="fa-solid fa-boxes-stacked me-1" style="color: #ec4899;"></i> إجمالي طلبات الحجز
+            </div>
+            <div style="font-size: 1.65rem; font-weight: 800; color: #ec4899;">@reservations.Count</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">إجمالي الفواتير المحجوزة</div>
+        </div>
+
+        <div class="card" style="padding: 1rem 1.25rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                <i class="fa-solid fa-warehouse me-1 text-amber"></i> محجوز حالياً بالمخزن
+            </div>
+            <div style="font-size: 1.65rem; font-weight: 800; color: var(--accent-amber);">
+                @reservations.Count(r => r.ReservationStatus == 1 || (r.IsReserved && r.ReservationStatus == 0))
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">بضاعة جاهزة بانتظار التسليم</div>
+        </div>
+
+        <div class="card" style="padding: 1rem 1.25rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                <i class="fa-solid fa-truck-ramp-box me-1 text-blue"></i> تسليم جزئي
+            </div>
+            <div style="font-size: 1.65rem; font-weight: 800; color: var(--accent-blue);">
+                @reservations.Count(r => r.ReservationStatus == 2)
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">تم تسليم دفعة من الأجهزة</div>
+        </div>
+
+        <div class="card" style="padding: 1rem 1.25rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                <i class="fa-solid fa-circle-check me-1 text-emerald"></i> تم تسليمها بالكامل
+            </div>
+            <div style="font-size: 1.65rem; font-weight: 800; color: var(--accent-emerald);">
+                @reservations.Count(r => r.ReservationStatus == 3)
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">تم خروج كامل الأجهزة</div>
+        </div>
+
+        <div class="card" style="padding: 1rem 1.25rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                <i class="fa-solid fa-money-bill-wave me-1 text-emerald"></i> قيمة البضاعة المحجوزة
+            </div>
+            <div style="font-size: 1.45rem; font-weight: 800; color: var(--text-primary);">
+                @reservations.Where(r => r.ReservationStatus != 3).Sum(r => r.TotalAmount).ToString("N2") <small style="font-size: 0.8rem;">ج.م</small>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">قيد التخزين والتسليم</div>
+        </div>
+    </div>
+
+    <!-- Filters Bar -->
+    <div style="display: flex; gap: 0.75rem; margin-bottom: 1.25rem; align-items: center; flex-wrap: wrap;">
+        <div class="search-box" style="max-width: 380px; flex: 1;">
+            <i class="fa-solid fa-search"></i>
+            <input @bind="searchQuery" @bind:event="oninput" placeholder="بحث برقم الفاتورة، اسم العميل، الهاتف، العنوان..." />
+        </div>
+
+        <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn @(selectedStatusFilter == -1 ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.85rem; font-size: 0.82rem; font-weight: 700;" @onclick="() => FilterByStatus(-1)">
+                الكل (@reservations.Count)
+            </button>
+            <button type="button" class="btn @(selectedStatusFilter == 1 ? "btn-amber" : "btn-secondary")" style="padding: 0.4rem 0.85rem; font-size: 0.82rem; font-weight: 700;" @onclick="() => FilterByStatus(1)">
+                <i class="fa-solid fa-warehouse me-1"></i> محجوز بالمخزن (@reservations.Count(r => r.ReservationStatus == 1 || (r.IsReserved && r.ReservationStatus == 0)))
+            </button>
+            <button type="button" class="btn @(selectedStatusFilter == 2 ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.85rem; font-size: 0.82rem; font-weight: 700;" @onclick="() => FilterByStatus(2)">
+                <i class="fa-solid fa-truck-ramp-box me-1"></i> تسليم جزئي (@reservations.Count(r => r.ReservationStatus == 2))
+            </button>
+            <button type="button" class="btn @(selectedStatusFilter == 3 ? "btn-emerald" : "btn-secondary")" style="padding: 0.4rem 0.85rem; font-size: 0.82rem; font-weight: 700;" @onclick="() => FilterByStatus(3)">
+                <i class="fa-solid fa-circle-check me-1"></i> تم التسليم (@reservations.Count(r => r.ReservationStatus == 3))
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(statusUpdateFeedback))
+    {
+        <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; padding: 0.65rem 1rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.88rem; display: flex; justify-content: space-between; align-items: center;">
+            <div><i class="fa-solid fa-check-circle me-1"></i> @statusUpdateFeedback</div>
+            <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.1rem 0.4rem;" @onclick="() => statusUpdateFeedback = null">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+    }
+
+    <!-- Reservations Table -->
+    <div class="card" style="padding: 0; overflow: hidden; border-radius: 0.75rem; border: 1px solid var(--border-color);">
+        @if (isLoading)
+        {
+            <div style="text-align: center; padding: 3.5rem 0;">
+                <i class="fa-solid fa-spinner fa-spin fa-2x text-pink"></i>
+                <p style="margin-top: 0.75rem; color: var(--text-secondary);">جاري تحميل سجل الحجوزات والأجهزة المحجوزة...</p>
+            </div>
+        }
+        else if (!filteredReservations.Any())
+        {
+            <div style="text-align: center; padding: 3.5rem 1rem;">
+                <i class="fa-solid fa-box-open fa-3x" style="color: var(--text-muted); opacity: 0.3; margin-bottom: 0.75rem; display: block;"></i>
+                <h4 style="color: var(--text-primary); font-weight: 700;">لا توجد طلبات حجز مطابقة</h4>
+                <p style="color: var(--text-secondary); font-size: 0.88rem; max-width: 450px; margin: 0.5rem auto 1rem;">
+                    يمكنك تفعيل خيار "حجز أجهزة / استلام مؤجل (جهاز عروسة)" من شاشة البيع عند إتمام أي فاتورة لتظهر هنا وتتم متابعتها.
+                </p>
+                <NavLink href="pos" class="btn btn-primary" style="font-size: 0.85rem;">
+                    <i class="fa-solid fa-cash-register me-1"></i> الانتقال لشاشة البيع
+                </NavLink>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table" style="margin: 0; width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); font-size: 0.82rem; color: var(--text-secondary);">
+                            <th style="padding: 0.75rem 1rem; text-align: right;">رقم الفاتورة</th>
+                            <th style="padding: 0.75rem; text-align: right;">العميل / المستلم</th>
+                            <th style="padding: 0.75rem; text-align: center;">تاريخ الحجز</th>
+                            <th style="padding: 0.75rem; text-align: center;">موعد التسليم (الفرح)</th>
+                            <th style="padding: 0.75rem; text-align: center;">عدد الأجهزة</th>
+                            <th style="padding: 0.75rem; text-align: left;">إجمالي الفاتورة</th>
+                            <th style="padding: 0.75rem; text-align: center;">حالة الحجز والتسليم</th>
+                            <th style="padding: 0.75rem 1rem; text-align: center;">الإجراءات والتفاعل</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var res in filteredReservations)
+                        {
+                            bool isFullyDispatched = res.ReservationStatus == 3;
+                            bool isPartiallyDispatched = res.ReservationStatus == 2;
+                            bool isPending = !isFullyDispatched && !isPartiallyDispatched;
+
+                            <tr style="border-bottom: 1px solid var(--border-color); font-size: 0.86rem; transition: background 0.15s ease;">
+                                <td style="padding: 0.75rem 1rem; font-weight: 700; white-space: nowrap;">
+                                    <span style="cursor: pointer; color: var(--accent-blue);" @onclick="() => OpenDetailsModal(res)">
+                                        <i class="fa-solid fa-receipt me-1"></i> @res.InvoiceNumber
+                                    </span>
+                                    @if (res.IsDelivery)
+                                    {
+                                        <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; margin-right: 0.35rem; font-size: 0.7rem;">
+                                            <i class="fa-solid fa-truck-fast me-1"></i> توصيل
+                                        </span>
+                                    }
+                                </td>
+
+                                <td style="padding: 0.75rem;">
+                                    <div style="font-weight: 700; color: var(--text-primary);">
+                                        @(string.IsNullOrWhiteSpace(res.CustomerName) || res.CustomerName == "Walk-in Customer" ? "عميل نقدي" : res.CustomerName)
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(res.RecipientPhone))
+                                    {
+                                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">
+                                            <i class="fa-solid fa-phone me-1"></i> @res.RecipientPhone
+                                        </div>
+                                    }
+                                </td>
+
+                                <td style="padding: 0.75rem; text-align: center; color: var(--text-secondary); white-space: nowrap;">
+                                    @res.SaleDate.ToString("yyyy-MM-dd", ArabicCulture)
+                                </td>
+
+                                <td style="padding: 0.75rem; text-align: center; white-space: nowrap;">
+                                    @if (res.TargetDeliveryDate.HasValue)
+                                    {
+                                        var daysRemaining = (res.TargetDeliveryDate.Value.Date - DateTime.Today).TotalDays;
+                                        <div style="font-weight: 700; color: @(daysRemaining <= 3 && !isFullyDispatched ? "var(--accent-red)" : "var(--accent-indigo)");">
+                                            <i class="fa-regular fa-calendar-check me-1"></i>
+                                            @res.TargetDeliveryDate.Value.ToString("yyyy-MM-dd")
+                                        </div>
+                                        @if (!isFullyDispatched)
+                                        {
+                                            @if (daysRemaining < 0)
+                                            {
+                                                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; font-size: 0.7rem;">
+                                                    متأخر منذ @(Math.Abs((int)daysRemaining)) يوم
+                                                </span>
+                                            }
+                                            else if (daysRemaining <= 7)
+                                            {
+                                                <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; font-size: 0.7rem;">
+                                                    خلال @((int)daysRemaining) يوم
+                                                </span>
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span style="color: var(--text-muted); font-size: 0.78rem;">غير محدد (لحين الطلب)</span>
+                                    }
+                                </td>
+
+                                <td style="padding: 0.75rem; text-align: center;">
+                                    <span class="badge" style="background: rgba(236, 72, 153, 0.15); color: #ec4899; font-weight: 700; font-size: 0.8rem; padding: 0.3rem 0.6rem;">
+                                        @(res.Items?.Sum(i => i.Quantity).ToString("N0") ?? "-") جهاز
+                                    </span>
+                                </td>
+
+                                <td style="padding: 0.75rem; text-align: left; white-space: nowrap;">
+                                    <div style="font-weight: 800; color: var(--accent-emerald);">@res.TotalAmount.ToString("N2") ج.م</div>
+                                    @if (res.TotalAmount > res.PaidAmount)
+                                    {
+                                        <div style="font-size: 0.72rem; color: #f87171;">متبقي: @((res.TotalAmount - res.PaidAmount).ToString("N2")) ج.م</div>
+                                    }
+                                    else
+                                    {
+                                        <div style="font-size: 0.72rem; color: #10b981;">مسدد بالكامل</div>
+                                    }
+                                </td>
+
+                                <td style="padding: 0.75rem; text-align: center; white-space: nowrap;">
+                                    @if (isFullyDispatched)
+                                    {
+                                        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.8rem; padding: 0.3rem 0.65rem;">
+                                            <i class="fa-solid fa-circle-check me-1"></i> تم التسليم بالكامل
+                                        </span>
+                                    }
+                                    else if (isPartiallyDispatched)
+                                    {
+                                        <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.8rem; padding: 0.3rem 0.65rem;">
+                                            <i class="fa-solid fa-truck-ramp-box me-1"></i> تسليم جزئي
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.8rem; padding: 0.3rem 0.65rem;">
+                                            <i class="fa-solid fa-warehouse me-1"></i> محجوز بالمخزن
+                                        </span>
+                                    }
+                                </td>
+
+                                <td style="padding: 0.75rem 1rem; text-align: center; white-space: nowrap;">
+                                    <div style="display: inline-flex; gap: 0.35rem; align-items: center;">
+                                        <!-- Update Status Dropdown / Action Buttons -->
+                                        @if (!isFullyDispatched)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-emerald" style="padding: 0.25rem 0.55rem; font-size: 0.76rem; font-weight: 700;"
+                                                    @onclick="() => UpdateStatus(res.Id, 3)" title="تسليم كامل الأجهزة للعميل">
+                                                <i class="fa-solid fa-check-double me-1"></i> تسليم كامل
+                                            </button>
+                                        }
+                                        @if (isPending)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.76rem; font-weight: 700; color: var(--accent-blue);"
+                                                    @onclick="() => UpdateStatus(res.Id, 2)" title="تسليم جزء من الأجهزة">
+                                                <i class="fa-solid fa-truck-ramp-box me-1"></i> تسليم جزئي
+                                            </button>
+                                        }
+                                        @if (isFullyDispatched || isPartiallyDispatched)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.76rem; color: var(--accent-amber);"
+                                                    @onclick="() => UpdateStatus(res.Id, 1)" title="إعادة تعيين الحالة إلى قيد الحجز">
+                                                <i class="fa-solid fa-rotate-left"></i>
+                                            </button>
+                                        }
+
+                                        <!-- View Items -->
+                                        <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.76rem;"
+                                                @onclick="() => OpenDetailsModal(res)" title="عرض الأصناف المحجوزة">
+                                            <i class="fa-solid fa-eye"></i>
+                                        </button>
+
+                                        <!-- Print Invoice / Delivery Voucher -->
+                                        <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.76rem;"
+                                                @onclick="() => PrintPdf(res.Id)" title="طباعة الفاتورة / إذن الصرف">
+                                            <i class="fa-solid fa-print"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal: Reserved Items & Customer Delivery Details -->
+@if (showDetailsModal && selectedReservation != null)
+{
+    <div class="modal-overlay" @onclick="CloseDetailsModal">
+        <div class="modal-card" style="width: 860px; max-width: 96vw; max-height: 90vh; display: flex; flex-direction: column;" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.12), rgba(99, 102, 241, 0.12));">
+                <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.6rem; color: #ec4899; font-weight: 800; font-size: 1.15rem;">
+                    <i class="fa-solid fa-boxes-packing"></i>
+                    <span>تفاصيل حجز الأجهزة: فاتورة @selectedReservation.InvoiceNumber</span>
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.25rem 0.55rem;" @onclick="CloseDetailsModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" style="padding: 1.25rem; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem;">
+                <!-- Reservation Info Banner -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; background: var(--bg-secondary); padding: 0.9rem 1.1rem; border-radius: 0.65rem; border: 1px solid var(--border-color); font-size: 0.85rem;">
+                    <div>
+                        <span style="color: var(--text-secondary); display: block; font-size: 0.76rem;">العميل:</span>
+                        <strong style="color: var(--text-primary); font-size: 0.95rem;">@(selectedReservation.CustomerName ?? "عميل نقدي")</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-secondary); display: block; font-size: 0.76rem;">هاتف العميل / المستلم:</span>
+                        <strong style="color: var(--accent-blue);">@(selectedReservation.RecipientPhone ?? "-")</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-secondary); display: block; font-size: 0.76rem;">موعد التسليم المستهدف:</span>
+                        <strong style="color: #ec4899;">@(selectedReservation.TargetDeliveryDate?.ToString("dddd، dd MMMM yyyy", ArabicCulture) ?? "غير محدد")</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-secondary); display: block; font-size: 0.76rem;">حالة الحجز الحالية:</span>
+                        <strong style="color: var(--text-primary);">
+                            @(selectedReservation.ReservationStatus == 3 ? "تم التسليم بالكامل" : selectedReservation.ReservationStatus == 2 ? "تسليم جزئي" : "محجوز بالمخزن")
+                        </strong>
+                    </div>
+                    @if (selectedReservation.IsDelivery && !string.IsNullOrWhiteSpace(selectedReservation.DeliveryAddress))
+                    {
+                        <div style="grid-column: 1 / -1; border-top: 1px dashed var(--border-color); padding-top: 0.45rem;">
+                            <span style="color: var(--text-secondary); font-size: 0.76rem;">عنوان التوصيل:</span>
+                            <span style="color: var(--text-primary); font-weight: 600;"> @selectedReservation.DeliveryAddress @(!string.IsNullOrWhiteSpace(selectedReservation.DeliveryFloor) ? $" - {selectedReservation.DeliveryFloor}" : "")</span>
+                        </div>
+                    }
+                </div>
+
+                <!-- Items Table -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 0.65rem; overflow: hidden;">
+                    <div style="background: var(--bg-secondary); padding: 0.65rem 1rem; border-bottom: 1px solid var(--border-color); font-weight: 700; font-size: 0.88rem; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                        <span><i class="fa-solid fa-list-check me-2" style="color: #ec4899;"></i> قائمة الأجهزة المحجوزة</span>
+                        <span class="badge" style="background: rgba(236, 72, 153, 0.15); color: #ec4899;">
+                            @(selectedReservation.Items?.Count ?? 0) صنف
+                        </span>
+                    </div>
+
+                    <table class="table" style="margin: 0; width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                        <thead>
+                            <tr style="background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                                <th style="padding: 0.6rem 1rem; text-align: right;">اسم الجهاز</th>
+                                <th style="padding: 0.6rem; text-align: center;">الكمية</th>
+                                <th style="padding: 0.6rem; text-align: left;">سعر الوحدة</th>
+                                <th style="padding: 0.6rem; text-align: left;">الإجمالي</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (selectedReservation.Items != null && selectedReservation.Items.Any())
+                            {
+                                @foreach (var item in selectedReservation.Items)
+                                {
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                        <td style="padding: 0.6rem 1rem; font-weight: 700; color: var(--text-primary);">
+                                            @item.ProductName
+                                            @if (!string.IsNullOrWhiteSpace(item.Barcode))
+                                            {
+                                                <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;">
+                                                    باركود: @item.Barcode
+                                                </div>
+                                            }
+                                        </td>
+                                        <td style="padding: 0.6rem; text-align: center; font-weight: 800; color: var(--accent-amber);">
+                                            @item.Quantity.ToString("N0") @item.BaseUnit
+                                        </td>
+                                        <td style="padding: 0.6rem; text-align: left; color: var(--text-secondary);">
+                                            @item.UnitPrice.ToString("N2") ج.م
+                                        </td>
+                                        <td style="padding: 0.6rem; text-align: left; font-weight: 700; color: var(--accent-emerald);">
+                                            @item.Total.ToString("N2") ج.م
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="4" style="text-align: center; padding: 1.5rem; color: var(--text-muted);">
+                                        لا توجد أصناف مسجلة
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Financial Summary Box -->
+                <div style="display: flex; justify-content: flex-end;">
+                    <div style="background: var(--bg-card); border: 1.5px solid var(--accent-emerald); border-radius: 0.55rem; padding: 0.75rem 1.25rem; min-width: 280px; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">إجمالي الفاتورة:</span>
+                            <strong style="color: var(--text-primary);">@selectedReservation.TotalAmount.ToString("N2") ج.م</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">المبلغ المدفوع:</span>
+                            <strong style="color: var(--accent-emerald);">@selectedReservation.PaidAmount.ToString("N2") ج.م</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; border-top: 1px dashed var(--border-color); padding-top: 0.35rem;">
+                            <span style="color: @(selectedReservation.TotalAmount > selectedReservation.PaidAmount ? "var(--accent-red)" : "var(--accent-emerald)"); font-weight: 700;">
+                                @(selectedReservation.TotalAmount > selectedReservation.PaidAmount ? "المتبقي على العميل:" : "الحساب:")
+                            </span>
+                            <strong style="color: @(selectedReservation.TotalAmount > selectedReservation.PaidAmount ? "var(--accent-red)" : "var(--accent-emerald)"); font-size: 1.05rem;">
+                                @(selectedReservation.TotalAmount > selectedReservation.PaidAmount ? $"{(selectedReservation.TotalAmount - selectedReservation.PaidAmount):N2} ج.م" : "خالص السداد")
+                            </strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <div style="display: flex; gap: 0.5rem;">
+                    @if (selectedReservation.ReservationStatus != 3)
+                    {
+                        <button type="button" class="btn btn-emerald" style="padding: 0.5rem 1.25rem; font-weight: 700;" @onclick="() => UpdateStatus(selectedReservation.Id, 3, closeModal: true)">
+                            <i class="fa-solid fa-check-double me-1"></i> تسليم كامل الأجهزة الآن
+                        </button>
+                    }
+                    @if (selectedReservation.ReservationStatus == 1 || selectedReservation.ReservationStatus == 0)
+                    {
+                        <button type="button" class="btn btn-secondary" style="padding: 0.5rem 1.1rem; color: var(--accent-blue);" @onclick="() => UpdateStatus(selectedReservation.Id, 2, closeModal: true)">
+                            <i class="fa-solid fa-truck-ramp-box me-1"></i> تسجيل تسليم جزئي
+                        </button>
+                    }
+                </div>
+
+                <div style="display: flex; gap: 0.5rem;">
+                    <button type="button" class="btn btn-primary" style="padding: 0.5rem 1.25rem;" @onclick="() => PrintPdf(selectedReservation.Id)">
+                        <i class="fa-solid fa-print me-1"></i> طباعة إذن التسليم / الفاتورة
+                    </button>
+                    <button type="button" class="btn btn-secondary" style="padding: 0.5rem 1.25rem;" @onclick="CloseDetailsModal">
+                        إغلاق
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<SaleDto> reservations = new();
+    private List<SaleDto> filteredReservations = new();
+
+    private string searchQuery = string.Empty;
+    private int selectedStatusFilter = -1; // -1: All, 1: Reserved, 2: PartiallyDispatched, 3: FullyDispatched
+    private bool isLoading = true;
+
+    private bool showDetailsModal = false;
+    private SaleDto? selectedReservation = null;
+    private string? statusUpdateFeedback = null;
+
+    private static readonly CultureInfo ArabicCulture = new("ar-EG");
+
+    protected override async Task OnInitializedAsync()
+    {
+        CloudSync.OnSyncStateChanged += HandleSyncStateChanged;
+        await LoadReservations();
+    }
+
+    private async void HandleSyncStateChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadReservations(silent: true);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        CloudSync.OnSyncStateChanged -= HandleSyncStateChanged;
+    }
+
+    private async Task LoadReservations(bool silent = false)
+    {
+        if (!silent) isLoading = true;
+        try
+        {
+            var allSales = await ApiClient.GetSalesListAsync() ?? new();
+            // Filter only reservations (either marked IsReserved or having a target delivery date / reservation status)
+            reservations = allSales
+                .Where(s => s.IsReserved || s.ReservationStatus > 0 || s.TargetDeliveryDate.HasValue)
+                .OrderByDescending(s => s.SaleDate)
+                .ToList();
+
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading reservations: {ex.Message}");
+        }
+        finally
+        {
+            if (!silent) isLoading = false;
+        }
+    }
+
+    private void FilterByStatus(int status)
+    {
+        selectedStatusFilter = status;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        var query = reservations.AsEnumerable();
+
+        if (selectedStatusFilter == 1)
+        {
+            query = query.Where(r => r.ReservationStatus == 1 || (r.IsReserved && r.ReservationStatus == 0));
+        }
+        else if (selectedStatusFilter == 2)
+        {
+            query = query.Where(r => r.ReservationStatus == 2);
+        }
+        else if (selectedStatusFilter == 3)
+        {
+            query = query.Where(r => r.ReservationStatus == 3);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var q = searchQuery.Trim();
+            query = query.Where(r =>
+                r.InvoiceNumber.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(r.CustomerName) && r.CustomerName.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(r.RecipientPhone) && r.RecipientPhone.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(r.DeliveryAddress) && r.DeliveryAddress.Contains(q, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        filteredReservations = query.ToList();
+    }
+
+    private async Task UpdateStatus(Guid saleId, int newStatus, bool closeModal = false)
+    {
+        try
+        {
+            var (success, error) = await ApiClient.UpdateReservationStatusAsync(saleId, newStatus);
+            if (success)
+            {
+                statusUpdateFeedback = newStatus switch
+                {
+                    3 => "تم تأكيد تسليم كامل الأجهزة المحجوزة للعميل بنجاح.",
+                    2 => "تم تسجيل تسليم جزئي للأجهزة بنجاح.",
+                    _ => "تم تحديث حالة الحجز إلى قيد الحفظ بالمخزن بنجاح."
+                };
+
+                if (closeModal)
+                {
+                    showDetailsModal = false;
+                }
+
+                await LoadReservations(silent: true);
+            }
+            else
+            {
+                statusUpdateFeedback = $"فشل تحديث الحالة: {error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusUpdateFeedback = $"خطأ: {ex.Message}";
+        }
+    }
+
+    private async Task OpenDetailsModal(SaleDto res)
+    {
+        selectedReservation = res;
+        showDetailsModal = true;
+        if (res.Items == null || !res.Items.Any())
+        {
+            try
+            {
+                var detail = await ApiClient.GetSaleByIdAsync(res.Id);
+                if (detail != null && detail.Items != null && detail.Items.Any())
+                {
+                    selectedReservation = detail;
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching reservation details: {ex.Message}");
+            }
+        }
+    }
+
+    private void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedReservation = null;
+    }
+
+    private async Task PrintPdf(Guid saleId)
+    {
+        try
+        {
+            await Printer.PrintInvoiceAsync(saleId, isThermal: false);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error printing voucher: {ex.Message}");
+        }
+    }
+}

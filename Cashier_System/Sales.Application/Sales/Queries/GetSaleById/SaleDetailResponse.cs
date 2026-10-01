@@ -34,5 +34,17 @@ namespace Sales.Application.Sales.Queries.GetSaleById
         string PaymentMethod,
         string Status,
         string? Notes,
-        IReadOnlyList<SaleDetailItemResponse> Items);
+        IReadOnlyList<SaleDetailItemResponse> Items,
+        bool IsReserved = false,
+        DateTime? TargetDeliveryDate = null,
+        int ReservationStatus = 0,
+        bool IsDelivery = false,
+        string? RecipientName = null,
+        string? RecipientPhone = null,
+        string? DeliveryAddress = null,
+        string? DeliveryFloor = null,
+        string? DriverName = null,
+        int DeliveryStatus = 0,
+        bool IsInstallment = false,
+        Guid? InstallmentContractId = null);
 }

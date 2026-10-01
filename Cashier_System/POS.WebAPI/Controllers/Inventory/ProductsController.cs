@@ -47,6 +47,12 @@ namespace POS.WebAPI.Controllers.Inventory
         public IFormFile? ImageFile { get; set; }
         public Guid? Id { get; set; }
         public decimal InitialStock { get; set; } = 0;
+        public Guid? BrandId { get; set; }
+        public string? ModelNumber { get; set; }
+        public string? Color { get; set; }
+        public int WarrantyPeriodMonths { get; set; } = 12;
+        public string? MaintenanceAgent { get; set; }
+        public bool HasSerialNumber { get; set; }
     }
 
     [ApiController]
@@ -95,7 +101,9 @@ namespace POS.WebAPI.Controllers.Inventory
                 request.ReorderLevel, request.MaxStockLevel,
                 request.IsWeighable, request.IsActive, request.TrackExpiry,
                 request.TaxRate, imageUrl, request.Id,
-                request.InitialStock, userId);
+                request.InitialStock, userId,
+                request.BrandId, request.ModelNumber, request.Color,
+                request.WarrantyPeriodMonths, request.MaintenanceAgent, request.HasSerialNumber);
 
             var result = await _sender.Send(command, ct);
             if (result.IsFailure)

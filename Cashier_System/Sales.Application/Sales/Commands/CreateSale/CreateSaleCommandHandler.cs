@@ -108,19 +108,19 @@ namespace Sales.Application.Sales.Commands.CreateSale
             if (completeResult.IsFailure)
                 return Result<CreateSaleResult>.Failure(completeResult.Error);
 
-            if (request.IsInstallment && request.CustomerId.HasValue)
+            if ((request.IsInstallment || request.PaymentMethod == "Installment") && request.CustomerId.HasValue)
             {
                 var contractNumber = $"INST-{DateTime.UtcNow:yyyyMMdd}-{orderNumber:D3}";
                 var contractResult = global::Sales.Domain.Installments.Entities.InstallmentContract.Create(
                     contractNumber,
                     sale.Id,
                     request.CustomerId.Value,
-                    request.GuarantorName ?? "الضامن",
-                    request.GuarantorPhone ?? "",
+                    string.IsNullOrWhiteSpace(request.GuarantorName) ? "بدون ضامن" : request.GuarantorName,
+                    string.IsNullOrWhiteSpace(request.GuarantorPhone) ? "-" : request.GuarantorPhone,
                     sale.TotalAmount,
                     request.PaidAmount,
                     request.InterestPercentage,
-                    request.NumberOfMonths,
+                    request.NumberOfMonths > 0 ? request.NumberOfMonths : 12,
                     request.InstallmentStartDate ?? DateTime.UtcNow.AddMonths(1),
                     request.GuarantorNationalId,
                     request.GuarantorAddress,

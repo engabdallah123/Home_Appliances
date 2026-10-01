@@ -127,5 +127,32 @@ namespace POS.WebAPI.Controllers.Sales
 
             return File(result.Value!, "application/pdf", $"Invoice_{id}.pdf");
         }
+
+        [HttpPatch("{id:guid}/reservation-status")]
+        public async Task<IActionResult> UpdateReservationStatus(Guid id, [FromBody] System.Text.Json.JsonElement body, CancellationToken ct)
+        {
+            int statusInt = 1;
+            if (body.ValueKind == System.Text.Json.JsonValueKind.Number)
+            {
+                statusInt = body.GetInt32();
+            }
+            else if (body.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (body.TryGetProperty("status", out var p) || body.TryGetProperty("Status", out p))
+                {
+                    if (p.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        statusInt = p.GetInt32();
+                    else if (p.ValueKind == System.Text.Json.JsonValueKind.String && int.TryParse(p.GetString(), out var sInt))
+                        statusInt = sInt;
+                }
+            }
+
+            var status = (global::Sales.Domain.Sales.Entities.ReservationStatus)statusInt;
+            var result = await _sender.Send(new global::Sales.Application.Sales.Commands.UpdateReservationStatus.UpdateReservationStatusCommand(id, status), ct);
+            if (result.IsFailure)
+                return BadRequest(result.Error);
+
+            return NoContent();
+        }
     }
 }

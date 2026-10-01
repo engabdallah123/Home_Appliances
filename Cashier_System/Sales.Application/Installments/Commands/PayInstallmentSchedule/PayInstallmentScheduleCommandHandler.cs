@@ -24,10 +24,14 @@ namespace Sales.Application.Installments.Commands.PayInstallmentSchedule
                 return Result.Failure(new Error("InstallmentPayment.InvalidAmount", "مبلغ السداد يجب أن يكون أكبر من صفر."));
 
             var schedule = await _salesUnitOfWork.InstallmentScheduleRepository.GetByIdAsync(request.ScheduleId);
-            if (schedule == null || schedule.ContractId != request.ContractId)
+            if (schedule == null)
                 return Result.Failure(new Error("InstallmentPayment.ScheduleNotFound", "القسط المطلوب غير موجود."));
 
-            var contract = await _salesUnitOfWork.InstallmentContractRepository.GetByIdAsync(request.ContractId);
+            var contractId = request.ContractId != Guid.Empty ? request.ContractId : schedule.ContractId;
+            if (schedule.ContractId != contractId)
+                return Result.Failure(new Error("InstallmentPayment.ScheduleMismatch", "القسط لا ينتمي إلى هذا العقد."));
+
+            var contract = await _salesUnitOfWork.InstallmentContractRepository.GetByIdAsync(contractId);
             if (contract == null)
                 return Result.Failure(new Error("InstallmentPayment.ContractNotFound", "عقد التقسيط غير موجود."));
 
@@ -53,9 +57,16 @@ namespace Sales.Application.Installments.Commands.PayInstallmentSchedule
             }
 
             // تحديث إجماليات الشفت المفتوح إن وجد
-            if (request.ShiftId.HasValue && request.ShiftId.Value != Guid.Empty)
+            Guid? effectiveShiftId = request.ShiftId;
+            if ((!effectiveShiftId.HasValue || effectiveShiftId.Value == Guid.Empty) && request.CashierId.HasValue && request.CashierId.Value != Guid.Empty)
             {
-                var shift = await _shiftsUnitOfWork.ShiftRepository.GetByIdAsync(request.ShiftId.Value, cancellationToken);
+                var activeShift = await _shiftsUnitOfWork.ShiftRepository.GetActiveShiftByCashierIdAsync(request.CashierId.Value, cancellationToken);
+                effectiveShiftId = activeShift?.Id;
+            }
+
+            if (effectiveShiftId.HasValue && effectiveShiftId.Value != Guid.Empty)
+            {
+                var shift = await _shiftsUnitOfWork.ShiftRepository.GetByIdAsync(effectiveShiftId.Value, cancellationToken);
                 if (shift != null)
                 {
                     shift.RecordDebtCollection(request.Amount, request.PaymentMethod);

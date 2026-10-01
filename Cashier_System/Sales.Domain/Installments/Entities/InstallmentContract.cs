@@ -108,17 +108,14 @@ namespace Sales.Domain.Installments.Entities
             if (customerId == Guid.Empty)
                 return Result<InstallmentContract>.Failure(new Error("InstallmentContract.CustomerIdRequired", "يجب تحديد عميل مسجل لعقد التقسيط."));
 
-            if (string.IsNullOrWhiteSpace(guarantorName))
-                return Result<InstallmentContract>.Failure(new Error("InstallmentContract.GuarantorNameRequired", "اسم الضامن مطلوب لإتمام عقد التقسيط."));
-
-            if (string.IsNullOrWhiteSpace(guarantorPhone))
-                return Result<InstallmentContract>.Failure(new Error("InstallmentContract.GuarantorPhoneRequired", "رقم هاتف الضامن مطلوب."));
+            guarantorName = string.IsNullOrWhiteSpace(guarantorName) ? "بدون ضامن" : guarantorName.Trim();
+            guarantorPhone = string.IsNullOrWhiteSpace(guarantorPhone) ? "-" : guarantorPhone.Trim();
 
             if (totalCashAmount <= 0)
                 return Result<InstallmentContract>.Failure(new Error("InstallmentContract.InvalidTotal", "إجمالي قيمة الأجهزة يجب أن تكون أكبر من صفر."));
 
             if (numberOfMonths <= 0)
-                return Result<InstallmentContract>.Failure(new Error("InstallmentContract.InvalidMonths", "عدد شهور التقسيط يجب أن يكون شهراً واحداً على الأقل."));
+                numberOfMonths = 12;
 
             var contract = new InstallmentContract(
                 Guid.NewGuid(),

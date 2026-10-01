@@ -34,9 +34,12 @@ namespace Sales.Application.Sales.Queries.GetSaleByInvoiceNumber
                     s.ShiftId, s.SubTotal, s.DiscountAmount, s.TaxAmount, s.TotalAmount,
                     s.PaidAmount, s.ChangeAmount, s.PaymentMethod,
                     CASE s.Status WHEN 1 THEN 'Completed' WHEN 2 THEN 'Cancelled' ELSE 'Completed' END AS Status,
-                    s.Notes
+                    s.Notes,
+                    s.IsReserved, s.TargetDeliveryDate, s.ReservationStatus,
+                    s.IsDelivery, s.RecipientName, s.RecipientPhone, s.DeliveryAddress, s.DeliveryFloor, s.DriverName, s.DeliveryStatus,
+                    s.IsInstallment, s.InstallmentContractId
                 FROM [Sales].[Sales] s
-                LEFT JOIN [Identity].[AspNetUsers] u ON s.CashierId = CAST(u.Id AS uniqueidentifier)
+                LEFT JOIN [Identity].[AspNetUsers] u ON (s.CashierId = TRY_CAST(u.Id AS uniqueidentifier) OR CAST(s.CashierId AS nvarchar(450)) = u.Id)
                 LEFT JOIN [Sales].[Customers] c ON s.CustomerId = c.Id
                 WHERE s.InvoiceNumber = @RawNumber 
                    OR s.InvoiceNumber = @InvNumber
@@ -118,7 +121,19 @@ namespace Sales.Application.Sales.Queries.GetSaleByInvoiceNumber
                 (string)saleData.PaymentMethod,
                 (string)saleData.Status,
                 (string?)saleData.Notes,
-                items.ToList());
+                items.ToList(),
+                (bool)(saleData.IsReserved ?? false),
+                (DateTime?)saleData.TargetDeliveryDate,
+                (int)(saleData.ReservationStatus ?? 0),
+                (bool)(saleData.IsDelivery ?? false),
+                (string?)saleData.RecipientName,
+                (string?)saleData.RecipientPhone,
+                (string?)saleData.DeliveryAddress,
+                (string?)saleData.DeliveryFloor,
+                (string?)saleData.DriverName,
+                (int)(saleData.DeliveryStatus ?? 0),
+                (bool)(saleData.IsInstallment ?? false),
+                saleData.InstallmentContractId == null ? (Guid?)null : (Guid)saleData.InstallmentContractId);
 
             return Result<SaleDetailResponse>.Success(response);
         }

@@ -16,13 +16,16 @@ namespace Sales.Application.Promotions.Commands.CreateOffer
 
         public async Task<Result<Guid>> Handle(CreateOfferCommand request, CancellationToken cancellationToken)
         {
+            var title = request.ResolvedTitle;
+            var type = request.ResolvedType;
+
             var offerResult = Offer.Create(
-                request.Title,
+                title,
                 request.Description,
-                request.Type,
-                request.DiscountPercentage,
-                request.FixedDiscountAmount,
-                request.BundlePrice,
+                type,
+                request.ResolvedDiscountPercentage,
+                request.ResolvedFixedDiscountAmount,
+                request.ResolvedBundlePrice,
                 request.StartDate,
                 request.EndDate,
                 request.TargetProductId,
@@ -34,7 +37,7 @@ namespace Sales.Application.Promotions.Commands.CreateOffer
 
             var offer = offerResult.Value!;
 
-            if (request.Type == OfferType.BundlePackage && request.Items != null && request.Items.Any())
+            if (type == OfferType.BundlePackage && request.Items != null && request.Items.Any())
             {
                 foreach (var itemReq in request.Items)
                 {

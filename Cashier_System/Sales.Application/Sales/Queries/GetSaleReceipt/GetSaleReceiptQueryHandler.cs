@@ -210,6 +210,16 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
                 installmentSummary = $"تقسيط: قسط شهري {((decimal)saleHeader.MonthlyInstallmentAmount):N2} {currency} لمدة {((int)saleHeader.NumberOfMonths)} شهر (مقدم: {((decimal)saleHeader.DownPayment):N2} {currency})";
             }
 
+            string rawPaymentMethod = (string?)saleHeader.PaymentMethod ?? "Cash";
+            string paymentMethod = rawPaymentMethod switch
+            {
+                "Installment" or "تقسيط" => "تقسيط",
+                "Credit" or "آجل" => "آجل",
+                "Cash" or "نقدي" or "كاش" => "نقدي",
+                "Visa" or "Card" or "بطاقة" or "فيزا" => "فيزا / بطاقة",
+                _ => rawPaymentMethod
+            };
+
             var receipt = new ReceiptResponse(
                 storeName,
                 address,
@@ -225,7 +235,7 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
                 saleHeader.TotalAmount,
                 saleHeader.PaidAmount,
                 saleHeader.ChangeAmount,
-                saleHeader.PaymentMethod,
+                paymentMethod,
                 currency,
                 invoiceFooterMessage,
                 logoUrl,

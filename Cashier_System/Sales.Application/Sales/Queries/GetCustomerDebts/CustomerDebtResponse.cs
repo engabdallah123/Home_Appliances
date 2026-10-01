@@ -1,15 +1,17 @@
-﻿namespace Sales.Application.Sales.Queries.GetCustomerDebts
+namespace Sales.Application.Sales.Queries.GetCustomerDebts
 {
-    public sealed record CustomerDebtResponse(
-        Guid SaleId,
-        string InvoiceNumber,
-        DateTime SaleDate,
-        Guid? CustomerId,
-        string? CustomerName,
-        string? CustomerPhone,
-        decimal TotalAmount,
-        decimal PaidAmount,
-        decimal RemainingAmount,
-        string PaymentMethod,
-        string Status);
+    public sealed class CustomerDebtResponse
+    {
+        public Guid SaleId { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public DateTime SaleDate { get; set; }
+        public Guid? CustomerId { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerPhone { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public string PaymentMethod { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+    }
 }

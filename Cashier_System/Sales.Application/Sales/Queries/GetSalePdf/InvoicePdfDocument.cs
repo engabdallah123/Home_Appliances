@@ -11,11 +11,16 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
         private static readonly CultureInfo ArabicCulture = new("ar-EG");
         private readonly ReceiptResponse _receipt;
         private readonly bool _isThermal;
+        private readonly byte[]? _faintWatermarkBytes;
 
         public InvoicePdfDocument(ReceiptResponse receipt, bool isThermal = false)
         {
             _receipt = receipt;
             _isThermal = isThermal;
+            if (_receipt.LogoBytes != null && _receipt.LogoBytes.Length > 0)
+            {
+                _faintWatermarkBytes = WatermarkHelper.MakeFaintWatermark(_receipt.LogoBytes, 0.15f);
+            }
         }
 
         public DocumentMetadata GetMetadata() => DocumentMetadata.Default;
@@ -66,10 +71,10 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                     // 3. Main Table & Watermark in a Bordered Container
                     column.Item().Border(1.8f).BorderColor(Colors.Black).Layers(layers =>
                     {
-                        // Watermark Layer
-                        if (_receipt.LogoBytes != null && _receipt.LogoBytes.Length > 0)
+                        // Watermark Layer (Ultra-faint, subtle background watermark)
+                        if (_faintWatermarkBytes != null && _faintWatermarkBytes.Length > 0)
                         {
-                            layers.Layer().AlignCenter().AlignMiddle().Width(220).Height(220).Image(_receipt.LogoBytes).FitArea();
+                            layers.Layer().AlignCenter().AlignMiddle().Width(240).Height(240).Image(_faintWatermarkBytes).FitArea();
                         }
 
                         // Table Content

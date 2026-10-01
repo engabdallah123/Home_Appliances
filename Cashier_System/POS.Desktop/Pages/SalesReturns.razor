@@ -342,8 +342,8 @@
                                                 <td style="padding: 0.65rem 0.75rem;">@s.SaleDate.ToString("dd/MM/yyyy HH:mm")</td>
                                                 <td style="padding: 0.65rem 0.75rem; font-weight: 600;">@(string.IsNullOrWhiteSpace(s.CustomerName) ? "عميل نقدي" : s.CustomerName)</td>
                                                 <td style="padding: 0.65rem 0.75rem;">
-                                                    <span class="badge @(s.PaymentMethod == "Cash" ? "badge-green" : s.PaymentMethod == "Credit" ? "badge-red" : "badge-indigo")">
-                                                        @(s.PaymentMethod == "Cash" ? "كاش" : s.PaymentMethod == "Credit" ? "آجل" : s.PaymentMethod)
+                                                    <span class="badge @(s.PaymentMethod == "Cash" ? "badge-green" : s.PaymentMethod == "Credit" ? "badge-red" : (s.PaymentMethod == "Installment" || s.PaymentMethod == "تقسيط" || s.IsInstallment) ? "badge-indigo" : "badge-secondary")">
+                                                        @(s.PaymentMethod == "Cash" ? "كاش" : s.PaymentMethod == "Credit" ? "آجل" : (s.PaymentMethod == "Installment" || s.PaymentMethod == "تقسيط" || s.IsInstallment) ? "تقسيط" : s.PaymentMethod)
                                                     </span>
                                                 </td>
                                                 <td style="font-weight: 800; color: var(--accent-emerald); font-size: 0.95rem; padding: 0.65rem 0.75rem;">@s.TotalAmount.ToString("N2") ج.م</td>
@@ -931,7 +931,7 @@
         public string? ItemReason { get; set; }
 
         public string BaseUnit { get; set; } = "قطعة";
-        public string ParentUnit { get; set; } = "كرتونة";
+        public string ParentUnit { get; set; } = "قطعة";
         public int ConversionFactor { get; set; } = 1;
         public bool HasCartons => ConversionFactor > 1;
 
@@ -1219,7 +1219,7 @@
                     RemainingQuantity = remaining,
                     ReturnQuantity = 0,
                     BaseUnit = !string.IsNullOrWhiteSpace(i.BaseUnit) ? i.BaseUnit : "قطعة",
-                    ParentUnit = !string.IsNullOrWhiteSpace(i.ParentUnit) ? i.ParentUnit : "كرتونة",
+                    ParentUnit = !string.IsNullOrWhiteSpace(i.ParentUnit) ? i.ParentUnit : "قطعة",
                     ConversionFactor = factor,
                     ItemReason = null
                 };

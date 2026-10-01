@@ -710,10 +710,10 @@
         public decimal ReturnQuantity { get; set; }
 
         public string BaseUnit { get; set; } = "قطعة";
-        public string ParentUnit { get; set; } = "كرتونة";
+        public string ParentUnit { get; set; } = "قطعة";
         public int ConversionFactor { get; set; } = 1;
         public bool HasCartons => ConversionFactor > 1;
-        public string UnitLabel => HasCartons ? ParentUnit : BaseUnit;
+        public string UnitLabel => BaseUnit;
 
         public void SetFullReturn()
         {
@@ -842,7 +842,7 @@
                     RemainingQuantity = remaining,
                     ReturnQuantity = 0,
                     BaseUnit = !string.IsNullOrWhiteSpace(i.BaseUnit) ? i.BaseUnit : "قطعة",
-                    ParentUnit = !string.IsNullOrWhiteSpace(i.ParentUnit) ? i.ParentUnit : "كرتونة",
+                    ParentUnit = !string.IsNullOrWhiteSpace(i.ParentUnit) ? i.ParentUnit : "قطعة",
                     ConversionFactor = factor
                 };
             }).ToList();
@@ -888,7 +888,7 @@
                         RemainingQuantity = remaining,
                         ReturnQuantity = 0,
                         BaseUnit = !string.IsNullOrWhiteSpace(i.BaseUnit) ? i.BaseUnit : "قطعة",
-                        ParentUnit = !string.IsNullOrWhiteSpace(i.ParentUnit) ? i.ParentUnit : "كرتونة",
+                        ParentUnit = !string.IsNullOrWhiteSpace(i.ParentUnit) ? i.ParentUnit : "قطعة",
                         ConversionFactor = factor
                     };
                 }).ToList();

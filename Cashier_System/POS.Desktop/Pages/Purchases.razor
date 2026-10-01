@@ -509,10 +509,10 @@
                     </div>
                 </div>
 
-                <!-- Product Selection & Multi-Unit Row -->
+                <!-- Product Selection & Line Item Row -->
                 <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1rem;">
-                    <!-- Row 1: Product Selection & Unit Type -->
-                    <div style="display: grid; grid-template-columns: @(selectedUnitType == "carton" ? "2fr 1fr 1fr" : "2fr 1fr"); gap: 0.75rem; margin-bottom: 0.75rem; align-items: flex-end;">
+                    <!-- Line Item Fields: Product, Quantity, Piece Cost -->
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem; align-items: flex-end;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">اسم الصنف / المنتج</label>
                             <select class="form-select" value="@selectedProductIdString" @onchange="OnProductSelected">
@@ -526,47 +526,14 @@
                             </select>
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">نوع الوحدة للتوريد</label>
-                            <select class="form-select" value="@selectedUnitType" @onchange="OnUnitTypeChanged">
-                                <option value="piece">@(SelectedProduct?.BaseUnit ?? "قطعة") (الوحدة الصغرى)</option>
-                                <option value="carton">@(SelectedProduct?.ParentUnit ?? "كرتونة") (@addItemCartonFactor @(SelectedProduct?.BaseUnit ?? "قطعة"))</option>
-                            </select>
-                        </div>
-                        @if (selectedUnitType == "carton")
-                        {
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label style="font-size: 0.8rem; color: #60a5fa; margin-bottom: 0.25rem; font-weight: 600;">قطع الكرتونة</label>
-                                <input type="number" class="form-control" style="border-color: #3b82f6; background: rgba(59,130,246,0.07);" @bind="addItemCartonFactor" @bind:after="OnCartonFactorChanged" min="1" title="عدد القطع في الكرتونة الواحدة" />
-                            </div>
-                        }
-                    </div>
-
-                    <!-- Row 2: Quantity, Unit Purchase Cost -->
-                    <div style="display: grid; grid-template-columns: 1fr 1.3fr; gap: 0.75rem; margin-bottom: 0.5rem; align-items: flex-end;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">@(selectedUnitType == "carton" ? "عدد الكراتين" : "الكمية (بالقطعة)")</label>
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">الكمية (بالقطعة)</label>
                             <input type="number" class="form-control" @bind="addItemQty" placeholder="الكمية" min="1" />
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">سعر الشراء / @(selectedUnitType == "carton" ? (SelectedProduct?.ParentUnit ?? "الكرتونة") : (SelectedProduct?.BaseUnit ?? "القطعة"))</label>
-                            <input type="number" step="0.01" class="form-control" @bind="addItemCost" @bind:after="OnAddItemCostChanged" placeholder="سعر الشراء" min="0" title="سعر شراء @(selectedUnitType == "carton" ? (SelectedProduct?.ParentUnit ?? "الكرتونة") : (SelectedProduct?.BaseUnit ?? "القطعة"))" />
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">سعر شراء القطعة (ج.م)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="addItemCost" @bind:after="OnAddItemCostChanged" placeholder="سعر الشراء" min="0" title="سعر شراء القطعة" />
                         </div>
                     </div>
-
-                    @if (selectedUnitType == "carton")
-                    {
-                        var unitFactor = addItemCartonFactor > 0 ? addItemCartonFactor : 1;
-                        <div style="margin-top: 0.6rem; padding: 0.55rem 0.85rem; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 0.4rem; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <div style="color: var(--accent-amber); display: flex; align-items: center; gap: 0.5rem;">
-                                <i class="fa-solid fa-calculator"></i>
-                                <span>توريد بالكرتونة: <strong>@addItemQty @(SelectedProduct?.ParentUnit ?? "كرتونة")</strong> (@unitFactor قطعة/كرتونة) = <strong style="color: #60a5fa;">@(addItemQty * unitFactor) @(SelectedProduct?.BaseUnit ?? "قطعة") في المخزون</strong></span>
-                            </div>
-                            <div>
-                                <span style="color: var(--text-secondary);">تكلفة القطعة المحسوبة: </span>
-                                <strong style="color: var(--accent-emerald); font-size: 0.95rem;">@(addItemCost > 0 ? (addItemCost / (decimal)unitFactor).ToString("N2") : "0.00") ج.م</strong>
-                            </div>
-                        </div>
-                    }
 
                     <!-- Add Line Item Button Row -->
                     <button class="btn btn-primary" type="button" @onclick="AddPurchaseLineItem" style="width: 100%; height: 42px; font-weight: 700; margin-top: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.95rem; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);">
@@ -617,10 +584,6 @@
                                 @foreach (var item in DisplayedPurchaseItems)
                                 {
                                     var prod = availableProducts.FirstOrDefault(p => p.Id == item.ProductId);
-                                    var factor = (prod != null && prod.ConversionFactor > 1) ? prod.ConversionFactor : 1;
-                                    bool isCarton = !string.IsNullOrWhiteSpace(item.Unit) &&
-                                                    (string.Equals(item.Unit.Trim(), "كرتونة", StringComparison.OrdinalIgnoreCase) ||
-                                                     (!string.IsNullOrWhiteSpace(prod?.ParentUnit) && string.Equals(item.Unit.Trim(), prod.ParentUnit.Trim(), StringComparison.OrdinalIgnoreCase)));
                                     <tr>
                                         <td>
                                             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -628,41 +591,18 @@
                                             </div>
                                         </td>
                                         <td>
-                                            @if (isCarton && factor > 1)
-                                            {
-                                                <div>
-                                                    <strong style="color: var(--accent-blue);">@item.Quantity.ToString("G29") @(prod?.ParentUnit ?? "كرتونة")</strong>
-                                                    <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">(@((item.Quantity * factor).ToString("N0")) @(prod?.BaseUnit ?? "قطعة"))</span>
-                                                </div>
-                                            }
-                                            else
-                                            {
-                                                <div>
-                                                    <strong>@item.Quantity.ToString("G29") @(prod?.BaseUnit ?? "قطعة")</strong>
-                                                </div>
-                                            }
+                                            <div>
+                                                <strong>@item.Quantity.ToString("G29") @(prod?.BaseUnit ?? "قطعة")</strong>
+                                            </div>
                                         </td>
                                         <td>
-                                            @if (isCarton && factor > 1)
-                                            {
-                                                <div>
-                                                    <strong style="color: var(--accent-amber);">@item.UnitCost.ToString("N2") ج.م</strong> / @(prod?.ParentUnit ?? "كرتونة")
-                                                </div>
-                                                <div style="font-size: 0.74rem; color: var(--accent-emerald);">
-                                                    (@((item.UnitCost / factor).ToString("N2")) ج.م لـ @(prod?.BaseUnit ?? "القطعة"))
-                                                </div>
-                                            }
-                                            else
-                                            {
-                                                <div>@item.UnitCost.ToString("N2") ج.م / @(prod?.BaseUnit ?? "قطعة")</div>
-                                            }
+                                            <div>@item.UnitCost.ToString("N2") ج.م / @(prod?.BaseUnit ?? "قطعة")</div>
                                         </td>
                                         <td style="color: var(--accent-emerald); font-weight: 700; font-size: 0.95rem;">@((item.Quantity * item.UnitCost).ToString("N2")) ج.م</td>
                                         <td style="white-space: nowrap; text-align: center;">
                                             @if (prod != null)
                                             {
-                                                var pieceCost = isCarton && factor > 1 ? (item.UnitCost / factor) : item.UnitCost;
-                                                <button type="button" class="btn btn-sm btn-secondary me-1" style="padding: 0.2rem 0.45rem; font-size: 0.72rem; color: var(--accent-emerald); border-color: rgba(16, 185, 129, 0.3);" title="تطبيق أسعار البيع مباشرة على هذا المنتج في الكتالوج" @onclick="() => OpenApplyPricesModal(prod, pieceCost)">
+                                                <button type="button" class="btn btn-sm btn-secondary me-1" style="padding: 0.2rem 0.45rem; font-size: 0.72rem; color: var(--accent-emerald); border-color: rgba(16, 185, 129, 0.3);" title="تطبيق أسعار البيع مباشرة على هذا المنتج في الكتالوج" @onclick="() => OpenApplyPricesModal(prod, item.UnitCost)">
                                                     <i class="fa-solid fa-wand-magic-sparkles me-1"></i> تطبيق الأسعار
                                                 </button>
                                             }
@@ -891,12 +831,6 @@
                                         <td style="padding: 0.5rem 0.75rem;"><code>@(string.IsNullOrWhiteSpace(item.Barcode) ? "-" : item.Barcode)</code></td>
                                         <td style="text-align: center; font-weight: 700; color: var(--accent-blue); padding: 0.5rem 0.75rem;">
                                             <span>@item.Quantity.ToString("G29") @(pInfo?.BaseUnit ?? "قطعة")</span>
-                                            @if (pInfo != null && pInfo.ConversionFactor > 1 && item.Quantity >= pInfo.ConversionFactor)
-                                            {
-                                                <div style="font-size: 0.72rem; color: var(--text-secondary); font-weight: normal;">
-                                                    (@PackagingUnitHelper.FormatTwoTierStockBreakdown(item.Quantity, pInfo.ConversionFactor, pInfo.BaseUnit, pInfo.ParentUnit))
-                                                </div>
-                                            }
                                         </td>
                                         <td style="text-align: left; padding: 0.5rem 0.75rem;">
                                             @item.UnitCost.ToString("N2") ج.م
@@ -999,8 +933,8 @@
                         </div>
                     </div>
 
-                    <!-- Row 1: Product Selection & Unit Type -->
-                    <div style="display: grid; grid-template-columns: @(editSelectedUnitType == "carton" ? "2fr 1fr 1fr" : "2fr 1fr"); gap: 0.75rem; margin-bottom: 0.75rem; align-items: flex-end;">
+                    <!-- Line Item Fields: Product, Quantity, Piece Cost -->
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem; align-items: flex-end;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">اسم الصنف / المنتج</label>
                             <select class="form-select" value="@editSelectedProductIdString" @onchange="OnEditProductSelected">
@@ -1014,47 +948,14 @@
                             </select>
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">نوع الوحدة للتوريد</label>
-                            <select class="form-select" value="@editSelectedUnitType" @onchange="OnEditUnitTypeChanged">
-                                <option value="piece">@(EditSelectedProduct?.BaseUnit ?? "قطعة") (الوحدة الصغرى)</option>
-                                <option value="carton">@(EditSelectedProduct?.ParentUnit ?? "كرتونة") (@editAddItemCartonFactor @(EditSelectedProduct?.BaseUnit ?? "قطعة"))</option>
-                            </select>
-                        </div>
-                        @if (editSelectedUnitType == "carton")
-                        {
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label style="font-size: 0.8rem; color: #60a5fa; margin-bottom: 0.25rem; font-weight: 600;">قطع الكرتونة</label>
-                                <input type="number" class="form-control" style="border-color: #3b82f6; background: rgba(59,130,246,0.07);" @bind="editAddItemCartonFactor" @bind:after="OnEditCartonFactorChanged" min="1" title="عدد القطع في الكرتونة الواحدة" />
-                            </div>
-                        }
-                    </div>
-
-                    <!-- Row 2: Quantity, Unit Purchase Cost -->
-                    <div style="display: grid; grid-template-columns: 1fr 1.3fr; gap: 0.75rem; margin-bottom: 0.5rem; align-items: flex-end;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">@(editSelectedUnitType == "carton" ? "عدد الكراتين" : "الكمية (بالقطعة)")</label>
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">الكمية (بالقطعة)</label>
                             <input type="number" step="1" class="form-control" @bind="editAddItemQty" placeholder="الكمية" min="1" />
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">سعر الشراء / @(editSelectedUnitType == "carton" ? (EditSelectedProduct?.ParentUnit ?? "الكرتونة") : (EditSelectedProduct?.BaseUnit ?? "القطعة"))</label>
-                            <input type="number" step="0.01" class="form-control" @bind="editAddItemCost" @bind:after="OnEditAddItemCostChanged" placeholder="سعر الشراء" min="0" title="سعر شراء @(editSelectedUnitType == "carton" ? (EditSelectedProduct?.ParentUnit ?? "الكرتونة") : (EditSelectedProduct?.BaseUnit ?? "القطعة"))" />
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">سعر شراء القطعة (ج.م)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editAddItemCost" @bind:after="OnEditAddItemCostChanged" placeholder="سعر الشراء" min="0" title="سعر شراء القطعة" />
                         </div>
                     </div>
-
-                    @if (editSelectedUnitType == "carton")
-                    {
-                        var editUnitFactor = editAddItemCartonFactor > 0 ? editAddItemCartonFactor : 1;
-                        <div style="margin-top: 0.6rem; padding: 0.55rem 0.85rem; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 0.4rem; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; flex-wrap: gap; gap: 0.5rem;">
-                            <div style="color: var(--accent-amber); display: flex; align-items: center; gap: 0.5rem;">
-                                <i class="fa-solid fa-calculator"></i>
-                                <span>توريد بالكرتونة: <strong>@editAddItemQty @(EditSelectedProduct?.ParentUnit ?? "كرتونة")</strong> (@editUnitFactor قطعة/كرتونة) = <strong style="color: #60a5fa;">@(editAddItemQty * editUnitFactor) @(EditSelectedProduct?.BaseUnit ?? "قطعة") في المخزون</strong></span>
-                            </div>
-                            <div>
-                                <span style="color: var(--text-secondary);">تكلفة القطعة المحسوبة: </span>
-                                <strong style="color: var(--accent-emerald); font-size: 0.95rem;">@(editAddItemCost > 0 ? (editAddItemCost / (decimal)editUnitFactor).ToString("N2") : "0.00") ج.م</strong>
-                            </div>
-                        </div>
-                    }
 
                     <!-- Add Line Item Button Row -->
                     <button class="btn btn-primary" type="button" @onclick="AddEditPurchaseLineItem" style="width: 100%; height: 42px; font-weight: 700; margin-top: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.95rem; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);">
@@ -1106,10 +1007,6 @@
                                 @foreach (var item in DisplayedEditPurchaseItems)
                                 {
                                     var prod = availableProducts.FirstOrDefault(p => p.Id == item.ProductId);
-                                    var factor = (prod != null && prod.ConversionFactor > 1) ? prod.ConversionFactor : 1;
-                                    bool isCarton = !string.IsNullOrWhiteSpace(item.Unit) &&
-                                                    (string.Equals(item.Unit.Trim(), "كرتونة", StringComparison.OrdinalIgnoreCase) ||
-                                                     (!string.IsNullOrWhiteSpace(prod?.ParentUnit) && string.Equals(item.Unit.Trim(), prod.ParentUnit.Trim(), StringComparison.OrdinalIgnoreCase)));
                                     <tr>
                                         <td style="font-weight: 600;">
                                             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -1118,40 +1015,21 @@
                                         </td>
                                         <td style="text-align: center;">
                                             <input type="number" step="1" min="1" class="form-control" style="width: 75px; padding: 0.2rem 0.4rem; text-align: center; margin: auto;" value="@item.Quantity" @onchange="@(e => UpdateEditItemQty(item, e.Value))" />
-                                            @if (isCarton && factor > 1)
-                                            {
-                                                <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem;">
-                                                    @(prod?.ParentUnit ?? "كرتونة") (@((item.Quantity * factor).ToString("N0")) @(prod?.BaseUnit ?? "قطعة"))
-                                                </div>
-                                            }
-                                            else
-                                            {
-                                                <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem;">
-                                                    @(prod?.BaseUnit ?? "قطعة")
-                                                </div>
-                                            }
+                                            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                                                @(prod?.BaseUnit ?? "قطعة")
+                                            </div>
                                         </td>
                                         <td style="text-align: left;">
                                             <input type="number" step="0.01" min="0" class="form-control" style="width: 85px; padding: 0.2rem 0.4rem; text-align: left;" value="@item.UnitCost" @onchange="@(e => UpdateEditItemCost(item, e.Value))" />
-                                            @if (isCarton && factor > 1)
-                                            {
-                                                <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;">
-                                                    (@((item.UnitCost / factor).ToString("N2")) ج.م للقطعة)
-                                                </div>
-                                            }
-                                            else
-                                            {
-                                                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.2rem;">
-                                                    (للقطعة)
-                                                </div>
-                                            }
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                                                (ج.م / قطعة)
+                                            </div>
                                         </td>
                                         <td style="text-align: left; font-weight: 700; color: var(--accent-amber);">@((item.Quantity * item.UnitCost).ToString("N2")) ج.م</td>
                                         <td style="text-align: center; white-space: nowrap;">
                                             @if (prod != null)
                                             {
-                                                var pieceCost = isCarton && factor > 1 ? (item.UnitCost / factor) : item.UnitCost;
-                                                <button type="button" class="btn btn-sm btn-secondary me-1" style="padding: 0.15rem 0.35rem; font-size: 0.7rem; color: var(--accent-emerald); border-color: rgba(16, 185, 129, 0.3);" title="تطبيق أسعار البيع مباشرة على هذا المنتج في الكتالوج" @onclick="() => OpenApplyPricesModal(prod, pieceCost)">
+                                                <button type="button" class="btn btn-sm btn-secondary me-1" style="padding: 0.15rem 0.35rem; font-size: 0.7rem; color: var(--accent-emerald); border-color: rgba(16, 185, 129, 0.3);" title="تطبيق أسعار البيع مباشرة على هذا المنتج في الكتالوج" @onclick="() => OpenApplyPricesModal(prod, item.UnitCost)">
                                                     <i class="fa-solid fa-wand-magic-sparkles"></i>
                                                 </button>
                                             }
@@ -1297,7 +1175,7 @@
                 <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.75rem 1rem; margin-bottom: 1rem;">
                     <div style="font-weight: 700; font-size: 1rem; color: var(--text-primary);">@applyPricesProduct.NameAr</div>
                     <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                        الوحدة الأساسية: @(applyPricesProduct.BaseUnit ?? "قطعة") | معامل الكرتونة: @applyPricesProduct.ConversionFactor
+                        الوحدة: @(applyPricesProduct.BaseUnit ?? "قطعة")
                     </div>
                 </div>
 
@@ -1322,20 +1200,6 @@
                         <input type="number" step="0.01" class="form-control" @bind="applyWholesalePrice" />
                     </div>
                 </div>
-
-                @if (applyPricesProduct.ConversionFactor > 1)
-                {
-                    <div style="background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 0.5rem; padding: 0.6rem 0.85rem; font-size: 0.8rem;">
-                        <div style="font-weight: 700; color: var(--accent-emerald); margin-bottom: 0.25rem;">
-                            معاينة أسعار الكرتونة المقابلة (@applyPricesProduct.ConversionFactor قطعة):
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>تكلفة الكرتونة: <strong>@((applyPurchasePrice * applyPricesProduct.ConversionFactor).ToString("N2")) ج.م</strong></span>
-                            <span>قطاعي: <strong>@((applySellingPrice * applyPricesProduct.ConversionFactor).ToString("N2")) ج.م</strong></span>
-                            <span>جملة: <strong>@((applyWholesalePrice * applyPricesProduct.ConversionFactor).ToString("N2")) ج.م</strong></span>
-                        </div>
-                    </div>
-                }
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" @onclick="CloseApplyPricesModal" disabled="@isApplyingPrices">إلغاء</button>
@@ -1466,96 +1330,19 @@
     private decimal baseProductPieceCost = 0;
     private decimal editBaseProductPieceCost = 0;
 
-    private int ResolveProductCartonFactor(ProductDto? prod)
-    {
-        if (prod == null) return 12;
-        if (prod.ConversionFactor > 1) return prod.ConversionFactor;
-        var pkg = PackagingUnitHelper.Parse(prod.Description);
-        if (pkg.TotalPiecesPerCarton > 1) return pkg.TotalPiecesPerCarton;
-        return 12;
-    }
-
-    private void OnUnitTypeChanged(ChangeEventArgs e)
-    {
-        selectedUnitType = e.Value?.ToString() ?? "piece";
-        UpdateAddItemCostByUnit();
-    }
-
-    private void UpdateAddItemCostByUnit()
-    {
-        if (baseProductPieceCost <= 0) return;
-
-        decimal factor = (selectedUnitType == "carton")
-            ? Math.Max(1, addItemCartonFactor)
-            : 1m;
-
-        addItemCost = Math.Round(baseProductPieceCost * factor, 2);
-    }
-
-    private void OnCartonFactorChanged()
-    {
-        if (addItemCartonFactor < 1) addItemCartonFactor = 1;
-        if (baseProductPieceCost > 0)
-        {
-            addItemCost = Math.Round(baseProductPieceCost * addItemCartonFactor, 2);
-        }
-        else if (addItemCost > 0)
-        {
-            baseProductPieceCost = addItemCost / addItemCartonFactor;
-        }
-    }
-
-    private void OnEditUnitTypeChanged(ChangeEventArgs e)
-    {
-        editSelectedUnitType = e.Value?.ToString() ?? "piece";
-        UpdateEditAddItemCostByUnit();
-    }
-
-    private void UpdateEditAddItemCostByUnit()
-    {
-        if (editBaseProductPieceCost <= 0) return;
-
-        decimal factor = (editSelectedUnitType == "carton")
-            ? Math.Max(1, editAddItemCartonFactor)
-            : 1m;
-
-        editAddItemCost = Math.Round(editBaseProductPieceCost * factor, 2);
-    }
-
-    private void OnEditCartonFactorChanged()
-    {
-        if (editAddItemCartonFactor < 1) editAddItemCartonFactor = 1;
-        if (editBaseProductPieceCost > 0)
-        {
-            editAddItemCost = Math.Round(editBaseProductPieceCost * editAddItemCartonFactor, 2);
-        }
-        else if (editAddItemCost > 0)
-        {
-            editBaseProductPieceCost = editAddItemCost / editAddItemCartonFactor;
-        }
-    }
-
     private void OnAddItemCostChanged()
     {
-        decimal factor = (selectedUnitType == "carton")
-            ? Math.Max(1, addItemCartonFactor)
-            : 1m;
-
-        if (factor > 0 && addItemCost > 0)
+        if (addItemCost > 0)
         {
-            baseProductPieceCost = addItemCost / factor;
+            baseProductPieceCost = addItemCost;
         }
     }
 
     private void OnEditAddItemCostChanged()
     {
-        decimal factor = (editSelectedUnitType == "carton")
-            ? Math.Max(1, editAddItemCartonFactor)
-            : 1m;
-
-        if (factor > 0 && editAddItemCost > 0)
+        if (editAddItemCost > 0)
         {
-            editBaseProductPieceCost = editAddItemCost / factor;
+            editBaseProductPieceCost = editAddItemCost;
         }
     }
 
@@ -1595,11 +1382,8 @@
     private string selectedProductIdString = string.Empty;
     private string scannedPurchaseBarcode = string.Empty;
     private string searchProductByName = string.Empty;
-    private string selectedUnitType = "piece";
-    private int addItemCartonFactor = 12;
     private decimal addItemQty = 1;
     private decimal addItemCost = 0;
-    private PackagingConfig currentProductPackaging = new(1, 1);
     private decimal purchasePaidAmount = 0;
     private bool isFullPayment = true;
     private List<CreatePurchaseItemRequest> purchaseItems = new();
@@ -1675,11 +1459,8 @@
         selectedProductIdString = string.Empty;
         scannedPurchaseBarcode = string.Empty;
         searchProductByName = string.Empty;
-        selectedUnitType = "piece";
-        addItemCartonFactor = 12;
         addItemQty = 1;
         addItemCost = 0;
-        currentProductPackaging = new(1, 1);
 
         errorMessage = string.Empty;
         showAddPurchaseModal = true;
@@ -1938,11 +1719,8 @@
         selectedProductIdString = string.Empty;
         scannedPurchaseBarcode = string.Empty;
         searchProductByName = string.Empty;
-        selectedUnitType = "piece";
-        addItemCartonFactor = 12;
         addItemQty = 1;
         addItemCost = 0;
-        currentProductPackaging = new(1, 1);
         purchaseItems.Clear();
         isFullPayment = true;
         purchasePaidAmount = 0;
@@ -2038,11 +1816,8 @@
     private string editSelectedProductIdString = string.Empty;
     private string editScannedBarcode = string.Empty;
     private string editSearchProductByName = string.Empty;
-    private string editSelectedUnitType = "piece";
-    private int editAddItemCartonFactor = 12;
     private decimal editAddItemQty = 1;
     private decimal editAddItemCost = 0;
-    private PackagingConfig editCurrentProductPackaging = new(1, 1);
 
     private async Task OpenEditPurchaseModal(PurchaseDto pur)
     {
@@ -2057,11 +1832,8 @@
         editSelectedProductIdString = string.Empty;
         editScannedBarcode = string.Empty;
         editSearchProductByName = string.Empty;
-        editSelectedUnitType = "piece";
-        editAddItemCartonFactor = 12;
         editAddItemQty = 1;
         editAddItemCost = 0;
-        editCurrentProductPackaging = new(1, 1);
 
         var details = await ApiClient.GetPurchaseDetailsAsync(pur.Id);
         if (details != null && details.Items != null)
@@ -2091,9 +1863,6 @@
             var prod = availableProducts.FirstOrDefault(p => p.Id == pId);
             if (prod != null)
             {
-                editCurrentProductPackaging = PackagingUnitHelper.Parse(prod.Description);
-                editAddItemCartonFactor = ResolveProductCartonFactor(prod);
-                editSelectedUnitType = "piece";
                 editBaseProductPieceCost = prod.PurchasePrice > 0 ? prod.PurchasePrice : prod.SellingPrice;
                 editAddItemCost = editBaseProductPieceCost;
                 editAddItemQty = 1;
@@ -2101,9 +1870,6 @@
         }
         else
         {
-            editSelectedUnitType = "piece";
-            editCurrentProductPackaging = new(1, 1);
-            editAddItemCartonFactor = 12;
             editBaseProductPieceCost = 0;
             editAddItemCost = 0;
             editAddItemQty = 1;
@@ -2126,9 +1892,6 @@
             if (prod is not null)
             {
                 editSelectedProductIdString = prod.Id.ToString();
-                editCurrentProductPackaging = PackagingUnitHelper.Parse(prod.Description);
-                editAddItemCartonFactor = ResolveProductCartonFactor(prod);
-                editSelectedUnitType = "piece";
                 editBaseProductPieceCost = prod.PurchasePrice > 0 ? prod.PurchasePrice : prod.SellingPrice;
                 editAddItemCost = editBaseProductPieceCost;
                 editAddItemQty = 1;
@@ -2156,7 +1919,7 @@
         }
 
         var prod = availableProducts.FirstOrDefault(p => p.Id == pId);
-        string unitName = editSelectedUnitType == "carton" ? (prod?.ParentUnit ?? "كرتونة") : (prod?.BaseUnit ?? "قطعة");
+        string unitName = prod?.BaseUnit ?? "قطعة";
 
         editPurchaseItems.Add(new CreatePurchaseItemRequest(
             pId,
@@ -2169,7 +1932,6 @@
         editAddItemQty = 1;
         editAddItemCost = 0;
         editBaseProductPieceCost = 0;
-        editSelectedUnitType = "piece";
         editSelectedProductIdString = string.Empty;
         errorMessage = string.Empty;
     }
@@ -2335,9 +2097,6 @@
             var prod = availableProducts.FirstOrDefault(p => p.Id == pId);
             if (prod != null)
             {
-                currentProductPackaging = PackagingUnitHelper.Parse(prod.Description);
-                addItemCartonFactor = ResolveProductCartonFactor(prod);
-                selectedUnitType = "piece";
                 baseProductPieceCost = prod.PurchasePrice > 0 ? prod.PurchasePrice : prod.SellingPrice;
                 addItemCost = baseProductPieceCost;
                 addItemQty = 1;
@@ -2345,9 +2104,6 @@
         }
         else
         {
-            selectedUnitType = "piece";
-            currentProductPackaging = new(1, 1);
-            addItemCartonFactor = 12;
             baseProductPieceCost = 0;
             addItemCost = 0;
             addItemQty = 1;
@@ -2370,9 +2126,6 @@
             if (prod is not null)
             {
                 selectedProductIdString = prod.Id.ToString();
-                currentProductPackaging = PackagingUnitHelper.Parse(prod.Description);
-                addItemCartonFactor = ResolveProductCartonFactor(prod);
-                selectedUnitType = "piece";
                 baseProductPieceCost = prod.PurchasePrice > 0 ? prod.PurchasePrice : prod.SellingPrice;
                 addItemCost = baseProductPieceCost;
                 addItemQty = 1;
@@ -2394,9 +2147,6 @@
             if (matched != null)
             {
                 selectedProductIdString = matched.Id.ToString();
-                currentProductPackaging = PackagingUnitHelper.Parse(matched.Description);
-                addItemCartonFactor = ResolveProductCartonFactor(matched);
-                selectedUnitType = "piece";
                 baseProductPieceCost = matched.PurchasePrice > 0 ? matched.PurchasePrice : matched.SellingPrice;
                 addItemCost = baseProductPieceCost;
                 addItemQty = 1;
@@ -2413,9 +2163,6 @@
             if (matched != null)
             {
                 editSelectedProductIdString = matched.Id.ToString();
-                editCurrentProductPackaging = PackagingUnitHelper.Parse(matched.Description);
-                editAddItemCartonFactor = ResolveProductCartonFactor(matched);
-                editSelectedUnitType = "piece";
                 editBaseProductPieceCost = matched.PurchasePrice > 0 ? matched.PurchasePrice : matched.SellingPrice;
                 editAddItemCost = editBaseProductPieceCost;
                 editAddItemQty = 1;
@@ -2439,7 +2186,7 @@
         }
 
         var prod = availableProducts.FirstOrDefault(p => p.Id == pId);
-        string unitName = selectedUnitType == "carton" ? (prod?.ParentUnit ?? "كرتونة") : (prod?.BaseUnit ?? "قطعة");
+        string unitName = prod?.BaseUnit ?? "قطعة";
 
         purchaseItems.Add(new CreatePurchaseItemRequest(
             pId,
@@ -2458,7 +2205,6 @@
         addItemQty = 1;
         addItemCost = 0;
         baseProductPieceCost = 0;
-        selectedUnitType = "piece";
         selectedProductIdString = string.Empty;
         errorMessage = string.Empty;
         _ = FocusPurchaseBarcodeAsync();

@@ -77,8 +77,8 @@ namespace Sales.Application.Installments.Queries.GetInstallmentContractById
 
             var schedules = (await connection.QueryAsync<InstallmentScheduleDto>(schedulesSql, new { ContractId = request.Id })).ToList();
 
-            var result = contract with { Schedules = schedules };
-            return Result<InstallmentContractDto>.Success(result);
+            contract.Schedules = schedules;
+            return Result<InstallmentContractDto>.Success(contract);
         }
     }
 }
