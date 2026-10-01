@@ -7,6 +7,11 @@
 @inject PosApiClient ApiClient
 @inject CustomAuthStateProvider AuthState
 @inject IJSRuntime JS
+<style>
+    .search-result-item:hover {
+        background: rgba(236, 72, 153, 0.15) !important;
+    }
+</style>
 
 <div>
     <div class="page-header">
@@ -218,16 +223,69 @@
                             <i class="fa-solid fa-cubes-stacked me-1"></i> محتويات البكج (الأجهزة المشمولة في العرض):
                         </h5>
 
-                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
-                            <select class="form-select" @bind="selectedBundleProductIdString" style="flex: 2;">
-                                <option value="">-- اختر جهاز لإضافته للبكج --</option>
-                                @foreach (var p in availableProducts)
-                                {
-                                    <option value="@p.Id.ToString()">@p.NameAr (@p.SellingPrice.ToString("N0") ج.م)</option>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; align-items: flex-start;">
+                            <div style="flex: 2; position: relative;">
+                                @{
+                                    var currentBundleProd = availableProducts.FirstOrDefault(p => p.Id.ToString() == selectedBundleProductIdString);
                                 }
-                            </select>
-                            <input type="number" class="form-control" @bind="selectedBundleQty" min="1" placeholder="الكمية" style="width: 80px;" />
-                            <button class="btn btn-secondary" type="button" @onclick="AddProductToBundle" style="white-space: nowrap;">
+                                @if (currentBundleProd != null)
+                                {
+                                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(236, 72, 153, 0.12); border: 1.5px solid #ec4899; padding: 0.35rem 0.65rem; border-radius: 0.4rem; height: 38px;">
+                                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; font-weight: 700; color: var(--text-primary);">
+                                            <i class="fa-solid fa-box me-1" style="color: #ec4899;"></i>
+                                            @currentBundleProd.NameAr
+                                            <span style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.4rem;">(@currentBundleProd.SellingPrice.ToString("N0") ج.م)</span>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.1rem 0.4rem; font-size: 0.75rem;" @onclick="ClearSelectedBundleProduct" title="إلغاء">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <input class="form-control"
+                                           placeholder="ابحث باسم الجهاز لإضافته للبكج..."
+                                           @bind="searchBundleProduct"
+                                           @bind:event="oninput"
+                                           style="height: 38px; font-size: 0.85rem;" />
+                                    @if (!string.IsNullOrWhiteSpace(searchBundleProduct))
+                                    {
+                                        <div style="position: absolute; top: 100%; right: 0; left: 0; background: var(--bg-card, #1e293b); border: 1.5px solid #ec4899; border-radius: 0.5rem; z-index: 1060; max-height: 220px; overflow-y: auto; box-shadow: var(--shadow-xl); margin-top: 3px;">
+                                            @if (FilteredBundleProducts.Any())
+                                            {
+                                                @foreach (var prod in FilteredBundleProducts)
+                                                {
+                                                    <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+                                                         class="search-result-item"
+                                                         @onclick="() => SelectBundleProduct(prod)">
+                                                        <div>
+                                                            <strong style="color: var(--text-primary); font-size: 0.88rem;">@prod.NameAr</strong>
+                                                            @if (!string.IsNullOrWhiteSpace(prod.Barcode))
+                                                            {
+                                                                <span style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.5rem;"><i class="fa-solid fa-barcode me-1"></i>@prod.Barcode</span>
+                                                            }
+                                                        </div>
+                                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                            <strong style="color: var(--accent-emerald); font-size: 0.88rem;">@prod.SellingPrice.ToString("N0") ج.م</strong>
+                                                            <button type="button" class="btn btn-xs btn-primary" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">
+                                                                اختيار
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
+                                                    لا توجد أجهزة مطابقة لـ "@searchBundleProduct"
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            <input type="number" class="form-control" @bind="selectedBundleQty" min="1" placeholder="الكمية" style="width: 80px; height: 38px;" />
+                            <button class="btn btn-secondary" type="button" @onclick="AddProductToBundle" style="white-space: nowrap; height: 38px;">
                                 <i class="fa-solid fa-plus"></i> إضافة
                             </button>
                         </div>
@@ -438,7 +496,27 @@
             }
             selectedBundleProductIdString = "";
             selectedBundleQty = 1;
+            searchBundleProduct = "";
         }
+    }
+
+    private string searchBundleProduct = string.Empty;
+    private List<ProductDto> FilteredBundleProducts => string.IsNullOrWhiteSpace(searchBundleProduct)
+        ? new()
+        : availableProducts.Where(p => p.NameAr.Contains(searchBundleProduct, StringComparison.OrdinalIgnoreCase)
+                                   || (!string.IsNullOrWhiteSpace(p.Barcode) && p.Barcode.Contains(searchBundleProduct, StringComparison.OrdinalIgnoreCase)))
+                           .Take(8).ToList();
+
+    private void SelectBundleProduct(ProductDto prod)
+    {
+        selectedBundleProductIdString = prod.Id.ToString();
+        searchBundleProduct = string.Empty;
+    }
+
+    private void ClearSelectedBundleProduct()
+    {
+        selectedBundleProductIdString = string.Empty;
+        searchBundleProduct = string.Empty;
     }
 
     private async Task SaveOfferAsync()

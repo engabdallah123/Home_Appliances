@@ -18,6 +18,7 @@ import '../../notifications/screens/low_stock_notifications_screen.dart';
 import '../../notifications/screens/shift_summaries_screen.dart';
 import '../../returns/screens/returns_list_screen.dart';
 import '../../sales/screens/mobile_pos_screen.dart';
+import '../../products/screens/price_check_screen.dart';
 import '../models/dashboard_model.dart';
 import '../providers/dashboard_provider.dart';
 
@@ -95,6 +96,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                 ],
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.price_check_rounded, color: AppColors.cyan, size: 26),
+            tooltip: "استعلام الأسعار (باركود + اسم)",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PriceCheckScreen()),
               );
             },
           ),
@@ -352,6 +363,93 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   },
                                   child: const Text(
                                     "بيع الآن",
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Price Check Quick Action Hero Card
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: isDark
+                                    ? [const Color(0xFF0F2027), const Color(0xFF203A43)]
+                                    : [const Color(0xFFF0FDF4), const Color(0xFFDCFCE7)],
+                                begin: Alignment.topRight,
+                                end: Alignment.bottomLeft,
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.cyan.withOpacity(0.4)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.cyan.withOpacity(0.12),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.cyan.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.price_check_rounded,
+                                    color: AppColors.cyan,
+                                    size: 28,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "الاستعلام عن سعر المنتج",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14.5,
+                                          color: isDark ? Colors.white : const Color(0xFF065F46),
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        "مسح الباركود بالكاميرا أو البحث باسم الجهاز لعرض السعر والمخزون.",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isDark ? Colors.white70 : const Color(0xFF047857),
+                                          height: 1.3,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 2,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.cyan,
+                                    foregroundColor: Colors.black87,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const PriceCheckScreen()),
+                                    );
+                                  },
+                                  child: const Text(
+                                    "استعلام",
                                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                   ),
                                 ),

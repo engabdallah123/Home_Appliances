@@ -46,26 +46,86 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                         ComposeFallbackHeader(column);
                     }
 
-                    // 2. Info Row (Date & Customer Name)
-                    column.Item().PaddingTop(6).PaddingBottom(6).Row(row =>
+                    // 2. Info Section (Customer Name, Date, Phone, Address, Payment Type, Delivery / Driver)
+                    column.Item().PaddingTop(4).PaddingBottom(6).Column(infoCol =>
                     {
-                        // Left: Date
                         var dateStr = _receipt.SaleDate.ToString("yyyy / MM / dd");
-                        row.ConstantItem(160).AlignLeft().Text(FormatRtl($"التاريخ : {dateStr}")).FontSize(11.5f).Bold();
-
-                        // Center: Invoice number badge
-                        if (!string.IsNullOrWhiteSpace(_receipt.InvoiceNumber))
-                        {
-                            row.RelativeItem().AlignCenter().Text(FormatRtl($"فاتورة رقم : {_receipt.InvoiceNumber}")).FontSize(10f).SemiBold().FontColor(Colors.Grey.Darken3);
-                        }
-                        else
-                        {
-                            row.RelativeItem();
-                        }
-
-                        // Right: Customer Name
                         var customerName = !string.IsNullOrWhiteSpace(_receipt.CustomerName) ? _receipt.CustomerName : "........................................";
-                        row.ConstantItem(260).AlignRight().Text(FormatRtl($"الإسم : {customerName}")).FontSize(11.5f).Bold();
+                        var customerPhone = !string.IsNullOrWhiteSpace(_receipt.CustomerPhone) ? _receipt.CustomerPhone : (!string.IsNullOrWhiteSpace(_receipt.RecipientPhone) ? _receipt.RecipientPhone : "....................");
+                        var customerAddress = !string.IsNullOrWhiteSpace(_receipt.CustomerAddress) ? _receipt.CustomerAddress : (!string.IsNullOrWhiteSpace(_receipt.DeliveryAddress) ? _receipt.DeliveryAddress : "........................................");
+
+                        string saleTypeDisplay = _receipt.SaleType switch
+                        {
+                            "تقسيط" => "تقسيط",
+                            "آجل" => "آجل",
+                            "كاش" => "كاش (نقدي)",
+                            _ => (!string.IsNullOrWhiteSpace(_receipt.PaymentMethod) ? _receipt.PaymentMethod : "كاش")
+                        };
+
+                        // Row 1: Date, Invoice #, Customer Name
+                        infoCol.Item().Row(r1 =>
+                        {
+                            r1.ConstantItem(170).AlignLeft().Text(FormatRtl($"التاريخ : {dateStr}")).FontSize(11f).Bold();
+
+                            if (!string.IsNullOrWhiteSpace(_receipt.InvoiceNumber))
+                            {
+                                r1.RelativeItem().AlignCenter().Text(FormatRtl($"فاتورة رقم : {_receipt.InvoiceNumber}")).FontSize(10.5f).SemiBold().FontColor(Colors.Grey.Darken3);
+                            }
+                            else
+                            {
+                                r1.RelativeItem();
+                            }
+
+                            r1.ConstantItem(260).AlignRight().Text(FormatRtl($"الإسم : {customerName}")).FontSize(11.5f).Bold();
+                        });
+
+                        // Row 2: Phone, Payment Type, Address
+                        infoCol.Item().PaddingTop(3).Row(r2 =>
+                        {
+                            r2.ConstantItem(170).AlignLeft().Text(FormatRtl($"الرقم : {customerPhone}")).FontSize(10.5f).SemiBold();
+
+                            r2.RelativeItem().AlignCenter().Text(t =>
+                            {
+                                t.Span(FormatRtl("الدفع : ")).FontSize(10f).Bold();
+                                var typeSpan = t.Span(FormatRtl($"[ {saleTypeDisplay} ]")).FontSize(10.5f).ExtraBold();
+                                if (saleTypeDisplay.Contains("تقسيط"))
+                                    typeSpan.FontColor(Colors.Blue.Darken2);
+                                else if (saleTypeDisplay.Contains("آجل"))
+                                    typeSpan.FontColor(Colors.Red.Darken2);
+                                else
+                                    typeSpan.FontColor(Colors.Green.Darken2);
+                            });
+
+                            r2.ConstantItem(260).AlignRight().Text(FormatRtl($"العنوان : {customerAddress}")).FontSize(10.5f).SemiBold();
+                        });
+
+                        // Row 3: If Delivery or Driver is present
+                        if (_receipt.IsDelivery || !string.IsNullOrWhiteSpace(_receipt.DriverName))
+                        {
+                            infoCol.Item().PaddingTop(3).Row(r3 =>
+                            {
+                                if (_receipt.DeliveryFee > 0)
+                                {
+                                    r3.ConstantItem(170).AlignLeft().Text(FormatRtl($"خدمة التوصيل : {_receipt.DeliveryFee:N2} {_receipt.Currency}")).FontSize(10f).Bold();
+                                }
+                                else
+                                {
+                                    r3.ConstantItem(170).AlignLeft().Text(FormatRtl("توصيل : ديليفري")).FontSize(10f).Bold().FontColor(Colors.Blue.Darken2);
+                                }
+
+                                var driverDisplay = !string.IsNullOrWhiteSpace(_receipt.DriverName) ? _receipt.DriverName : "....................";
+                                r3.RelativeItem().AlignCenter().Text(FormatRtl($"مندوب التوصيل : {driverDisplay}")).FontSize(10.5f).Bold().FontColor(Colors.Indigo.Darken2);
+
+                                r3.ConstantItem(260).AlignRight().Text(FormatRtl("النوع : توصيل طلبات (ديليفري)")).FontSize(10f).SemiBold();
+                            });
+                        }
+
+                        // If installment summary exists
+                        if (_receipt.IsInstallment && !string.IsNullOrWhiteSpace(_receipt.InstallmentSummary))
+                        {
+                            infoCol.Item().PaddingTop(3).Background(Colors.Grey.Lighten4).Padding(3).AlignCenter()
+                                .Text(FormatRtl(_receipt.InstallmentSummary)).FontSize(9.5f).Bold().FontColor(Colors.Blue.Darken3);
+                        }
                     });
 
                     // 3. Main Table & Watermark in a Bordered Container
@@ -158,20 +218,28 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                                 }
                             });
 
-                            // Bottom Summary Row inside the table box
+                            // Bottom Summary Row inside the table box with Total Amount & Total Pieces
+                            var totalPieces = _receipt.Items.Sum(i => i.Quantity);
                             boxCol.Item().BorderTop(1.5f).BorderColor(Colors.Black).MinHeight(32).Row(bRow =>
                             {
-                                // Box with total amount (under الإجمالي)
+                                // Box with total amount (under Col 0: الإجمالي)
                                 bRow.ConstantItem(85).BorderRight(1.2f).BorderColor(Colors.Black).PaddingVertical(4).AlignCenter().AlignMiddle()
                                     .Text($"{_receipt.TotalAmount:N2}").FontSize(12f).ExtraBold();
 
-                                // Label الإجمالي النهائي (under سعر الوحدة والعدد)
-                                bRow.ConstantItem(135).BorderRight(1.2f).BorderColor(Colors.Black).PaddingVertical(4).AlignCenter().AlignMiddle()
-                                    .Text(FormatRtl("الإجمالي النهائي")).FontSize(11.5f).ExtraBold();
+                                // Label الإجمالي النهائي (under Col 1: سعر الوحدة)
+                                bRow.ConstantItem(80).BorderRight(1.2f).BorderColor(Colors.Black).PaddingVertical(4).AlignCenter().AlignMiddle()
+                                    .Text(FormatRtl("الإجمالي النهائي")).FontSize(10.5f).ExtraBold();
 
-                                // Signature area (under الصنف والرقم)
-                                bRow.RelativeItem().PaddingRight(14).AlignRight().AlignMiddle()
-                                    .Text(FormatRtl("التوقيع / .....................................................")).FontSize(11f).Bold();
+                                // Total Pieces Count (under Col 2: العدد)
+                                bRow.ConstantItem(55).BorderRight(1.2f).BorderColor(Colors.Black).PaddingVertical(4).AlignCenter().AlignMiddle()
+                                    .Text($"{totalPieces:G29}").FontSize(11f).ExtraBold();
+
+                                // Under Col 3 & 4: Total Pieces label + Signature area
+                                bRow.RelativeItem().PaddingHorizontal(10).AlignMiddle().Row(subRow =>
+                                {
+                                    subRow.ConstantItem(150).AlignLeft().Text(FormatRtl($"إجمالي عدد القطع : {totalPieces:G29} قطعة")).FontSize(10.5f).Bold();
+                                    subRow.RelativeItem().AlignRight().Text(FormatRtl("التوقيع / .....................................................")).FontSize(10.5f).Bold();
+                                });
                             });
                         });
                     });

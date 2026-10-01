@@ -31,12 +31,17 @@ namespace Sales.Application.Installments.Queries.GetInstallmentContracts
                         WHEN (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) < 0 THEN 0 
                         ELSE (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) 
                     END AS RemainingBalance,
-                    c.NumberOfMonths, c.StartDate, c.Status,
-                    CASE c.Status
-                        WHEN 1 THEN N'ساري'
-                        WHEN 2 THEN N'مكتمل'
-                        WHEN 3 THEN N'متعثر'
-                        WHEN 4 THEN N'ملغي'
+                    c.NumberOfMonths, c.StartDate,
+                    CASE 
+                        WHEN c.Status = 1 AND (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) <= 0.01 THEN 2
+                        ELSE c.Status 
+                    END AS Status,
+                    CASE 
+                        WHEN (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) <= 0.01 AND c.Status != 4 THEN N'مكتمل'
+                        WHEN c.Status = 1 THEN N'ساري'
+                        WHEN c.Status = 2 THEN N'مكتمل'
+                        WHEN c.Status = 3 THEN N'متعثر'
+                        WHEN c.Status = 4 THEN N'ملغي'
                         ELSE N'غير معروف'
                     END AS StatusText,
                     c.Notes, c.CreatedAt
@@ -58,7 +63,18 @@ namespace Sales.Application.Installments.Queries.GetInstallmentContracts
 
             if (request.Status.HasValue)
             {
-                sql += " AND c.Status = @Status";
+                if (request.Status.Value == Domain.Installments.Entities.InstallmentContractStatus.Active)
+                {
+                    sql += " AND (c.Status = 1 AND (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) > 0.01)";
+                }
+                else if (request.Status.Value == Domain.Installments.Entities.InstallmentContractStatus.Completed)
+                {
+                    sql += " AND (c.Status = 2 OR ((c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) <= 0.01 AND c.Status != 4))";
+                }
+                else
+                {
+                    sql += " AND c.Status = @Status";
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(request.SearchTerm))

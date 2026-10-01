@@ -358,12 +358,25 @@ class _SalesListScreenState extends State<SalesListScreen> {
                       Text(
                         "الهاتف: ${detail.recipientPhone}",
                         style: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 13),
+                      )
+                    else if (detail.customerPhone != null && detail.customerPhone!.isNotEmpty)
+                      Text(
+                        "الهاتف: ${detail.customerPhone}",
+                        style: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 13),
                       ),
                     if (detail.isDelivery && detail.deliveryAddress != null)
                       Text(
                         "عنوان التوصيل: ${detail.deliveryAddress}",
                         style: const TextStyle(color: Color(0xFF06B6D4), fontSize: 13),
                       ),
+                    Text(
+                      "طريقة الدفع: ${detail.isInstallment ? 'تقسيط' : (detail.paymentMethod == 'Credit' || detail.paymentMethod == 'آجل' ? 'آجل' : 'كاش (نقدي)')}",
+                      style: TextStyle(
+                        color: detail.isInstallment ? const Color(0xFF6366F1) : (detail.paymentMethod == 'Credit' || detail.paymentMethod == 'آجل' ? const Color(0xFFF59E0B) : const Color(0xFF10B981)),
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const Divider(height: 20),
                     const Text(
                       "الأجهزة المشتراة:",
@@ -405,6 +418,17 @@ class _SalesListScreenState extends State<SalesListScreen> {
                       );
                     }),
                     const Divider(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("إجمالي عدد القطع:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text(
+                          "${detail.items.fold<double>(0, (sum, item) => sum + item.quantity).toInt()} قطعة",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF6366F1)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [

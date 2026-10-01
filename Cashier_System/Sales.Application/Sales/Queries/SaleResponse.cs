@@ -96,5 +96,9 @@ namespace Sales.Application.Sales.Queries
         bool IsReserved = false,
         DateTime? TargetDeliveryDate = null,
         bool IsInstallment = false,
-        string? InstallmentSummary = null);
+        string? InstallmentSummary = null,
+        string? CustomerPhone = null,
+        string? CustomerAddress = null,
+        string? DriverName = null,
+        string? SaleType = null);
 }

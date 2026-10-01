@@ -51,8 +51,8 @@
                 </span>
 
                 <!-- Price Check Top Bar Button (Direct Full Screen Navigation) -->
-                <NavLink href="price-check" class="topbar-btn-price" title="استعلام فوري عن سعر منتج بالباركود [Alt + B]">
-                    <i class="fa-solid fa-barcode"></i>
+                <NavLink href="price-check" class="topbar-btn-price" title="استعلام فوري عن سعر منتج بالاسم [Alt + B]">
+                    <i class="fa-solid fa-tag"></i>
                     <span>الاستعلام عن السعر</span>
                 </NavLink>
 
@@ -163,7 +163,7 @@
         Nav.NavigateTo(route);
         if (route == "price-check")
         {
-            _ = JS.InvokeVoidAsync("focusElementById", "price-check-barcode-input", 120);
+            _ = JS.InvokeVoidAsync("focusElementById", "price-check-name-input", 120);
         }
         else if (route == "products")
         {

@@ -11,6 +11,11 @@
 @inject CustomAuthStateProvider AuthState
 @inject StoreStateContainer StoreState
 @inject IJSRuntime JS
+<style>
+    .search-result-item:hover {
+        background: rgba(99, 102, 241, 0.15) !important;
+    }
+</style>
 
 <div>
     <div class="page-header">
@@ -21,10 +26,6 @@
         @if (CanManageProducts)
         {
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                <NavLink href="expiry" class="btn btn-secondary" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem;">
-                    <i class="fa-solid fa-clock-rotate-left text-amber"></i>
-                    <span>متابعة الصلاحية</span>
-                </NavLink>
                 <button class="btn btn-secondary" style="background: rgba(16, 124, 65, 0.15); border-color: #107c41; color: #107c41;" @onclick="OpenImportModal">
                     <i class="fa-solid fa-file-import me-1"></i> استيراد من إكسيل
                 </button>
@@ -302,13 +303,54 @@
                         <div class="grid-2" style="gap: 0.6rem;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="font-size: 0.84rem; font-weight: 700;">المورد (اختياري)</label>
-                                <select class="form-select" @bind="supplierIdString" style="padding: 0.45rem 0.7rem; font-size: 0.88rem;">
-                                    <option value="">-- اختر المورد --</option>
-                                    @foreach (var s in suppliers)
-                                    {
-                                        <option value="@s.Id.ToString()">@s.Name</option>
-                                    }
-                                </select>
+                                @{
+                                    var currentProductSupplier = suppliers.FirstOrDefault(s => s.Id.ToString() == supplierIdString);
+                                }
+                                @if (currentProductSupplier != null)
+                                {
+                                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(16, 185, 129, 0.12); border: 1.5px solid var(--accent-emerald); padding: 0.35rem 0.65rem; border-radius: 0.4rem; height: 38px;">
+                                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">
+                                            <i class="fa-solid fa-truck-field me-1" style="color: var(--accent-emerald);"></i>
+                                            @currentProductSupplier.Name
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.1rem 0.4rem; font-size: 0.75rem;" @onclick="ClearSelectedProductSupplier" title="إلغاء اختيار المورد">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div style="position: relative;">
+                                        <input class="form-control"
+                                               placeholder="ابحث باسم المورد..."
+                                               @bind="searchProductSupplier"
+                                               @bind:event="oninput"
+                                               style="height: 38px; font-size: 0.85rem;" />
+                                        @if (!string.IsNullOrWhiteSpace(searchProductSupplier))
+                                        {
+                                            <div style="position: absolute; top: 100%; right: 0; left: 0; background: var(--bg-card, #1e293b); border: 1.5px solid var(--accent-indigo); border-radius: 0.5rem; z-index: 1060; max-height: 180px; overflow-y: auto; box-shadow: var(--shadow-xl); margin-top: 3px;">
+                                                @if (FilteredProductSuppliers.Any())
+                                                {
+                                                    @foreach (var sup in FilteredProductSuppliers)
+                                                    {
+                                                        <div style="padding: 0.45rem 0.65rem; border-bottom: 1px solid var(--border-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+                                                             class="search-result-item"
+                                                             @onclick="() => SelectProductSupplier(sup)">
+                                                            <strong style="color: var(--text-primary); font-size: 0.84rem;">@sup.Name</strong>
+                                                            <button type="button" class="btn btn-xs btn-primary" style="padding: 0.15rem 0.45rem; font-size: 0.72rem;">اختيار</button>
+                                                        </div>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <div style="padding: 0.65rem; text-align: center; color: var(--text-muted); font-size: 0.78rem;">
+                                                        لا يوجد مورد مطابق لـ "@searchProductSupplier"
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
                             </div>
 
                             <div class="form-group" style="margin-bottom: 0;">
@@ -913,6 +955,24 @@
     private string brandIdString = string.Empty;
     private string unitIdString = string.Empty;
     private string supplierIdString = string.Empty;
+    private string searchProductSupplier = string.Empty;
+    private List<SupplierDto> FilteredProductSuppliers => string.IsNullOrWhiteSpace(searchProductSupplier)
+        ? new()
+        : suppliers.Where(s => s.Name.Contains(searchProductSupplier, StringComparison.OrdinalIgnoreCase)
+                            || (!string.IsNullOrWhiteSpace(s.Phone) && s.Phone.Contains(searchProductSupplier, StringComparison.OrdinalIgnoreCase)))
+                   .Take(8).ToList();
+
+    private void SelectProductSupplier(SupplierDto sup)
+    {
+        supplierIdString = sup.Id.ToString();
+        searchProductSupplier = string.Empty;
+    }
+
+    private void ClearSelectedProductSupplier()
+    {
+        supplierIdString = string.Empty;
+        searchProductSupplier = string.Empty;
+    }
 
     private byte[]? selectedImageBytes;
     private string? selectedFileName;

@@ -54,7 +54,7 @@
     <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; align-items: center; flex-wrap: wrap;">
         <div class="search-box" style="max-width: 360px; flex: 1;">
             <i class="fa-solid fa-search"></i>
-            <input @bind="searchQuery" @bind:event="oninput" placeholder="بحث برقم العقد، اسم العميل، أو الهاتف..." />
+            <input @bind="searchQuery" @bind:event="oninput" @bind:after="() => { currentPage = 1; EnsureValidPage(); }" placeholder="بحث برقم العقد، اسم العميل، أو الهاتف..." />
         </div>
 
         <div style="display: flex; gap: 0.4rem; align-items: center;">
@@ -62,10 +62,10 @@
                 الكل (@contracts.Count)
             </button>
             <button class="btn @(selectedStatusFilter == 1 ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick='() => FilterByStatus(1)'>
-                ساري / جاري السداد (@contracts.Count(c => c.Status == 1 || c.StatusText == "ساري" || c.StatusText == "Active"))
+                ساري / جاري السداد (@contracts.Count(c => !IsContractCompleted(c) && c.Status != 3 && c.Status != 4))
             </button>
             <button class="btn @(selectedStatusFilter == 2 ? "btn-emerald" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick='() => FilterByStatus(2)'>
-                مكتمل ومسدد (@contracts.Count(c => c.Status == 2 || c.StatusText == "مكتمل" || c.StatusText == "Completed"))
+                مكتمل ومسدد (@contracts.Count(c => IsContractCompleted(c)))
             </button>
             <button class="btn @(selectedStatusFilter == 3 ? "btn-amber" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" @onclick='() => FilterByStatus(3)'>
                 متعثر / متأخر (@contracts.Count(c => c.Status == 3 || c.StatusText == "متعثر" || c.StatusText == "Defaulted"))
@@ -111,7 +111,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var c in filteredContracts)
+                    @foreach (var c in pagedContracts)
                     {
                         var paidPercent = c.TotalWithInterest > 0 
                             ? Math.Min(100, Math.Round((c.DownPayment + (c.TotalWithInterest - c.RemainingAmount)) / c.TotalWithInterest * 100))
@@ -154,7 +154,7 @@
                                 </div>
                             </td>
                             <td>
-                                @if (c.Status == 2 || c.StatusText == "مكتمل" || c.StatusText == "Completed")
+                                @if (IsContractCompleted(c))
                                 {
                                     <span class="badge badge-success">مسدد بالكامل</span>
                                 }
@@ -177,6 +177,8 @@
                 </tbody>
             </table>
         </div>
+
+        <Pagination CurrentPage="@currentPage" TotalItems="@filteredContracts.Count" PageSize="@pageSize" OnPageChanged="@(p => currentPage = p)" OnPageSizeChanged="@(s => { pageSize = s; currentPage = 1; EnsureValidPage(); })" />
     }
 </div>
 
@@ -382,6 +384,19 @@
     private int selectedStatusFilter = -1; // -1: All, 1: Active, 2: Completed, 3: Defaulted
     private bool isLoading = true;
 
+    private int currentPage = 1;
+    private int pageSize = 15;
+    private IEnumerable<InstallmentContractDto> pagedContracts => filteredContracts.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private void EnsureValidPage()
+    {
+        var maxPage = Math.Max(1, (int)Math.Ceiling((double)filteredContracts.Count / pageSize));
+        if (currentPage > maxPage)
+        {
+            currentPage = maxPage;
+        }
+    }
+
     // Schedule Modal
     private bool showScheduleModal = false;
     private InstallmentContractDto? selectedContract = null;
@@ -398,11 +413,14 @@
     private decimal totalRemainingBalance => contracts.Sum(c => c.RemainingAmount);
     private int overdueCount => upcomingInstallments.Count(u => u.IsOverdue);
 
+    private bool IsContractCompleted(InstallmentContractDto c) =>
+        c.Status == 2 || c.StatusText == "مكتمل" || c.StatusText == "Completed" || c.RemainingAmount <= 0.01m;
+
     private List<InstallmentContractDto> filteredContracts => contracts
-        .Where(c => (selectedStatusFilter == -1 || c.Status == selectedStatusFilter || 
-                     (selectedStatusFilter == 1 && (c.StatusText == "ساري" || c.StatusText == "Active")) ||
-                     (selectedStatusFilter == 2 && (c.StatusText == "مكتمل" || c.StatusText == "Completed")) ||
-                     (selectedStatusFilter == 3 && (c.StatusText == "متعثر" || c.StatusText == "Defaulted")))
+        .Where(c => (selectedStatusFilter == -1 ||
+                     (selectedStatusFilter == 1 && !IsContractCompleted(c) && c.Status != 3 && c.Status != 4) ||
+                     (selectedStatusFilter == 2 && IsContractCompleted(c)) ||
+                     (selectedStatusFilter == 3 && (c.Status == 3 || c.StatusText == "متعثر" || c.StatusText == "Defaulted")))
             && (string.IsNullOrWhiteSpace(searchQuery)
                 || c.ContractNumber.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
                 || c.CustomerName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
@@ -441,6 +459,8 @@
     private void FilterByStatus(int status)
     {
         selectedStatusFilter = status;
+        currentPage = 1;
+        EnsureValidPage();
     }
 
     private async Task OpenScheduleModal(InstallmentContractDto contract)

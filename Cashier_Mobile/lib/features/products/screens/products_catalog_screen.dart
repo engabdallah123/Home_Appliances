@@ -9,6 +9,7 @@ import '../models/product_model.dart';
 import '../providers/products_provider.dart';
 import 'add_edit_product_screen.dart';
 import 'brands_list_screen.dart';
+import 'price_check_screen.dart';
 
 class ProductsCatalogScreen extends StatefulWidget {
   const ProductsCatalogScreen({super.key});
@@ -73,6 +74,16 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.getTextPrimary(isDark)),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.price_check_rounded, color: AppColors.cyan),
+            tooltip: "استعلام عن سعر منتج (كاميرا + اسم)",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PriceCheckScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.verified_rounded, color: AppColors.accent),
             tooltip: "الماركات التجارية",

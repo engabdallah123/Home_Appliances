@@ -1,0 +1,133 @@
+<Window x:Class="POS.Desktop.ExitAppConfirmationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="تأكيد الخروج من البرنامج"
+        Width="500" Height="320"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        FlowDirection="RightToLeft"
+        FontFamily="Segoe UI, Tahoma, Cairo, Arial">
+
+    <Window.Resources>
+        <!-- Custom Template for Exit Button: Solid red, always crisp white text without hover interference -->
+        <ControlTemplate x:Key="ExitButtonTemplate" TargetType="Button">
+            <Border Background="#dc2626" 
+                    BorderBrush="#b91c1c" 
+                    BorderThickness="1" 
+                    CornerRadius="10" 
+                    Padding="16,0"
+                    SnapsToDevicePixels="True">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+        </ControlTemplate>
+
+        <!-- Custom Template for Cancel Button: Solid light gray, always dark text without hover interference -->
+        <ControlTemplate x:Key="CancelButtonTemplate" TargetType="Button">
+            <Border Background="#f1f5f9" 
+                    BorderBrush="#cbd5e1" 
+                    BorderThickness="1.5" 
+                    CornerRadius="10" 
+                    Padding="20,0"
+                    SnapsToDevicePixels="True">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+        </ControlTemplate>
+
+        <!-- Custom Template for X Close Button -->
+        <ControlTemplate x:Key="CloseIconTemplate" TargetType="Button">
+            <Border Background="Transparent" SnapsToDevicePixels="True">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+        </ControlTemplate>
+    </Window.Resources>
+
+    <!-- Main Outer Card (Clean Bright White Background) -->
+    <Border Background="#ffffff" 
+            BorderBrush="#cbd5e1" 
+            BorderThickness="1.5" 
+            CornerRadius="16"
+            Margin="10">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="25" ShadowDepth="4" Color="#000000" Opacity="0.18" />
+        </Border.Effect>
+
+        <Grid Margin="24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Grid.Row="0" Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Icon Badge (Light Red Background with Crisp Red Power Icon) -->
+                <Border Grid.Column="0" Width="46" Height="46" CornerRadius="12" Background="#fee2e2" BorderBrush="#fecaca" BorderThickness="1" Margin="0,0,14,0">
+                    <TextBlock Text="⏻" Foreground="#dc2626" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0" />
+                </Border>
+
+                <!-- Title & Subtitle in High Contrast Dark Slate -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="تأكيد إغلاق البرنامج" Foreground="#0f172a" FontSize="18" FontWeight="Bold" />
+                    <TextBlock Text="نظام إدارة المبيعات والمخزون - Home Appliances" Foreground="#64748b" FontSize="12.5" Margin="0,2,0,0" />
+                </StackPanel>
+
+                <!-- Close 'X' Button -->
+                <Button Grid.Column="2" Width="32" Height="32" Click="OnCancelClick" Template="{StaticResource CloseIconTemplate}" Cursor="Hand" ToolTip="إلغاء والبقاء بالبرنامج">
+                    <TextBlock Text="✕" Foreground="#94a3b8" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+            </Grid>
+
+            <!-- Content Body Card (Soft Light Background) -->
+            <Border Grid.Row="1" Background="#f8fafc" BorderBrush="#e2e8f0" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,0,18">
+                <StackPanel VerticalAlignment="Center">
+                    <!-- Standard Question -->
+                    <TextBlock Text="هل أنت متأكد من رغبتك في إغلاق البرنامج والخروج الآن؟" Foreground="#1e293b" FontSize="14.5" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+                    <!-- Warning if Cart has items -->
+                    <Border x:Name="PnlCartWarning" Background="#fef2f2" BorderBrush="#fecaca" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,8" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚠️ " FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock x:Name="TxtCartWarning" Text="توجد منتجات في سلة المبيعات لم يتم إتمامها!" Foreground="#b91c1c" FontSize="13" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Safe Exit Info Text -->
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <TextBlock Text="🔒 " FontSize="12" VerticalAlignment="Center" />
+                        <TextBlock Text="يتم حفظ جميع العمليات وسجلات الفواتير تلقائياً وبأمان." Foreground="#64748b" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Action Buttons -->
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Confirm Exit Button (Solid Red, Solid White Text, No Hover Glitch) -->
+                <Button Grid.Column="0" Click="OnConfirmExitClick" Height="44" Template="{StaticResource ExitButtonTemplate}" Cursor="Hand">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="🚪" FontSize="15" Margin="0,0,8,0" />
+                        <TextBlock Text="تأكيد الخروج وإغلاق البرنامج" Foreground="#ffffff" FontSize="13.5" FontWeight="Bold" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Stay / Cancel Button (Solid Light Gray, Solid Dark Slate Text, No Hover Glitch) -->
+                <Button Grid.Column="2" Click="OnCancelClick" Height="44" Template="{StaticResource CancelButtonTemplate}" Cursor="Hand">
+                    <TextBlock Text="البقاء في البرنامج" Foreground="#1e293b" FontSize="13.5" FontWeight="Bold" VerticalAlignment="Center" />
+                </Button>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

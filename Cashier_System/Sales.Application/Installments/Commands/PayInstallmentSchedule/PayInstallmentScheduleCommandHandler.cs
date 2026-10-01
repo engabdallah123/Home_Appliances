@@ -75,14 +75,19 @@ namespace Sales.Application.Installments.Commands.PayInstallmentSchedule
                 }
             }
 
-            // فحص اكتمال كافة أقساط العقد
+            // فحص اكتمال كافة أقساط العقد حتى لو تم السداد قبل الموعد المحدد النهائي
             var allSchedules = (await _salesUnitOfWork.InstallmentScheduleRepository.GetAllAsync())
                 .Where(s => s.ContractId == contract.Id)
                 .ToList();
 
-            if (allSchedules.All(s => s.Status == Domain.Installments.Entities.InstallmentStatus.Paid))
+            decimal totalPaidSoFar = allSchedules.Sum(s => s.PaidAmount);
+            bool allSchedulesPaid = allSchedules.All(s => s.Status == Domain.Installments.Entities.InstallmentStatus.Paid);
+            bool totalContractPaid = (contract.TotalInstallmentAmount - totalPaidSoFar) <= 0.01m;
+
+            if (allSchedulesPaid || totalContractPaid)
             {
-                // تم الانتهاء
+                contract.MarkAsCompleted();
+                _salesUnitOfWork.InstallmentContractRepository.Update(contract);
             }
 
             await _salesUnitOfWork.SaveChangesAsync(cancellationToken);

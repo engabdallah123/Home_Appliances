@@ -100,12 +100,15 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
                     s.InvoiceNumber, s.SaleDate,
                     ISNULL(u.FullName, 'Cashier') AS CashierName,
                     c.Name AS CustomerName,
+                    c.Phone AS CustomerPhone,
+                    c.Address AS CustomerAddress,
                     s.SubTotal, s.DiscountAmount, s.TaxAmount, s.TotalAmount,
                     s.PaidAmount, s.ChangeAmount, s.PaymentMethod,
                     s.Notes,
                     ISNULL(s.DeliveryFee, 0) AS DeliveryFee,
                     ISNULL(s.IsDelivery, 0) AS IsDelivery,
                     s.RecipientName, s.RecipientPhone, s.DeliveryAddress,
+                    s.DriverName,
                     ISNULL(s.IsReserved, 0) AS IsReserved, s.TargetDeliveryDate,
                     ISNULL(s.IsInstallment, 0) AS IsInstallment,
                     inst.MonthlyInstallmentAmount, inst.NumberOfMonths, inst.DownPayment,
@@ -200,6 +203,10 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
             string? recipientName = (string?)saleHeader.RecipientName;
             string? recipientPhone = (string?)saleHeader.RecipientPhone;
             string? deliveryAddress = (string?)saleHeader.DeliveryAddress;
+            string? driverName = (string?)saleHeader.DriverName;
+            string? customerPhone = !string.IsNullOrWhiteSpace(recipientPhone) ? recipientPhone : (string?)saleHeader.CustomerPhone;
+            string? customerAddress = !string.IsNullOrWhiteSpace(deliveryAddress) ? deliveryAddress : (string?)saleHeader.CustomerAddress;
+
             bool isReserved = (bool)(saleHeader.IsReserved ?? false);
             DateTime? targetDeliveryDate = (DateTime?)saleHeader.TargetDeliveryDate;
             bool isInstallment = (bool)(saleHeader.IsInstallment ?? false);
@@ -219,6 +226,20 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
                 "Visa" or "Card" or "بطاقة" or "فيزا" => "فيزا / بطاقة",
                 _ => rawPaymentMethod
             };
+
+            string saleType;
+            if (isInstallment || rawPaymentMethod is "Installment" or "تقسيط")
+            {
+                saleType = "تقسيط";
+            }
+            else if (rawPaymentMethod is "Credit" or "آجل" || (saleHeader.PaidAmount + 0.01m < saleHeader.TotalAmount))
+            {
+                saleType = "آجل";
+            }
+            else
+            {
+                saleType = "كاش";
+            }
 
             var receipt = new ReceiptResponse(
                 storeName,
@@ -254,7 +275,11 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
                 isReserved,
                 targetDeliveryDate,
                 isInstallment,
-                installmentSummary);
+                installmentSummary,
+                customerPhone,
+                customerAddress,
+                driverName,
+                saleType);
 
             return Result<ReceiptResponse>.Success(receipt);
         }

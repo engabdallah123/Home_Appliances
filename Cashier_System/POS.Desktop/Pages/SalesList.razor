@@ -234,11 +234,27 @@
                     <div><span style="color: var(--text-secondary);">تاريخ البيع:</span> <strong>@detailedSaleInvoice.SaleDate.ToLocalTime().ToString("dd/MM/yyyy hh:mm tt", ArabicCulture)</strong></div>
                     <div><span style="color: var(--text-secondary);">الكاشير:</span> <strong style="color: var(--text-primary);">@(detailedSaleInvoice.CashierName ?? "مستخدم كاشير")</strong></div>
                     <div><span style="color: var(--text-secondary);">العميل:</span> <strong style="color: var(--accent-blue);">@(detailedSaleInvoice.CustomerName ?? "عميل نقدي عام")</strong></div>
+                    @if (!string.IsNullOrWhiteSpace(detailedSaleInvoice.RecipientPhone))
+                    {
+                        <div><span style="color: var(--text-secondary);">الهاتف:</span> <strong style="direction: ltr; display: inline-block;">@detailedSaleInvoice.RecipientPhone</strong></div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(detailedSaleInvoice.DeliveryAddress))
+                    {
+                        <div><span style="color: var(--text-secondary);">العنوان:</span> <strong>@detailedSaleInvoice.DeliveryAddress</strong></div>
+                    }
+                    @if (detailedSaleInvoice.IsDelivery || !string.IsNullOrWhiteSpace(detailedSaleInvoice.DriverName))
+                    {
+                        <div><span style="color: var(--text-secondary);">المندوب:</span> <strong style="color: var(--accent-indigo);">@(detailedSaleInvoice.DriverName ?? "غير محدد")</strong></div>
+                    }
                     <div>
-                        <span style="color: var(--text-secondary);">طريقة الدفع:</span> 
+                        <span style="color: var(--text-secondary);">الدفع:</span> 
                         <span class="badge @(detailedSaleInvoice.PaymentMethod == "Cash" ? "badge-green" : (detailedSaleInvoice.PaymentMethod == "Credit" || detailedSaleInvoice.PaymentMethod == "آجل") ? "badge-amber" : (detailedSaleInvoice.PaymentMethod == "Installment" || detailedSaleInvoice.PaymentMethod == "تقسيط" || detailedSaleInvoice.IsInstallment) ? "badge-indigo" : "badge-secondary")">
                             @(detailedSaleInvoice.PaymentMethod == "Cash" ? "نقداً (كاش)" : (detailedSaleInvoice.PaymentMethod == "Credit" || detailedSaleInvoice.PaymentMethod == "آجل") ? "آجل" : (detailedSaleInvoice.PaymentMethod == "Installment" || detailedSaleInvoice.PaymentMethod == "تقسيط" || detailedSaleInvoice.IsInstallment) ? "تقسيط" : (detailedSaleInvoice.PaymentMethod == "Visa" || detailedSaleInvoice.PaymentMethod == "Card") ? "فيزا" : detailedSaleInvoice.PaymentMethod)
                         </span>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-secondary);">إجمالي القطع:</span> 
+                        <strong style="color: var(--accent-emerald);">@(detailedSaleInvoice.Items?.Sum(i => i.Quantity) ?? 0) قطعة</strong>
                     </div>
                     <div>
                         <span style="color: var(--text-secondary);">الحالة:</span> 

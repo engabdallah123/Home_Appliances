@@ -11,8 +11,11 @@
 @inject IJSRuntime JS
 @inject global::POS.Desktop.Services.Sync.ICloudSyncService CloudSync
 @implements IDisposable
-
-
+<style>
+    .search-result-item:hover {
+        background: rgba(99, 102, 241, 0.15) !important;
+    }
+</style>
 
 <div>
     <div class="page-header">
@@ -443,13 +446,66 @@
                 <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
                     <div class="form-group" style="margin-bottom: 0;">
                         <label style="font-weight: 600;">المورد <span style="color: var(--accent-red);">*</span></label>
-                        <select class="form-select" @bind="selectedSupplierIdString">
-                            <option value="">-- اختر المورد --</option>
-                            @foreach (var s in suppliers)
-                            {
-                                <option value="@s.Id.ToString()">@s.Name</option>
-                            }
-                        </select>
+                        @{
+                            var currentSelectedSupplier = suppliers.FirstOrDefault(s => s.Id.ToString() == selectedSupplierIdString);
+                        }
+                        @if (currentSelectedSupplier != null)
+                        {
+                            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(16, 185, 129, 0.12); border: 1.5px solid var(--accent-emerald); padding: 0.35rem 0.65rem; border-radius: 0.4rem; height: 38px;">
+                                <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; font-weight: 700; color: var(--text-primary);">
+                                    <i class="fa-solid fa-truck-field me-1" style="color: var(--accent-emerald);"></i>
+                                    @currentSelectedSupplier.Name
+                                    @if (!string.IsNullOrWhiteSpace(currentSelectedSupplier.Phone))
+                                    {
+                                        <span style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.4rem;">(@currentSelectedSupplier.Phone)</span>
+                                    }
+                                </div>
+                                <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.1rem 0.4rem; font-size: 0.75rem;" @onclick="ClearSelectedSupplier" title="تغيير المورد">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="position: relative;">
+                                <input class="form-control"
+                                       placeholder="ابحث باسم المورد أو رقم الهاتف..."
+                                       @bind="searchSupplierByName"
+                                       @bind:event="oninput"
+                                       style="height: 38px; font-size: 0.85rem;" />
+                                @if (!string.IsNullOrWhiteSpace(searchSupplierByName))
+                                {
+                                    <div style="position: absolute; top: 100%; right: 0; left: 0; background: var(--bg-card, #1e293b); border: 1.5px solid var(--accent-indigo); border-radius: 0.5rem; z-index: 1060; max-height: 220px; overflow-y: auto; box-shadow: var(--shadow-xl); margin-top: 3px;">
+                                        @if (FilteredSuppliers.Any())
+                                        {
+                                            @foreach (var sup in FilteredSuppliers)
+                                            {
+                                                <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+                                                     class="search-result-item"
+                                                     @onclick="() => SelectSupplierForAdd(sup)">
+                                                    <div>
+                                                        <strong style="color: var(--text-primary); font-size: 0.88rem;">@sup.Name</strong>
+                                                        @if (!string.IsNullOrWhiteSpace(sup.Phone))
+                                                        {
+                                                            <div style="font-size: 0.75rem; color: var(--text-secondary); direction: ltr; text-align: right;">@sup.Phone</div>
+                                                        }
+                                                    </div>
+                                                    <button type="button" class="btn btn-xs btn-primary" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">
+                                                        اختيار
+                                                    </button>
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
+                                                لا يوجد مورد مطابق لـ "@searchSupplierByName"
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
                     </div>
 
                     <div class="form-group" style="margin-bottom: 0;">
@@ -499,31 +555,106 @@
                                placeholder="مسح أو إدخال باركود الصنف... [Enter]" 
                                class="form-control" />
                     </div>
-                    <div class="search-box" style="width: 100%;">
+                    <div class="search-box" style="width: 100%; position: relative;">
                         <i class="fa-solid fa-magnifying-glass"></i>
                         <input @bind="searchProductByName" 
                                @bind:event="oninput" 
                                @onkeyup="HandleProductNameSearchKeyUp" 
-                               placeholder="بحث عن الصنف بالاسم... [Enter]" 
+                               placeholder="بحث عن الصنف بالاسم مباشرة..." 
                                class="form-control" />
+                        @if (!string.IsNullOrWhiteSpace(searchProductByName))
+                        {
+                            <button type="button" @onclick="() => searchProductByName = string.Empty" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer;" title="مسح البحث">
+                                <i class="fa-solid fa-circle-xmark"></i>
+                            </button>
+                        }
                     </div>
                 </div>
+
+                <!-- Live Direct Search Filter Results Panel (Directly Below the Search Input) -->
+                @if (!string.IsNullOrWhiteSpace(searchProductByName))
+                {
+                    <div class="purchase-live-search-results" style="background: var(--bg-card); border: 1.5px solid var(--accent-indigo); border-radius: 0.65rem; margin-bottom: 0.75rem; max-height: 220px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,0.3); z-index: 10;">
+                        <div style="padding: 0.4rem 0.85rem; background: rgba(99, 102, 241, 0.1); border-bottom: 1px solid var(--border-color); font-size: 0.78rem; font-weight: 700; color: var(--accent-indigo); display: flex; justify-content: space-between;">
+                            <span>نتائج البحث المباشرة بالاسم (@FilteredPurchaseProducts.Count صنف مطابقة)</span>
+                            <span style="font-size: 0.72rem; color: var(--text-secondary);">اضغط على الصنف لاختياره مباشرة</span>
+                        </div>
+                        @if (FilteredPurchaseProducts.Any())
+                        {
+                            @foreach (var p in FilteredPurchaseProducts)
+                            {
+                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--border-color-light); cursor: pointer; transition: background 0.15s ease;"
+                                     class="search-result-item"
+                                     @onclick="() => SelectProductForAddPurchase(p)">
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <div style="width: 32px; height: 32px; border-radius: 6px; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent-indigo); font-size: 0.9rem;">
+                                            <i class="fa-solid fa-box"></i>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">@p.NameAr</div>
+                                            <div style="font-size: 0.75rem; color: var(--text-secondary); display: flex; gap: 0.75rem;">
+                                                @if (!string.IsNullOrWhiteSpace(p.Barcode))
+                                                {
+                                                    <span><i class="fa-solid fa-barcode me-1"></i> @p.Barcode</span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(p.BrandName))
+                                                {
+                                                    <span><i class="fa-solid fa-tag me-1"></i> @p.BrandName</span>
+                                                }
+                                                <span><i class="fa-solid fa-cubes me-1"></i> رصيد المخزن: <strong>@p.QuantityInStock</strong> @(p.BaseUnit ?? "قطعة")</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <div style="text-align: left;">
+                                            <div style="font-weight: 800; color: var(--accent-emerald); font-size: 0.92rem;">
+                                                @(p.PurchasePrice > 0 ? p.PurchasePrice.ToString("N2") : p.SellingPrice.ToString("N2")) ج.م
+                                            </div>
+                                            <div style="font-size: 0.7rem; color: var(--text-muted);">سعر الشراء للقطعة</div>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-primary" style="padding: 0.25rem 0.65rem; font-size: 0.78rem; font-weight: 700;">
+                                            <i class="fa-solid fa-check me-1"></i> اختيار
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                                <i class="fa-solid fa-circle-exclamation me-1" style="color: var(--accent-amber);"></i> لا توجد أصناف مطابقة لـ "@searchProductByName"
+                            </div>
+                        }
+                    </div>
+                }
 
                 <!-- Product Selection & Line Item Row -->
                 <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1rem;">
                     <!-- Line Item Fields: Product, Quantity, Piece Cost -->
                     <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem; align-items: flex-end;">
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">اسم الصنف / المنتج</label>
-                            <select class="form-select" value="@selectedProductIdString" @onchange="OnProductSelected">
-                                <option value="">-- @(FilteredPurchaseProducts.Any() ? "اختر المنتج (" + FilteredPurchaseProducts.Count + ")" : "لا توجد نتائج مطابقة") --</option>
-                                @foreach (var p in FilteredPurchaseProducts)
-                                {
-                                    <option value="@p.Id.ToString()">
-                                        @p.NameAr (@(p.PurchasePrice > 0 ? p.PurchasePrice : p.SellingPrice) ج.م)
-                                    </option>
-                                }
-                            </select>
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">الصنف المختار</label>
+                            @{
+                                var selectedProd = availableProducts.FirstOrDefault(p => p.Id.ToString() == selectedProductIdString);
+                            }
+                            @if (selectedProd != null)
+                            {
+                                <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(99, 102, 241, 0.12); border: 1.5px solid var(--accent-indigo); padding: 0.45rem 0.75rem; border-radius: 0.5rem;">
+                                    <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        <strong style="color: var(--text-primary); font-size: 0.9rem;">@selectedProd.NameAr</strong>
+                                        <span style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.4rem;">(@(selectedProd.PurchasePrice > 0 ? selectedProd.PurchasePrice.ToString("N2") : selectedProd.SellingPrice.ToString("N2")) ج.م)</span>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.15rem 0.45rem; font-size: 0.75rem; color: var(--text-muted);" @onclick="ClearSelectedAddProduct" title="إلغاء اختيار هذا الصنف">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="padding: 0.45rem 0.75rem; border: 1.5px dashed var(--border-color); border-radius: 0.5rem; color: var(--text-muted); font-size: 0.82rem; background: rgba(255,255,255,0.01);">
+                                    <i class="fa-solid fa-arrow-up me-1" style="color: var(--accent-indigo);"></i> اكتب اسم الصنف في خانة البحث أعلاه أو امسح الباركود
+                                </div>
+                            }
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
                             <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">الكمية (بالقطعة)</label>
@@ -882,12 +1013,66 @@
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
                         <label style="font-weight: 600;">المورد <span style="color: var(--accent-red);">*</span></label>
-                        <select class="form-select" @bind="editSupplierIdString">
-                            @foreach (var sup in suppliers)
-                            {
-                                <option value="@sup.Id">@sup.Name</option>
-                            }
-                        </select>
+                        @{
+                            var currentEditSupplier = suppliers.FirstOrDefault(s => s.Id.ToString() == editSupplierIdString);
+                        }
+                        @if (currentEditSupplier != null)
+                        {
+                            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(16, 185, 129, 0.12); border: 1.5px solid var(--accent-emerald); padding: 0.35rem 0.65rem; border-radius: 0.4rem; height: 38px;">
+                                <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; font-weight: 700; color: var(--text-primary);">
+                                    <i class="fa-solid fa-truck-field me-1" style="color: var(--accent-emerald);"></i>
+                                    @currentEditSupplier.Name
+                                    @if (!string.IsNullOrWhiteSpace(currentEditSupplier.Phone))
+                                    {
+                                        <span style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.4rem;">(@currentEditSupplier.Phone)</span>
+                                    }
+                                </div>
+                                <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.1rem 0.4rem; font-size: 0.75rem;" @onclick="ClearSelectedEditSupplier" title="تغيير المورد">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="position: relative;">
+                                <input class="form-control"
+                                       placeholder="ابحث باسم المورد أو رقم الهاتف..."
+                                       @bind="editSearchSupplierByName"
+                                       @bind:event="oninput"
+                                       style="height: 38px; font-size: 0.85rem;" />
+                                @if (!string.IsNullOrWhiteSpace(editSearchSupplierByName))
+                                {
+                                    <div style="position: absolute; top: 100%; right: 0; left: 0; background: var(--bg-card, #1e293b); border: 1.5px solid var(--accent-indigo); border-radius: 0.5rem; z-index: 1060; max-height: 220px; overflow-y: auto; box-shadow: var(--shadow-xl); margin-top: 3px;">
+                                        @if (FilteredEditSuppliers.Any())
+                                        {
+                                            @foreach (var sup in FilteredEditSuppliers)
+                                            {
+                                                <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+                                                     class="search-result-item"
+                                                     @onclick="() => SelectSupplierForEdit(sup)">
+                                                    <div>
+                                                        <strong style="color: var(--text-primary); font-size: 0.88rem;">@sup.Name</strong>
+                                                        @if (!string.IsNullOrWhiteSpace(sup.Phone))
+                                                        {
+                                                            <div style="font-size: 0.75rem; color: var(--text-secondary); direction: ltr; text-align: right;">@sup.Phone</div>
+                                                        }
+                                                    </div>
+                                                    <button type="button" class="btn btn-xs btn-primary" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">
+                                                        اختيار
+                                                    </button>
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
+                                                لا يوجد مورد مطابق لـ "@editSearchSupplierByName"
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
                         <label style="font-weight: 600; display: flex; align-items: center; justify-content: space-between;">
@@ -927,25 +1112,100 @@
                             <i class="fa-solid fa-barcode"></i>
                             <input class="form-control" @bind="editScannedBarcode" @bind:event="oninput" @onkeyup="HandleEditBarcodeKeyUp" placeholder="مسح أو إدخال باركود الصنف..." />
                         </div>
-                        <div class="search-box" style="width: 100%;">
+                        <div class="search-box" style="width: 100%; position: relative;">
                             <i class="fa-solid fa-magnifying-glass"></i>
-                            <input class="form-control" @bind="editSearchProductByName" @bind:event="oninput" @onkeyup="HandleEditProductNameSearchKeyUp" placeholder="بحث عن الصنف بالاسم..." />
+                            <input class="form-control" @bind="editSearchProductByName" @bind:event="oninput" @onkeyup="HandleEditProductNameSearchKeyUp" placeholder="بحث عن الصنف بالاسم مباشرة..." />
+                            @if (!string.IsNullOrWhiteSpace(editSearchProductByName))
+                            {
+                                <button type="button" @onclick="() => editSearchProductByName = string.Empty" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer;" title="مسح البحث">
+                                    <i class="fa-solid fa-circle-xmark"></i>
+                                </button>
+                            }
                         </div>
                     </div>
+
+                    <!-- Live Direct Search Filter Results Panel for Edit Modal -->
+                    @if (!string.IsNullOrWhiteSpace(editSearchProductByName))
+                    {
+                        <div class="purchase-live-search-results" style="background: var(--bg-card); border: 1.5px solid var(--accent-indigo); border-radius: 0.65rem; margin-bottom: 0.75rem; max-height: 220px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,0.3); z-index: 10;">
+                            <div style="padding: 0.4rem 0.85rem; background: rgba(99, 102, 241, 0.1); border-bottom: 1px solid var(--border-color); font-size: 0.78rem; font-weight: 700; color: var(--accent-indigo); display: flex; justify-content: space-between;">
+                                <span>نتائج البحث المباشرة بالاسم (@FilteredEditPurchaseProducts.Count صنف مطابقة)</span>
+                                <span style="font-size: 0.72rem; color: var(--text-secondary);">اضغط على الصنف لاختياره مباشرة</span>
+                            </div>
+                            @if (FilteredEditPurchaseProducts.Any())
+                            {
+                                @foreach (var prod in FilteredEditPurchaseProducts)
+                                {
+                                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--border-color-light); cursor: pointer; transition: background 0.15s ease;"
+                                         class="search-result-item"
+                                         @onclick="() => SelectProductForEditPurchase(prod)">
+                                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                            <div style="width: 32px; height: 32px; border-radius: 6px; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent-indigo); font-size: 0.9rem;">
+                                                <i class="fa-solid fa-box"></i>
+                                            </div>
+                                            <div>
+                                                <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">@prod.NameAr</div>
+                                                <div style="font-size: 0.75rem; color: var(--text-secondary); display: flex; gap: 0.75rem;">
+                                                    @if (!string.IsNullOrWhiteSpace(prod.Barcode))
+                                                    {
+                                                        <span><i class="fa-solid fa-barcode me-1"></i> @prod.Barcode</span>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(prod.BrandName))
+                                                    {
+                                                        <span><i class="fa-solid fa-tag me-1"></i> @prod.BrandName</span>
+                                                    }
+                                                    <span><i class="fa-solid fa-cubes me-1"></i> رصيد المخزن: <strong>@prod.QuantityInStock</strong> @(prod.BaseUnit ?? "قطعة")</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                            <div style="text-align: left;">
+                                                <div style="font-weight: 800; color: var(--accent-emerald); font-size: 0.92rem;">
+                                                    @(prod.PurchasePrice > 0 ? prod.PurchasePrice.ToString("N2") : prod.SellingPrice.ToString("N2")) ج.م
+                                                </div>
+                                                <div style="font-size: 0.7rem; color: var(--text-muted);">سعر الشراء للقطعة</div>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-primary" style="padding: 0.25rem 0.65rem; font-size: 0.78rem; font-weight: 700;">
+                                                <i class="fa-solid fa-check me-1"></i> اختيار
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                                    <i class="fa-solid fa-circle-exclamation me-1" style="color: var(--accent-amber);"></i> لا توجد أصناف مطابقة لـ "@editSearchProductByName"
+                                </div>
+                            }
+                        </div>
+                    }
 
                     <!-- Line Item Fields: Product, Quantity, Piece Cost -->
                     <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem; align-items: flex-end;">
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">اسم الصنف / المنتج</label>
-                            <select class="form-select" value="@editSelectedProductIdString" @onchange="OnEditProductSelected">
-                                <option value="">-- @(FilteredEditPurchaseProducts.Any() ? "اختر صنف (" + FilteredEditPurchaseProducts.Count + ")" : "لا توجد نتائج") --</option>
-                                @foreach (var prod in FilteredEditPurchaseProducts)
-                                {
-                                    <option value="@prod.Id">
-                                        @prod.NameAr (@(prod.PurchasePrice > 0 ? prod.PurchasePrice : prod.SellingPrice) ج.م)
-                                    </option>
-                                }
-                            </select>
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">الصنف المختار</label>
+                            @{
+                                var editSelectedProd = availableProducts.FirstOrDefault(p => p.Id.ToString() == editSelectedProductIdString);
+                            }
+                            @if (editSelectedProd != null)
+                            {
+                                <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(99, 102, 241, 0.12); border: 1.5px solid var(--accent-indigo); padding: 0.45rem 0.75rem; border-radius: 0.5rem;">
+                                    <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        <strong style="color: var(--text-primary); font-size: 0.9rem;">@editSelectedProd.NameAr</strong>
+                                        <span style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.4rem;">(@(editSelectedProd.PurchasePrice > 0 ? editSelectedProd.PurchasePrice.ToString("N2") : editSelectedProd.SellingPrice.ToString("N2")) ج.م)</span>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.15rem 0.45rem; font-size: 0.75rem; color: var(--text-muted);" @onclick="ClearSelectedEditProduct" title="إلغاء اختيار هذا الصنف">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="padding: 0.45rem 0.75rem; border: 1.5px dashed var(--border-color); border-radius: 0.5rem; color: var(--text-muted); font-size: 0.82rem; background: rgba(255,255,255,0.01);">
+                                    <i class="fa-solid fa-arrow-up me-1" style="color: var(--accent-indigo);"></i> اكتب اسم الصنف في خانة البحث أعلاه أو امسح الباركود
+                                </div>
+                            }
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
                             <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">الكمية (بالقطعة)</label>
@@ -2108,6 +2368,80 @@
             addItemCost = 0;
             addItemQty = 1;
         }
+    }
+
+    private void SelectProductForAddPurchase(ProductDto prod)
+    {
+        selectedProductIdString = prod.Id.ToString();
+        baseProductPieceCost = prod.PurchasePrice > 0 ? prod.PurchasePrice : prod.SellingPrice;
+        addItemCost = baseProductPieceCost;
+        addItemQty = 1;
+        errorMessage = string.Empty;
+        searchProductByName = string.Empty;
+    }
+
+    private void ClearSelectedAddProduct()
+    {
+        selectedProductIdString = string.Empty;
+        baseProductPieceCost = 0;
+        addItemCost = 0;
+        addItemQty = 1;
+    }
+
+    private void SelectProductForEditPurchase(ProductDto prod)
+    {
+        editSelectedProductIdString = prod.Id.ToString();
+        editBaseProductPieceCost = prod.PurchasePrice > 0 ? prod.PurchasePrice : prod.SellingPrice;
+        editAddItemCost = editBaseProductPieceCost;
+        editAddItemQty = 1;
+        errorMessage = string.Empty;
+        editSearchProductByName = string.Empty;
+    }
+
+    private void ClearSelectedEditProduct()
+    {
+        editSelectedProductIdString = string.Empty;
+        editBaseProductPieceCost = 0;
+        editAddItemCost = 0;
+        editAddItemQty = 1;
+    }
+
+    private string searchSupplierByName = string.Empty;
+    private List<SupplierDto> FilteredSuppliers => string.IsNullOrWhiteSpace(searchSupplierByName)
+        ? new()
+        : suppliers.Where(s => s.Name.Contains(searchSupplierByName, StringComparison.OrdinalIgnoreCase)
+                            || (!string.IsNullOrWhiteSpace(s.Phone) && s.Phone.Contains(searchSupplierByName, StringComparison.OrdinalIgnoreCase)))
+                   .Take(8).ToList();
+
+    private void SelectSupplierForAdd(SupplierDto s)
+    {
+        selectedSupplierIdString = s.Id.ToString();
+        searchSupplierByName = string.Empty;
+    }
+
+    private void ClearSelectedSupplier()
+    {
+        selectedSupplierIdString = string.Empty;
+        searchSupplierByName = string.Empty;
+    }
+
+    private string editSearchSupplierByName = string.Empty;
+    private List<SupplierDto> FilteredEditSuppliers => string.IsNullOrWhiteSpace(editSearchSupplierByName)
+        ? new()
+        : suppliers.Where(s => s.Name.Contains(editSearchSupplierByName, StringComparison.OrdinalIgnoreCase)
+                            || (!string.IsNullOrWhiteSpace(s.Phone) && s.Phone.Contains(editSearchSupplierByName, StringComparison.OrdinalIgnoreCase)))
+                   .Take(8).ToList();
+
+    private void SelectSupplierForEdit(SupplierDto s)
+    {
+        editSupplierIdString = s.Id.ToString();
+        editSearchSupplierByName = string.Empty;
+    }
+
+    private void ClearSelectedEditSupplier()
+    {
+        editSupplierIdString = string.Empty;
+        editSearchSupplierByName = string.Empty;
     }
 
     private async Task HandlePurchaseBarcodeKeyUp(KeyboardEventArgs e)

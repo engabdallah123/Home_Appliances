@@ -65,27 +65,16 @@ namespace POS.Desktop
                 var cartContainer = App.Services?.GetService(typeof(POS.Desktop.Services.State.CartStateContainer))
                     as POS.Desktop.Services.State.CartStateContainer;
 
-                if (cartContainer != null && cartContainer.Items.Any())
+                int cartCount = (cartContainer != null && cartContainer.Items.Any()) ? cartContainer.Items.Count : 0;
+
+                // Modern Exit Confirmation Dialog
+                var exitDialog = new ExitAppConfirmationDialog(cartCount)
                 {
-                    var msg = $"توجد منتجات ({cartContainer.Items.Count}) في سلة المبيعات لم يتم إتمام بيعها بعد.\n\nهل تريد الخروج وتجاهل السلة أم البقاء في البرنامج؟";
-                    var res = MessageBox.Show(msg, "تنبيه قبل الخروج", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No, MessageBoxOptions.RightAlign | MessageBoxOptions.RtlReading);
-                    if (res != MessageBoxResult.Yes)
-                    {
-                        e.Cancel = true;
-                    }
-                    return;
-                }
+                    Owner = this
+                };
+                exitDialog.ShowDialog();
 
-                // General Exit Confirmation
-                var confirmResult = MessageBox.Show(
-                    "هل تريد الخروج من البرنامج؟",
-                    "تأكيد الخروج",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question,
-                    MessageBoxResult.Yes,
-                    MessageBoxOptions.RightAlign | MessageBoxOptions.RtlReading);
-
-                if (confirmResult != MessageBoxResult.Yes)
+                if (!exitDialog.IsConfirmed)
                 {
                     e.Cancel = true;
                 }

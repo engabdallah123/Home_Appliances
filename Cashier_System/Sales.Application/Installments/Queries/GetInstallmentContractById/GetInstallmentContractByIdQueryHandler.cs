@@ -31,12 +31,17 @@ namespace Sales.Application.Installments.Queries.GetInstallmentContractById
                         WHEN (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) < 0 THEN 0 
                         ELSE (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) 
                     END AS RemainingBalance,
-                    c.NumberOfMonths, c.StartDate, c.Status,
-                    CASE c.Status
-                        WHEN 1 THEN N'ساري'
-                        WHEN 2 THEN N'مكتمل'
-                        WHEN 3 THEN N'متعثر'
-                        WHEN 4 THEN N'ملغي'
+                    c.NumberOfMonths, c.StartDate,
+                    CASE 
+                        WHEN c.Status = 1 AND (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) <= 0.01 THEN 2
+                        ELSE c.Status 
+                    END AS Status,
+                    CASE 
+                        WHEN (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) <= 0.01 AND c.Status != 4 THEN N'مكتمل'
+                        WHEN c.Status = 1 THEN N'ساري'
+                        WHEN c.Status = 2 THEN N'مكتمل'
+                        WHEN c.Status = 3 THEN N'متعثر'
+                        WHEN c.Status = 4 THEN N'ملغي'
                         ELSE N'غير معروف'
                     END AS StatusText,
                     c.Notes, c.CreatedAt

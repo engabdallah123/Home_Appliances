@@ -86,7 +86,7 @@
     <div style="display: flex; gap: 0.75rem; margin-bottom: 1.25rem; align-items: center; flex-wrap: wrap;">
         <div class="search-box" style="max-width: 380px; flex: 1;">
             <i class="fa-solid fa-search"></i>
-            <input @bind="searchQuery" @bind:event="oninput" placeholder="بحث برقم الفاتورة، اسم العميل، الهاتف، العنوان..." />
+            <input @bind="searchQuery" @bind:event="oninput" @bind:after="ApplyFilters" placeholder="بحث برقم الفاتورة، اسم العميل، الهاتف، العنوان..." />
         </div>
 
         <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
@@ -154,7 +154,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var res in filteredReservations)
+                        @foreach (var res in pagedReservations)
                         {
                             bool isFullyDispatched = res.ReservationStatus == 3;
                             bool isPartiallyDispatched = res.ReservationStatus == 2;
@@ -303,6 +303,8 @@
             </div>
         }
     </div>
+
+    <Pagination CurrentPage="@currentPage" TotalItems="@filteredReservations.Count" PageSize="@pageSize" OnPageChanged="@(p => currentPage = p)" OnPageSizeChanged="@(s => { pageSize = s; currentPage = 1; EnsureValidPage(); })" />
 </div>
 
 <!-- Modal: Reserved Items & Customer Delivery Details -->
@@ -463,6 +465,10 @@
     private List<SaleDto> reservations = new();
     private List<SaleDto> filteredReservations = new();
 
+    private int currentPage = 1;
+    private int pageSize = 15;
+    private IEnumerable<SaleDto> pagedReservations => filteredReservations.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
     private string searchQuery = string.Empty;
     private int selectedStatusFilter = -1; // -1: All, 1: Reserved, 2: PartiallyDispatched, 3: FullyDispatched
     private bool isLoading = true;
@@ -520,6 +526,7 @@
     private void FilterByStatus(int status)
     {
         selectedStatusFilter = status;
+        currentPage = 1;
         ApplyFilters();
     }
 
@@ -551,6 +558,16 @@
         }
 
         filteredReservations = query.ToList();
+        EnsureValidPage();
+    }
+
+    private void EnsureValidPage()
+    {
+        var maxPage = Math.Max(1, (int)Math.Ceiling((double)filteredReservations.Count / pageSize));
+        if (currentPage > maxPage)
+        {
+            currentPage = maxPage;
+        }
     }
 
     private async Task UpdateStatus(Guid saleId, int newStatus, bool closeModal = false)

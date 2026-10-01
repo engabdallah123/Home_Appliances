@@ -184,13 +184,28 @@ namespace Sales.Domain.Installments.Entities
 
             UpdatedAt = DateTime.UtcNow;
 
-            // تحديث حالة العقد إذا تم سداد كافة الأقساط بالكامل
-            if (_schedules.All(s => s.Status == InstallmentStatus.Paid))
-            {
-                Status = InstallmentContractStatus.Completed;
-            }
+            // تحديث حالة العقد إذا تم سداد كافة الأقساط بالكامل أو استيفاء كامل المبلغ المتبقي
+            CheckCompletion();
 
             return Result.Success();
+        }
+
+        public void MarkAsCompleted()
+        {
+            Status = InstallmentContractStatus.Completed;
+            UpdatedAt = DateTime.UtcNow;
+        }
+
+        public void CheckCompletion()
+        {
+            if (Status == InstallmentContractStatus.Cancelled)
+                return;
+
+            if (_schedules.All(s => s.Status == InstallmentStatus.Paid) || RemainingBalance <= 0.01m)
+            {
+                Status = InstallmentContractStatus.Completed;
+                UpdatedAt = DateTime.UtcNow;
+            }
         }
 
         public void RefreshScheduleStatuses()

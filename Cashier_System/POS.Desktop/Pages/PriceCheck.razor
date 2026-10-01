@@ -9,29 +9,29 @@
     <!-- Header -->
     <div class="price-check-header">
         <div class="header-icon">
-            <i class="fa-solid fa-barcode"></i>
+            <i class="fa-solid fa-tag"></i>
         </div>
         <div>
-            <h2>شاشة الاستعلام الفوري عن سعر المنتج</h2>
-            <p>ضع المنتج أمام قارئ الباركود أو ادخل كود المنتج يدوياً للاستعلام عن السعر والمخزون</p>
+            <h2>شاشة الاستعلام عن سعر المنتج</h2>
+            <p>ابحث باسم المنتج أو الجهاز للاستعلام الفوري عن سعر البيع والجملة وحالة التوفر بالمخزن</p>
         </div>
     </div>
 
-    <!-- Search / Scanner Input Box -->
+    <!-- Search Input Box (Name Search Only) -->
     <div class="search-scanner-card">
         <div class="input-wrapper">
-            <i class="fa-solid fa-barcode search-icon"></i>
-            <input id="price-check-barcode-input"
-                   @ref="barcodeInput"
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input id="price-check-name-input"
+                   @ref="nameInput"
                    type="text"
                    class="scanner-input"
-                   placeholder="امسح الباركود باستخدام القارئ أو ادخل الكود هنا..."
-                   @bind="barcodeQuery"
+                   placeholder="اكتب اسم المنتج أو الجهاز هنا للاستعلام عن سعره..."
+                   @bind="searchNameQuery"
                    @bind:event="oninput"
                    @onkeyup="HandleKeyUp"
                    autocomplete="off" />
-            
-            @if (!string.IsNullOrWhiteSpace(barcodeQuery))
+
+            @if (!string.IsNullOrWhiteSpace(searchNameQuery))
             {
                 <button class="clear-btn" @onclick="ClearSearch" title="مسح">
                     <i class="fa-solid fa-xmark"></i>
@@ -39,12 +39,65 @@
             }
         </div>
 
+        <!-- Live Instant Suggestions Dropdown -->
+        @if (!string.IsNullOrWhiteSpace(searchNameQuery) && MatchingProducts.Any())
+        {
+            <div class="live-suggestions-panel">
+                <div class="suggestions-header">
+                    <span>نتائج البحث المطابقة (@MatchingProducts.Count()):</span>
+                    <span class="hint-text">اضغط على الصنف لعرض بطاقة السعر بالكامل</span>
+                </div>
+                <div class="suggestions-list">
+                    @foreach (var p in MatchingProducts.Take(12))
+                    {
+                        <div class="suggestion-item @(selectedProduct?.Id == p.Id ? "active" : "")" @onclick="() => SelectProduct(p)">
+                            <div class="item-info">
+                                <div class="item-name">
+                                    <span class="name-ar">@p.NameAr</span>
+                                    @if (!string.IsNullOrWhiteSpace(p.NameEn))
+                                    {
+                                        <span class="name-en">@p.NameEn</span>
+                                    }
+                                </div>
+                                <div class="item-meta">
+                                    @if (!string.IsNullOrWhiteSpace(p.BrandName))
+                                    {
+                                        <span class="meta-tag brand-tag"><i class="fa-solid fa-award"></i> @p.BrandName</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(p.CategoryName))
+                                    {
+                                        <span class="meta-tag"><i class="fa-solid fa-tags"></i> @p.CategoryName</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(p.Barcode))
+                                    {
+                                        <span class="meta-tag barcode-tag"><i class="fa-solid fa-barcode"></i> @p.Barcode</span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="item-pricing">
+                                <span class="price-val">@p.SellingPrice.ToString("N2") ج.م</span>
+                                @if (p.QuantityInStock > 0)
+                                {
+                                    <span class="stock-badge in-stock"><i class="fa-solid fa-check"></i> متوفر (@p.QuantityInStock.ToString("N0"))</span>
+                                }
+                                else
+                                {
+                                    <span class="stock-badge out-stock"><i class="fa-solid fa-xmark"></i> نفد المخزون</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
         <div class="action-buttons">
-            <button class="btn btn-search" @onclick="PerformSearchAsync" disabled="@(isLoading || string.IsNullOrWhiteSpace(barcodeQuery))">
-                <i class="fa-solid fa-magnifying-glass"></i> استعلام (Enter)
+            <button class="btn btn-search" @onclick="SelectFirstMatchOrSearch" disabled="@(isLoading || string.IsNullOrWhiteSpace(searchNameQuery))">
+                <i class="fa-solid fa-magnifying-glass"></i> استعلام مباشر (Enter)
             </button>
             <button class="btn btn-reset" @onclick="ClearSearch">
-                <i class="fa-solid fa-rotate-left"></i> مسح الخانات
+                <i class="fa-solid fa-rotate-left"></i> تفريغ البحث
             </button>
         </div>
     </div>
@@ -57,35 +110,35 @@
             <p>جاري البحث واسترجاع تفاصيل المنتج والسعر...</p>
         </div>
     }
-    else if (product is not null)
+    else if (selectedProduct is not null)
     {
         <div class="product-result-card">
-            <!-- Left Side: Product Image & Badges -->
+            <!-- Left Side: Product Image & Stock Status -->
             <div class="product-media-column">
                 <div class="image-container">
-                    @if (!string.IsNullOrWhiteSpace(product.ImageUrl))
+                    @if (!string.IsNullOrWhiteSpace(selectedProduct.ImageUrl))
                     {
-                        <img src="@ApiClient.GetImageFullUrl(product.ImageUrl)" alt="@product.NameAr" class="product-img" onerror="this.onerror=null; this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                        <img src="@ApiClient.GetImageFullUrl(selectedProduct.ImageUrl)" alt="@selectedProduct.NameAr" class="product-img" onerror="this.onerror=null; this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
                         <div class="no-image-placeholder" style="display:none;">
                             <i class="fa-solid fa-box-open fa-3x"></i>
-                            <span>منتج بدون صورة</span>
+                            <span>صورة المنتج</span>
                         </div>
                     }
                     else
                     {
                         <div class="no-image-placeholder">
                             <i class="fa-solid fa-box-open fa-3x"></i>
-                            <span>منتج بدون صورة</span>
+                            <span>صورة المنتج</span>
                         </div>
                     }
                 </div>
 
                 <div class="product-media-stock-text">
-                    @if (product.QuantityInStock > 0)
+                    @if (selectedProduct.QuantityInStock > 0)
                     {
                         <span class="stock-text-available">
                             <i class="fa-solid fa-boxes-stacked"></i>
-                            <span>متوفر بالمخزن: <strong>@product.QuantityInStock.ToString("N0") @(product.UnitSymbol ?? "قطعة")</strong></span>
+                            <span>متوفر بالمخزن: <strong>@selectedProduct.QuantityInStock.ToString("N0") @(selectedProduct.UnitSymbol ?? "قطعة")</strong></span>
                         </span>
                     }
                     else
@@ -103,155 +156,144 @@
                 <!-- Price Display Hero Box -->
                 <div class="price-hero-card">
                     <div class="price-hero-header">
-                        <span><i class="fa-solid fa-tag"></i> سعر البيع النهائي</span>
+                        <span><i class="fa-solid fa-tag"></i> سعر البيع النهائي للعميل</span>
                         <span class="tax-badge">
-                            @(product.TaxRate > 0 ? $"شامل ضريبة {product.TaxRate}%" : "معفى من الضريبة")
+                            @(selectedProduct.TaxRate > 0 ? $"شامل ضريبة {selectedProduct.TaxRate}%" : "معفى من الضريبة")
                         </span>
                     </div>
 
                     <div class="price-main-display">
-                        <span class="price-amount">@product.SellingPrice.ToString("N2")</span>
+                        <span class="price-amount">@selectedProduct.SellingPrice.ToString("N2")</span>
                         <span class="price-currency">ج.م</span>
                     </div>
 
                     <div class="price-sub-details">
-                        @if (product.WholesalePrice > 0)
+                        @if (selectedProduct.WholesalePrice > 0)
                         {
                             <span class="sub-detail-item">
-                                <i class="fa-solid fa-boxes-packing"></i> سعر الجملة: <strong>@product.WholesalePrice.ToString("N2") ج.م</strong>
+                                <i class="fa-solid fa-boxes-packing"></i> سعر الجملة: <strong>@selectedProduct.WholesalePrice.ToString("N2") ج.م</strong>
                             </span>
                         }
-                        @if (!string.IsNullOrWhiteSpace(product.UnitSymbol))
+                        @if (!string.IsNullOrWhiteSpace(selectedProduct.UnitSymbol))
                         {
                             <span class="sub-detail-item">
-                                <i class="fa-solid fa-scale-unbalanced"></i> وحدة البيع: <strong>@product.UnitSymbol</strong>
+                                <i class="fa-solid fa-scale-unbalanced"></i> وحدة البيع: <strong>@selectedProduct.UnitSymbol</strong>
                             </span>
                         }
                     </div>
                 </div>
 
-                <!-- Product Attributes -->
+                <!-- Product Attributes Grid -->
                 <div class="attributes-grid">
-                    <div class="attr-box">
-                        <span class="attr-label">اسم المنتج بالعربية</span>
-                        <span class="attr-val font-title">@product.NameAr</span>
+                    <div class="attr-box full-span">
+                        <span class="attr-label">اسم المنتج</span>
+                        <span class="attr-val font-title">@selectedProduct.NameAr</span>
                     </div>
 
-                    @if (!string.IsNullOrWhiteSpace(product.NameEn))
+                    @if (!string.IsNullOrWhiteSpace(selectedProduct.NameEn))
                     {
-                        <div class="attr-box">
-                            <span class="attr-label">اسم المنتج بالإنجليزية</span>
-                            <span class="attr-val">@product.NameEn</span>
+                        <div class="attr-box full-span">
+                            <span class="attr-label">الاسم بالإنجليزية</span>
+                            <span class="attr-val">@selectedProduct.NameEn</span>
                         </div>
                     }
 
                     <div class="attr-box">
-                        <span class="attr-label">كود الباركود</span>
-                        <span class="attr-val barcode-font"><i class="fa-solid fa-barcode"></i> @product.Barcode</span>
-                    </div>
-
-                    <div class="attr-box">
-                        <span class="attr-label">الكمية المتوفرة بالمخزن</span>
-                        <span class="attr-val" style="color: @(product.QuantityInStock > 0 ? "var(--accent-green)" : "var(--accent-red)"); font-weight: 800;">
-                            <i class="fa-solid @(product.QuantityInStock > 0 ? "fa-cubes" : "fa-circle-xmark") me-1"></i>
-                            @product.QuantityInStock.ToString("N0") @(product.UnitSymbol ?? "قطعة")
-                        </span>
-                    </div>
-
-                    <div class="attr-box">
                         <span class="attr-label">التصنيف</span>
-                        <span class="attr-val">@(product.CategoryName ?? "غير محدد")</span>
+                        <span class="attr-val">@(selectedProduct.CategoryName ?? "غير محدد")</span>
                     </div>
 
-                    @if (!string.IsNullOrWhiteSpace(product.BrandName))
+                    @if (!string.IsNullOrWhiteSpace(selectedProduct.BrandName))
                     {
                         <div class="attr-box">
                             <span class="attr-label">الماركة / التوكيل</span>
-                            <span class="attr-val" style="color: var(--accent-indigo); font-weight: 700;">
-                                <i class="fa-solid fa-award me-1"></i> @product.BrandName
+                            <span class="attr-val brand-val">
+                                <i class="fa-solid fa-award me-1"></i> @selectedProduct.BrandName
                             </span>
                         </div>
                     }
 
-                    @if (!string.IsNullOrWhiteSpace(product.ModelNumber))
+                    @if (!string.IsNullOrWhiteSpace(selectedProduct.ModelNumber))
                     {
                         <div class="attr-box">
                             <span class="attr-label">الموديل / الكود الفني</span>
-                            <span class="attr-val"><code>@product.ModelNumber</code></span>
+                            <span class="attr-val"><code>@selectedProduct.ModelNumber</code></span>
                         </div>
                     }
 
-                    @if (!string.IsNullOrWhiteSpace(product.Color))
+                    @if (!string.IsNullOrWhiteSpace(selectedProduct.Color))
                     {
                         <div class="attr-box">
                             <span class="attr-label">اللون</span>
-                            <span class="attr-val"><i class="fa-solid fa-palette me-1"></i> @product.Color</span>
+                            <span class="attr-val"><i class="fa-solid fa-palette me-1"></i> @selectedProduct.Color</span>
                         </div>
                     }
+
+                    <div class="attr-box">
+                        <span class="attr-label">الكمية بالمخزن</span>
+                        <span class="attr-val" style="color: @(selectedProduct.QuantityInStock > 0 ? "var(--accent-green)" : "var(--accent-red)"); font-weight: 800;">
+                            <i class="fa-solid @(selectedProduct.QuantityInStock > 0 ? "fa-cubes" : "fa-circle-xmark") me-1"></i>
+                            @selectedProduct.QuantityInStock.ToString("N0") @(selectedProduct.UnitSymbol ?? "قطعة")
+                        </span>
+                    </div>
 
                     <div class="attr-box">
                         <span class="attr-label">فترة الضمان</span>
-                        <span class="attr-val" style="color: #60a5fa; font-weight: 700;">
-                            <i class="fa-solid fa-shield-halved me-1"></i> @(product.WarrantyPeriodMonths > 0 ? $"{product.WarrantyPeriodMonths} شهر" : "بدون ضمان")
+                        <span class="attr-val" style="color: var(--accent-blue); font-weight: 700;">
+                            <i class="fa-solid fa-shield-halved me-1"></i> @(selectedProduct.WarrantyPeriodMonths > 0 ? $"{selectedProduct.WarrantyPeriodMonths} شهر" : "بدون ضمان")
                         </span>
                     </div>
 
-                    @if (!string.IsNullOrWhiteSpace(product.MaintenanceAgent))
+                    @if (!string.IsNullOrWhiteSpace(selectedProduct.MaintenanceAgent))
                     {
                         <div class="attr-box">
                             <span class="attr-label">مركز الصيانة وخدمة العملاء</span>
-                            <span class="attr-val"><i class="fa-solid fa-headset me-1"></i> @product.MaintenanceAgent</span>
+                            <span class="attr-val"><i class="fa-solid fa-headset me-1"></i> @selectedProduct.MaintenanceAgent</span>
                         </div>
                     }
 
-                    <div class="attr-box">
-                        <span class="attr-label">حالة التوفر</span>
-                        <span class="attr-val">
-                            @if (product.QuantityInStock > 0)
-                            {
-                                <span style="color: var(--accent-green); font-weight: 700;"><i class="fa-solid fa-check-circle me-1"></i>متوفر للبيع</span>
-                            }
-                            else
-                            {
-                                <span style="color: var(--accent-red); font-weight: 700;"><i class="fa-solid fa-circle-xmark me-1"></i>غير متوفر بالمخزن</span>
-                            }
-                        </span>
-                    </div>
+                    @if (!string.IsNullOrWhiteSpace(selectedProduct.Barcode))
+                    {
+                        <div class="attr-box">
+                            <span class="attr-label">كود الباركود</span>
+                            <span class="attr-val barcode-font"><i class="fa-solid fa-barcode"></i> @selectedProduct.Barcode</span>
+                        </div>
+                    }
                 </div>
 
                 <!-- Tags / Attributes Flags -->
                 <div class="flags-container">
-                    @if (product.HasSerialNumber)
+                    @if (selectedProduct.HasSerialNumber)
                     {
                         <span class="flag-chip chip-amber"><i class="fa-solid fa-barcode"></i> متتبع بسيريال نمبر (S/N)</span>
                     }
-                    @if (product.WarrantyPeriodMonths > 0)
+                    @if (selectedProduct.WarrantyPeriodMonths > 0)
                     {
-                        <span class="flag-chip chip-blue"><i class="fa-solid fa-shield-halved"></i> ضمان معتمد @product.WarrantyPeriodMonths شهر</span>
+                        <span class="flag-chip chip-blue"><i class="fa-solid fa-shield-halved"></i> ضمان معتمد @selectedProduct.WarrantyPeriodMonths شهر</span>
                     }
-                    @if (product.IsActive)
+                    @if (selectedProduct.IsActive)
                     {
-                        <span class="flag-chip chip-green"><i class="fa-solid fa-check"></i> منتج متاح بالمعرض</span>
+                        <span class="flag-chip chip-green"><i class="fa-solid fa-check"></i> منتج متاح للبيع</span>
                     }
                 </div>
 
                 <!-- Action Footer -->
                 <div class="result-action-footer">
                     <button class="btn btn-scan-next" @onclick="ClearAndFocus">
-                        <i class="fa-solid fa-barcode"></i> استعلام عن منتج آخر (مسح جديد)
+                        <i class="fa-solid fa-magnifying-glass"></i> الاستعلام عن منتج آخر (بحث جديد)
                     </button>
                 </div>
             </div>
         </div>
     }
-    else if (hasSearched)
+    else if (hasSearched && !MatchingProducts.Any())
     {
         <div class="state-card not-found-state">
             <div class="not-found-icon">
                 <i class="fa-solid fa-face-frown fa-4x text-red"></i>
             </div>
-            <h3>لم يتم العثور على منتج بهذا الباركود!</h3>
-            <p>تأكد من صحة كود الباركود المدخل أو جرب المسح مرة أخرى</p>
+            <h3>لم يتم العثور على أي منتج بهذا الاسم!</h3>
+            <p>تأكد من كتابة اسم المنتج بشكل صحيح أو جرب كلمات بحث أخرى</p>
 
             <button class="btn btn-scan-next" @onclick="ClearAndFocus" style="margin-top: 1rem;">
                 <i class="fa-solid fa-rotate-left"></i> المحاولة مرة أخرى
@@ -260,13 +302,13 @@
     }
     else
     {
-        <!-- Initial Standby Kiosk Screen -->
+        <!-- Initial Standby Screen -->
         <div class="state-card standby-state">
             <div class="standby-icon">
-                <i class="fa-solid fa-qrcode fa-5x text-indigo"></i>
+                <i class="fa-solid fa-magnifying-glass fa-4x text-indigo"></i>
             </div>
-            <h3>الشاشة جاهزة للاستعلام</h3>
-            <p>وجه القارئ الضوئي نحو الباركود أو قم بكتابة الكود للبدء</p>
+            <h3>شاشة الاستعلام عن الأسعار جاهزة</h3>
+            <p>ابدأ بكتابة اسم المنتج أو الجهاز في خانة البحث أعلاه لعرض السعر والمواصفات فوراً</p>
         </div>
     }
 </div>
@@ -319,7 +361,7 @@
         margin-top: 0.2rem;
     }
 
-    /* Search & Scanner Input Card */
+    /* Search Card */
     .search-scanner-card {
         background: var(--bg-card);
         border: 1px solid var(--border-color);
@@ -329,6 +371,7 @@
         flex-direction: column;
         gap: 1rem;
         box-shadow: var(--shadow-md);
+        position: relative;
     }
 
     .input-wrapper {
@@ -351,7 +394,7 @@
         color: var(--text-primary);
         padding: 1rem 3.2rem 1rem 3rem;
         border-radius: 12px;
-        font-size: 1.25rem;
+        font-size: 1.2rem;
         font-weight: 700;
         font-family: var(--font-family);
         outline: none;
@@ -375,6 +418,135 @@
         padding: 0.3rem;
     }
     .clear-btn:hover { color: var(--accent-red); }
+
+    /* Live Suggestions Panel */
+    .live-suggestions-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+        margin-top: -0.25rem;
+    }
+
+    .suggestions-header {
+        background: var(--bg-secondary);
+        padding: 0.65rem 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .hint-text {
+        font-size: 0.75rem;
+        font-weight: normal;
+        color: var(--text-muted);
+    }
+
+    .suggestions-list {
+        max-height: 280px;
+        overflow-y: auto;
+    }
+
+    .suggestion-item {
+        padding: 0.85rem 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border-color);
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+
+    .suggestion-item:last-child {
+        border-bottom: none;
+    }
+
+    .suggestion-item:hover, .suggestion-item.active {
+        background: var(--bg-card-hover);
+    }
+
+    .item-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .item-name {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+    }
+
+    .name-ar {
+        font-size: 0.98rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .name-en {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .item-meta {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .meta-tag {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        background: var(--bg-secondary);
+        padding: 0.15rem 0.45rem;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+    }
+
+    .brand-tag {
+        color: var(--accent-indigo);
+        font-weight: 600;
+    }
+
+    .barcode-tag {
+        font-family: monospace;
+    }
+
+    .item-pricing {
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.25rem;
+    }
+
+    .price-val {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: var(--accent-emerald);
+    }
+
+    .stock-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.15rem 0.45rem;
+        border-radius: 6px;
+    }
+
+    .stock-badge.in-stock {
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--accent-emerald);
+    }
+
+    .stock-badge.out-stock {
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--accent-red);
+    }
 
     .action-buttons {
         display: flex;
@@ -426,6 +598,7 @@
     .standby-state h3, .not-found-state h3 {
         font-size: 1.4rem;
         font-weight: 800;
+        color: var(--text-primary);
     }
 
     .standby-state p, .not-found-state p {
@@ -598,6 +771,10 @@
         border: 1px solid var(--border-color);
     }
 
+    .attr-box.full-span {
+        grid-column: 1 / -1;
+    }
+
     .attr-label {
         font-size: 0.75rem;
         color: var(--text-muted);
@@ -610,7 +787,8 @@
         color: var(--text-primary);
     }
 
-    .font-title { font-size: 1.15rem; font-weight: 800; color: var(--accent-blue); }
+    .font-title { font-size: 1.2rem; font-weight: 800; color: var(--accent-blue); }
+    .brand-val { color: var(--accent-indigo); font-weight: 700; }
     .barcode-font { font-family: monospace; font-size: 1rem; color: var(--accent-amber); }
 
     .flags-container {
@@ -664,29 +842,61 @@
 </style>
 
 @code {
-    private ElementReference barcodeInput;
-    private string barcodeQuery = string.Empty;
+    private ElementReference nameInput;
+    private string searchNameQuery = string.Empty;
     private bool isLoading = false;
     private bool hasSearched = false;
-    private ProductDto? product;
+    private ProductDto? selectedProduct;
+    private List<ProductDto> allProducts = new();
+
+    private IEnumerable<ProductDto> MatchingProducts
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(searchNameQuery))
+                return Enumerable.Empty<ProductDto>();
+
+            var q = searchNameQuery.Trim();
+            return allProducts.Where(p =>
+                (p.NameAr != null && p.NameAr.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                (p.NameEn != null && p.NameEn.Contains(q, StringComparison.OrdinalIgnoreCase)));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllProductsAsync();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            await FocusBarcodeScannerAsync(50, true);
+            await FocusSearchInputAsync(50, true);
         }
     }
 
-    private async Task FocusBarcodeScannerAsync(int delay = 0, bool select = true)
+    private async Task LoadAllProductsAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("focusElementById", "price-check-barcode-input", delay, select);
+            allProducts = await ApiClient.GetProductsAsync();
         }
         catch
         {
-            try { await barcodeInput.FocusAsync(); } catch { }
+            allProducts = new();
+        }
+    }
+
+    private async Task FocusSearchInputAsync(int delay = 0, bool select = true)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("focusElementById", "price-check-name-input", delay, select);
+        }
+        catch
+        {
+            try { await nameInput.FocusAsync(); } catch { }
         }
     }
 
@@ -694,44 +904,58 @@
     {
         if (e.Key == "Enter")
         {
-            await PerformSearchAsync();
+            await SelectFirstMatchOrSearch();
         }
     }
 
-    private async Task PerformSearchAsync()
+    private async Task SelectFirstMatchOrSearch()
     {
-        if (string.IsNullOrWhiteSpace(barcodeQuery)) return;
+        if (string.IsNullOrWhiteSpace(searchNameQuery)) return;
 
-        isLoading = true;
         hasSearched = true;
-        product = null;
+        var firstMatch = MatchingProducts.FirstOrDefault();
+        if (firstMatch is not null)
+        {
+            SelectProduct(firstMatch);
+            return;
+        }
+
+        // If not in in-memory list, try fetching from API
+        isLoading = true;
+        selectedProduct = null;
         StateHasChanged();
 
-        var query = barcodeQuery.Trim();
-
-        // 1. Try exact barcode match first
-        product = await ApiClient.GetProductByBarcodeAsync(query);
-
-        // 2. Fallback: Search in product catalog list if barcode exact lookup returned null
-        if (product is null)
+        try
         {
-            var searchResults = await ApiClient.GetProductsAsync(query);
-            product = searchResults.FirstOrDefault(p => 
-                string.Equals(p.Barcode, query, StringComparison.OrdinalIgnoreCase) ||
-                p.NameAr.Contains(query, StringComparison.OrdinalIgnoreCase));
+            var results = await ApiClient.GetProductsAsync(searchNameQuery.Trim());
+            selectedProduct = results.FirstOrDefault(p =>
+                (p.NameAr != null && p.NameAr.Contains(searchNameQuery.Trim(), StringComparison.OrdinalIgnoreCase)) ||
+                (p.NameEn != null && p.NameEn.Contains(searchNameQuery.Trim(), StringComparison.OrdinalIgnoreCase)));
+        }
+        catch
+        {
+            selectedProduct = null;
         }
 
         isLoading = false;
         StateHasChanged();
-        await FocusBarcodeScannerAsync(50, true);
+        await FocusSearchInputAsync(50, true);
+    }
+
+    private void SelectProduct(ProductDto p)
+    {
+        selectedProduct = p;
+        hasSearched = true;
+        searchNameQuery = p.NameAr;
+        StateHasChanged();
     }
 
     private async Task ClearSearch()
     {
-        barcodeQuery = string.Empty;
-        product = null;
+        searchNameQuery = string.Empty;
+        selectedProduct = null;
         hasSearched = false;
-        await FocusBarcodeScannerAsync(0, true);
+        await FocusSearchInputAsync(0, true);
     }
 
     private async Task ClearAndFocus()
