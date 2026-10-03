@@ -131,5 +131,77 @@ namespace POS.CloudAPI.Controllers
 
             return Ok(response);
         }
+
+        [HttpGet("monthly-report")]
+        public async Task<IActionResult> GetMonthlyReport([FromQuery] int? year, [FromQuery] int? month)
+        {
+            var tenantId = GetTenantId();
+            if (tenantId == Guid.Empty) return Unauthorized();
+
+            var targetYear = year ?? DateTime.UtcNow.Year;
+            var targetMonth = month ?? DateTime.UtcNow.Month;
+
+            var startDate = new DateTime(targetYear, targetMonth, 1);
+            var endDate = startDate.AddMonths(1);
+
+            var sales = await _db.Sales
+                .AsNoTracking()
+                .Where(s => s.TenantId == tenantId && s.SaleDate >= startDate && s.SaleDate < endDate)
+                .ToListAsync();
+
+            var purchases = await _db.Purchases
+                .AsNoTracking()
+                .Where(p => p.TenantId == tenantId && p.PurchaseDate >= startDate && p.PurchaseDate < endDate)
+                .ToListAsync();
+
+            var expenses = await _db.Expenses
+                .AsNoTracking()
+                .Where(e => e.TenantId == tenantId && e.Date >= startDate && e.Date < endDate)
+                .ToListAsync();
+
+            var daysInMonth = DateTime.DaysInMonth(targetYear, targetMonth);
+            var dailyBreakdown = new List<object>();
+
+            decimal totalSales = 0;
+            decimal totalPurchases = 0;
+            decimal totalExpenses = 0;
+
+            for (int d = 1; d <= daysInMonth; d++)
+            {
+                var curDate = new DateTime(targetYear, targetMonth, d);
+                var daySales = sales.Where(s => s.SaleDate.Date == curDate.Date).Sum(s => s.TotalAmount);
+                var daySalesCount = sales.Count(s => s.SaleDate.Date == curDate.Date);
+                var dayPurchases = purchases.Where(p => p.PurchaseDate.Date == curDate.Date).Sum(p => p.TotalAmount);
+                var dayExpenses = expenses.Where(e => e.Date.Date == curDate.Date).Sum(e => e.Amount);
+                var dayNet = daySales - dayPurchases - dayExpenses;
+
+                totalSales += daySales;
+                totalPurchases += dayPurchases;
+                totalExpenses += dayExpenses;
+
+                dailyBreakdown.Add(new
+                {
+                    Day = d,
+                    Date = curDate.ToString("yyyy-MM-dd"),
+                    DayName = curDate.ToString("dddd", new System.Globalization.CultureInfo("ar-EG")),
+                    Sales = daySales,
+                    SalesCount = daySalesCount,
+                    Purchases = dayPurchases,
+                    Expenses = dayExpenses,
+                    Net = dayNet
+                });
+            }
+
+            return Ok(new
+            {
+                Year = targetYear,
+                Month = targetMonth,
+                TotalSales = totalSales,
+                TotalPurchases = totalPurchases,
+                TotalExpenses = totalExpenses,
+                NetProfit = totalSales - totalPurchases - totalExpenses,
+                DailyStats = dailyBreakdown
+            });
+        }
     }
 }

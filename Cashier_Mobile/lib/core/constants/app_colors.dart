@@ -17,6 +17,7 @@ class AppColors {
   static const Color purple = Color(0xFF8B5CF6);
   static const Color cyan = Color(0xFF06B6D4);
   static const Color accent = Color(0xFF38BDF8);
+  static const Color rose = Color(0xFFF43F5E);
 
   // Dark Theme Colors
   static const Color darkBackground = Color(0xFF0F172A);
@@ -54,4 +55,49 @@ class AppColors {
   static Color getTextSecondary(bool isDark) => isDark ? darkTextSecondary : lightTextSecondary;
   static Color getTextMuted(bool isDark) => isDark ? darkTextMuted : lightTextMuted;
   static Color getInputBackground(bool isDark) => isDark ? darkSurfaceElevated : const Color(0xFFF8FAFC);
+
+  // Modern Gradients
+  static const LinearGradient primaryGradient = LinearGradient(
+    colors: [Color(0xFF4F46E5), Color(0xFF06B6D4)],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
+  static const LinearGradient successGradient = LinearGradient(
+    colors: [Color(0xFF059669), Color(0xFF10B981)],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
+  static const LinearGradient warningGradient = LinearGradient(
+    colors: [Color(0xFFD97706), Color(0xFFF59E0B)],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
+  static const LinearGradient dangerGradient = LinearGradient(
+    colors: [Color(0xFFDC2626), Color(0xFFEF4444)],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
+  static const LinearGradient roseGradient = LinearGradient(
+    colors: [Color(0xFFBE185D), Color(0xFFEC4899)],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
+  static const LinearGradient purpleGradient = LinearGradient(
+    colors: [Color(0xFF6D28D9), Color(0xFF8B5CF6)],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
+  static LinearGradient cardGradient(bool isDark) => LinearGradient(
+    colors: isDark
+        ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+        : [const Color(0xFFFFFFFF), const Color(0xFFF8FAFC)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 }

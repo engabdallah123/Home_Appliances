@@ -7,7 +7,7 @@
     <RootNamespace>POS.Desktop</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <ApplicationTitle>POS Supermarket Cashier System</ApplicationTitle>
+    <ApplicationTitle>ElectroPOS Pro - Home Appliances Cashier System</ApplicationTitle>
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 

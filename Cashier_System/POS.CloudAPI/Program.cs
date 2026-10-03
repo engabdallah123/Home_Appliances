@@ -120,7 +120,17 @@ namespace POS.CloudAPI
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[Cloud API Notice] Database init: {ex.Message}");
+                    if (args.Contains("--migrate-only"))
+                    {
+                        throw;
+                    }
                 }
+            }
+
+            if (args.Contains("--migrate-only"))
+            {
+                Console.WriteLine("[Cloud API] Migration complete! Exiting.");
+                return;
             }
 
             app.UseSwagger();
@@ -129,6 +139,8 @@ namespace POS.CloudAPI
                 c.SwaggerEndpoint("/swagger/v1/swagger.json", "POS Cloud API v1");
                 c.RoutePrefix = "swagger";
             });
+
+            app.MapGet("/", () => Results.Redirect("/swagger"));
 
             app.UseCors("AllowAll");
             app.UseAuthentication();
@@ -143,9 +155,12 @@ namespace POS.CloudAPI
         {
             var configured = configuration.GetConnectionString("DefaultConnection");
 
-            if (!string.IsNullOrWhiteSpace(configured) && CanConnectToSql(configured))
+            if (!string.IsNullOrWhiteSpace(configured))
             {
-                return configured;
+                if (configured.Contains("databaseasp.net") || CanConnectToSql(configured))
+                {
+                    return configured;
+                }
             }
 
             var fallbackServers = new[] { ".\\SQLEXPRESS", ".", "localhost", "(localdb)\\MSSQLLocalDB", "127.0.0.1" };
@@ -171,7 +186,7 @@ namespace POS.CloudAPI
             {
                 var testBuilder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString)
                 {
-                    ConnectTimeout = 4
+                    ConnectTimeout = 15
                 };
                 if (string.IsNullOrWhiteSpace(testBuilder.InitialCatalog))
                 {

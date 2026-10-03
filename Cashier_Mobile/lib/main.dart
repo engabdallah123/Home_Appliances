@@ -73,7 +73,7 @@ class CashierMobileApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
-            title: 'Cashier',
+            title: 'إلكترو كاشير | ElectroPOS',
             debugShowCheckedModeBanner: false,
             themeMode: themeProvider.themeMode,
 

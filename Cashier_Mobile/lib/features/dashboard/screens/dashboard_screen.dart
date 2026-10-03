@@ -19,6 +19,9 @@ import '../../notifications/screens/shift_summaries_screen.dart';
 import '../../returns/screens/returns_list_screen.dart';
 import '../../sales/screens/mobile_pos_screen.dart';
 import '../../products/screens/price_check_screen.dart';
+import 'monthly_report_screen.dart';
+import '../../sales/screens/installments_screen.dart';
+import '../../sales/screens/reservations_screen.dart';
 import '../models/dashboard_model.dart';
 import '../providers/dashboard_provider.dart';
 
@@ -532,19 +535,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Column(
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    _buildMonthStatItem(isDark, "إجمالي مبيعات الشهر", "${currencyFormatter.format(stats?.monthSalesAmount ?? 0)} ج.م", AppColors.success),
-                                    _buildMonthStatItem(isDark, "صافي ربح الشهر", "${currencyFormatter.format(stats?.monthProfitAmount ?? 0)} ج.م", AppColors.cyan),
+                                    Expanded(
+                                      child: _buildMonthStatItem(isDark, "إجمالي مبيعات الشهر", "${currencyFormatter.format(stats?.monthSalesAmount ?? 0)} ج.م", AppColors.success),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildMonthStatItem(isDark, "صافي ربح الشهر", "${currencyFormatter.format(stats?.monthProfitAmount ?? 0)} ج.م", AppColors.cyan),
+                                    ),
                                   ],
                                 ),
                                 const Divider(height: 24),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    _buildMonthStatItem(isDark, "مشتريات الشهر", "${currencyFormatter.format(stats?.monthPurchasesAmount ?? 0)} ج.م", AppColors.primaryLight),
-                                    _buildMonthStatItem(isDark, "مصروفات الشهر", "${currencyFormatter.format(stats?.monthExpensesAmount ?? 0)} ج.م", AppColors.danger),
+                                    Expanded(
+                                      child: _buildMonthStatItem(isDark, "مشتريات الشهر", "${currencyFormatter.format(stats?.monthPurchasesAmount ?? 0)} ج.م", AppColors.primaryLight),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildMonthStatItem(isDark, "مصروفات الشهر", "${currencyFormatter.format(stats?.monthExpensesAmount ?? 0)} ج.م", AppColors.danger),
+                                    ),
                                   ],
+                                ),
+                                const Divider(height: 20),
+                                InkWell(
+                                  onTap: () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const MonthlyReportScreen()));
+                                  },
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.cyan.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: AppColors.cyan.withOpacity(0.3)),
+                                    ),
+                                    child: const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.analytics_rounded, size: 16, color: AppColors.cyan),
+                                        SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            "عرض التقرير المالي والشهري التفصيلي بالأيام",
+                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.cyan),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        SizedBox(width: 4),
+                                        Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.cyan),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -565,17 +607,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Column(
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    _buildMonthStatItem(isDark, "هالك اليوم", "${currencyFormatter.format(stats?.todayWasteLossAmount ?? 0)} ج.م", AppColors.warning),
-                                    _buildMonthStatItem(isDark, "هالك هذا الشهر", "${currencyFormatter.format(stats?.monthWasteLossAmount ?? 0)} ج.م", AppColors.danger),
+                                    Expanded(
+                                      child: _buildMonthStatItem(isDark, "هالك اليوم", "${currencyFormatter.format(stats?.todayWasteLossAmount ?? 0)} ج.م", AppColors.warning),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildMonthStatItem(isDark, "هالك هذا الشهر", "${currencyFormatter.format(stats?.monthWasteLossAmount ?? 0)} ج.م", AppColors.danger),
+                                    ),
                                   ],
                                 ),
                                 const Divider(height: 24),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    _buildMonthStatItem(isDark, "إجمالي خسائر الهالك", "${currencyFormatter.format(stats?.totalWasteLossAmount ?? 0)} ج.م", AppColors.danger),
+                                    Expanded(
+                                      child: _buildMonthStatItem(isDark, "إجمالي خسائر الهالك", "${currencyFormatter.format(stats?.totalWasteLossAmount ?? 0)} ج.م", AppColors.danger),
+                                    ),
+                                    const SizedBox(width: 8),
                                     TextButton.icon(
                                       onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpiryNotificationsScreen())),
                                       icon: const Icon(Icons.history_rounded, size: 16),
@@ -790,6 +838,84 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InstallmentsScreen())),
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.getSurface(isDark),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: AppColors.purple.withOpacity(0.3)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(7),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.purple.withOpacity(0.15),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.request_quote_rounded, color: AppColors.purple, size: 18),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text("أقساط الأجهزة", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                              Text("سجل وتحصيل الأقساط", style: TextStyle(fontSize: 10, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReservationsScreen())),
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.getSurface(isDark),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: AppColors.rose.withOpacity(0.3)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(7),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.rose.withOpacity(0.15),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.favorite_rounded, color: AppColors.rose, size: 18),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text("حجوزات العروسة", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                              Text("تسليمات وعربون المحل", style: TextStyle(fontSize: 10, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
 
                           const SizedBox(height: 24),
 
@@ -847,9 +973,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Icon(icon, size: 18, color: AppColors.primaryLight),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.getTextPrimary(isDark)),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.getTextPrimary(isDark)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
@@ -884,11 +1014,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             const SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
+                maxLines: 1,
+              ),
             ),
           ],
         ),
@@ -900,9 +1033,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: TextStyle(fontSize: 11, color: AppColors.getTextMuted(isDark))),
+        Text(
+          title,
+          style: TextStyle(fontSize: 11, color: AppColors.getTextMuted(isDark)),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(
+            value,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
+            maxLines: 1,
+          ),
+        ),
       ],
     );
   }

@@ -1,8 +1,11 @@
 using ClosedXML.Excel;
 using Inventory.Domain;
+using Inventory.Domain.Batches.Entities;
+using Inventory.Domain.Catalog.Brands;
 using Inventory.Domain.Catalog.Categories;
 using Inventory.Domain.Catalog.Products.Entities;
 using Inventory.Domain.Catalog.Units;
+using Inventory.Domain.Stock.StockMovements;
 using Microsoft.AspNetCore.Http;
 using POS.Shared.Application.IService;
 using POS.Shared.Application.Messaging;
@@ -51,7 +54,6 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                     using var zipStream = new MemoryStream(request.FileBytes);
                     using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: true);
 
-                    // Find excel entry (*.xlsx or *.xls) inside ZIP archive
                     var excelEntry = archive.Entries.FirstOrDefault(e =>
                         e.FullName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
                         e.FullName.EndsWith(".xls", StringComparison.OrdinalIgnoreCase));
@@ -64,7 +66,6 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                         excelBytes = ms.ToArray();
                     }
 
-                    // Index image files by barcode (filename without extension)
                     foreach (var entry in archive.Entries)
                     {
                         var ext = Path.GetExtension(entry.FullName).ToLowerInvariant();
@@ -85,7 +86,7 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                 }
             }
 
-            // 2. Pre-fetch existing Categories, Units, and Products for high-speed Bulk operations
+            // 2. Pre-fetch existing Categories, Brands, Units, and Products for bulk resolution
             var existingCategories = await _unitOfWork.CategoryRepository.GetAllAsync();
             var categoryMap = new Dictionary<string, Category>(StringComparer.OrdinalIgnoreCase);
             foreach (var cat in existingCategories)
@@ -94,6 +95,18 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                     categoryMap[cat.NameAr.Trim()] = cat;
                 if (!string.IsNullOrWhiteSpace(cat.NameEn) && !categoryMap.ContainsKey(cat.NameEn.Trim()))
                     categoryMap[cat.NameEn.Trim()] = cat;
+            }
+
+            var existingBrands = await _unitOfWork.BrandRepository.GetAllAsync();
+            var brandMap = new Dictionary<string, Brand>(StringComparer.OrdinalIgnoreCase);
+            foreach (var b in existingBrands)
+            {
+                if (!string.IsNullOrWhiteSpace(b.Name) && !brandMap.ContainsKey(b.Name.Trim()))
+                    brandMap[b.Name.Trim()] = b;
+                if (!string.IsNullOrWhiteSpace(b.NameAr) && !brandMap.ContainsKey(b.NameAr.Trim()))
+                    brandMap[b.NameAr.Trim()] = b;
+                if (!string.IsNullOrWhiteSpace(b.NameEn) && !brandMap.ContainsKey(b.NameEn.Trim()))
+                    brandMap[b.NameEn.Trim()] = b;
             }
 
             var existingUnits = await _unitOfWork.UnitRepository.GetAllAsync();
@@ -138,7 +151,7 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
 
             // 4. Dynamic Column Header Detection (Row 1)
             var headerRow = worksheet.Row(1);
-            int lastCellNum = Math.Max(20, headerRow.LastCellUsed()?.Address.ColumnNumber ?? 20);
+            int lastCellNum = Math.Max(22, headerRow.LastCellUsed()?.Address.ColumnNumber ?? 22);
 
             var colMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
@@ -155,26 +168,38 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                     colMap["nameAr"] = col;
                 else if (!colMap.ContainsKey("category") && (h.Contains("تصنيف") || h.Contains("فئة") || h.Contains("فئه") || h.Contains("category"))) 
                     colMap["category"] = col;
-                else if (!colMap.ContainsKey("parentUnit") && (h.Contains("كبرى") || h.Contains("تعبئة") || h.Contains("تعبئه") || h.Contains("parentunit") || (h.Contains("كرتون") && !h.Contains("معامل")))) 
-                    colMap["parentUnit"] = col;
-                else if (!colMap.ContainsKey("baseUnit") && (h.Contains("صغرى") || h.Contains("اساسية") || h.Contains("أساسية") || h.Contains("baseunit") || (h.Contains("وحدة") && !h.Contains("كبرى")))) 
-                    colMap["baseUnit"] = col;
-                else if (!colMap.ContainsKey("conversionFactor") && (h.Contains("معامل") || h.Contains("تحويل") || h.Contains("conversion") || h.Contains("factor"))) 
-                    colMap["conversionFactor"] = col;
+                else if (!colMap.ContainsKey("brand") && (h.Contains("مارك") || h.Contains("براند") || h.Contains("brand") || h.Contains("توكيل") || h.Contains("علامة") || h.Contains("علامه"))) 
+                    colMap["brand"] = col;
+                else if (!colMap.ContainsKey("modelNumber") && (h.Contains("موديل") || h.Contains("طراز") || h.Contains("model"))) 
+                    colMap["modelNumber"] = col;
+                else if (!colMap.ContainsKey("color") && (h.Contains("لون") || h.Contains("اللون") || h.Contains("color") || h.Contains("colour"))) 
+                    colMap["color"] = col;
+                else if (!colMap.ContainsKey("warranty") && (h.Contains("ضمان") || h.Contains("warranty"))) 
+                    colMap["warranty"] = col;
+                else if (!colMap.ContainsKey("maintenanceAgent") && (h.Contains("صيان") || h.Contains("وكيل") || h.Contains("agent") || h.Contains("maintenance"))) 
+                    colMap["maintenanceAgent"] = col;
+                else if (!colMap.ContainsKey("hasSerialNumber") && (h.Contains("سيريال") || h.Contains("تسلسل") || h.Contains("serial") || h.Contains("sn") || h.Contains("s/n"))) 
+                    colMap["hasSerialNumber"] = col;
                 else if (!colMap.ContainsKey("purchasePrice") && (h.Contains("شراء") || h.Contains("تكلفة") || h.Contains("تكلفه") || h.Contains("cost") || h.Contains("purchase"))) 
                     colMap["purchasePrice"] = col;
                 else if (!colMap.ContainsKey("wholesalePrice") && (h.Contains("جملة") || h.Contains("جمله") || h.Contains("wholesale"))) 
                     colMap["wholesalePrice"] = col;
                 else if (!colMap.ContainsKey("sellingPrice") && (h.Contains("قطاعي") || (h.Contains("بيع") && !h.Contains("جملة")) || h.Contains("selling") || h.Contains("price"))) 
                     colMap["sellingPrice"] = col;
+                else if (!colMap.ContainsKey("initialStock") && (h.Contains("أولي") || h.Contains("اولي") || h.Contains("افتتاحي") || h.Contains("رصيد") || h.Contains("مخزون") || h.Contains("stock") || h.Contains("qty") || h.Contains("quantity"))) 
+                    colMap["initialStock"] = col;
                 else if (!colMap.ContainsKey("reorderLevel") && (h.Contains("إعادة") || h.Contains("اعادة") || h.Contains("طلب") || h.Contains("reorder"))) 
                     colMap["reorderLevel"] = col;
                 else if (!colMap.ContainsKey("maxStockLevel") && (h.Contains("أقصى") || h.Contains("اقصى") || h.Contains("max"))) 
                     colMap["maxStockLevel"] = col;
-                else if (!colMap.ContainsKey("initialStock") && (h.Contains("أولي") || h.Contains("اولي") || h.Contains("رصيد") || h.Contains("مخزون") || h.Contains("stock") || h.Contains("qty") || h.Contains("quantity"))) 
-                    colMap["initialStock"] = col;
                 else if (!colMap.ContainsKey("taxRate") && (h.Contains("ضريب") || h.Contains("tax"))) 
                     colMap["taxRate"] = col;
+                else if (!colMap.ContainsKey("baseUnit") && (h.Contains("صغرى") || h.Contains("اساسية") || h.Contains("أساسية") || h.Contains("baseunit") || (h.Contains("وحدة") && !h.Contains("كبرى")))) 
+                    colMap["baseUnit"] = col;
+                else if (!colMap.ContainsKey("parentUnit") && (h.Contains("كبرى") || h.Contains("تعبئة") || h.Contains("تعبئه") || h.Contains("parentunit") || (h.Contains("كرتون") && !h.Contains("معامل")))) 
+                    colMap["parentUnit"] = col;
+                else if (!colMap.ContainsKey("conversionFactor") && (h.Contains("معامل") || h.Contains("تحويل") || h.Contains("conversion") || h.Contains("factor"))) 
+                    colMap["conversionFactor"] = col;
                 else if (!colMap.ContainsKey("isWeighable") && (h.Contains("وزن") || h.Contains("ميزان") || h.Contains("weigh"))) 
                     colMap["isWeighable"] = col;
                 else if (!colMap.ContainsKey("expiryAlertDays") && (h.Contains("تنبيه") || h.Contains("alert"))) 
@@ -197,7 +222,10 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
             var batchBarcodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var newProductsToAdd = new List<Product>();
             var newCategoriesToAdd = new List<Category>();
+            var newBrandsToAdd = new List<Brand>();
             var newUnitsToAdd = new List<Unit>();
+            var newBatchesToAdd = new List<InventoryBatch>();
+            var newMovementsToAdd = new List<StockMovement>();
 
             for (int rowNum = 2; rowNum <= lastRow; rowNum++)
             {
@@ -207,54 +235,76 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                 string nameAr = GetCellValue(row.Cell(GetCol("nameAr", 2)));
                 string nameEn = GetCellValue(row.Cell(GetCol("nameEn", 3)));
                 string categoryName = GetCellValue(row.Cell(GetCol("category", 4)));
-                
-                string baseUnit = colMap.ContainsKey("baseUnit") ? GetCellValue(row.Cell(colMap["baseUnit"])) : GetCellValue(row.Cell(5));
+                string brandName = colMap.ContainsKey("brand") ? GetCellValue(row.Cell(colMap["brand"])) : GetCellValue(row.Cell(5));
+                string modelNumber = colMap.ContainsKey("modelNumber") ? GetCellValue(row.Cell(colMap["modelNumber"])) : GetCellValue(row.Cell(6));
+                string color = colMap.ContainsKey("color") ? GetCellValue(row.Cell(colMap["color"])) : GetCellValue(row.Cell(7));
+                string warrantyText = colMap.ContainsKey("warranty") ? GetCellValue(row.Cell(colMap["warranty"])) : GetCellValue(row.Cell(8));
+                string maintenanceAgent = colMap.ContainsKey("maintenanceAgent") ? GetCellValue(row.Cell(colMap["maintenanceAgent"])) : GetCellValue(row.Cell(9));
+                string hasSerialText = colMap.ContainsKey("hasSerialNumber") ? GetCellValue(row.Cell(colMap["hasSerialNumber"])) : GetCellValue(row.Cell(10));
+
+                int warrantyMonths = ParseWarrantyMonths(warrantyText);
+                bool hasSerialNumber = ParseBool(hasSerialText);
+
+                decimal purchasePrice = colMap.ContainsKey("purchasePrice") 
+                    ? ParseDecimal(GetCellValue(row.Cell(colMap["purchasePrice"])), 0) 
+                    : ParseDecimal(GetCellValue(row.Cell(11)), 0);
+
+                decimal sellingPrice = colMap.ContainsKey("sellingPrice") 
+                    ? ParseDecimal(GetCellValue(row.Cell(colMap["sellingPrice"])), 0) 
+                    : ParseDecimal(GetCellValue(row.Cell(12)), 0);
+
+                decimal wholesalePrice = colMap.ContainsKey("wholesalePrice") 
+                    ? ParseDecimal(GetCellValue(row.Cell(colMap["wholesalePrice"])), 0) 
+                    : ParseDecimal(GetCellValue(row.Cell(13)), 0);
+
+                decimal initialStock = colMap.ContainsKey("initialStock") 
+                    ? ParseDecimal(GetCellValue(row.Cell(colMap["initialStock"])), 0) 
+                    : ParseDecimal(GetCellValue(row.Cell(14)), 0);
+
+                decimal reorderLevel = colMap.ContainsKey("reorderLevel") 
+                    ? ParseDecimal(GetCellValue(row.Cell(colMap["reorderLevel"])), 2) 
+                    : ParseDecimal(GetCellValue(row.Cell(15)), 2);
+
+                decimal maxStockLevel = colMap.ContainsKey("maxStockLevel") 
+                    ? ParseDecimal(GetCellValue(row.Cell(colMap["maxStockLevel"])), 50) 
+                    : ParseDecimal(GetCellValue(row.Cell(16)), 50);
+
+                decimal taxRate = colMap.ContainsKey("taxRate") 
+                    ? ParseDecimal(GetCellValue(row.Cell(colMap["taxRate"])), 0) 
+                    : ParseDecimal(GetCellValue(row.Cell(17)), 0);
+
+                string baseUnit = colMap.ContainsKey("baseUnit") 
+                    ? GetCellValue(row.Cell(colMap["baseUnit"])) 
+                    : GetCellValue(row.Cell(18));
                 if (string.IsNullOrWhiteSpace(baseUnit)) baseUnit = "قطعة";
 
-                bool isWeighable = colMap.ContainsKey("isWeighable") ? ParseBool(GetCellValue(row.Cell(colMap["isWeighable"]))) : ParseBool(GetCellValue(row.Cell(15)));
+                string? rawImageUrl = colMap.ContainsKey("imageUrl") 
+                    ? GetCellValue(row.Cell(colMap["imageUrl"]), checkHyperlink: true) 
+                    : GetCellValue(row.Cell(19), checkHyperlink: true);
 
-                string parentUnit = colMap.ContainsKey("parentUnit") ? GetCellValue(row.Cell(colMap["parentUnit"])) : GetCellValue(row.Cell(6));
-                if (string.IsNullOrWhiteSpace(parentUnit)) parentUnit = isWeighable ? null : "كرتونة";
+                string? description = colMap.ContainsKey("description") 
+                    ? GetCellValue(row.Cell(colMap["description"])) 
+                    : GetCellValue(row.Cell(20));
 
+                // Optional Grocery / Legacy packaging fields (if supplied)
+                string? parentUnit = colMap.ContainsKey("parentUnit") ? GetCellValue(row.Cell(colMap["parentUnit"])) : null;
                 int conversionFactor = colMap.ContainsKey("conversionFactor")
                     ? (int)ParseDecimal(GetCellValue(row.Cell(colMap["conversionFactor"])), 1)
-                    : (int)ParseDecimal(GetCellValue(row.Cell(7)), 1);
+                    : 1;
                 if (conversionFactor < 1) conversionFactor = 1;
 
-                decimal purchasePrice = colMap.ContainsKey("purchasePrice") ? ParseDecimal(GetCellValue(row.Cell(colMap["purchasePrice"])), 0) : ParseDecimal(GetCellValue(row.Cell(8)), 0);
-                decimal sellingPrice = colMap.ContainsKey("sellingPrice") ? ParseDecimal(GetCellValue(row.Cell(colMap["sellingPrice"])), 0) : ParseDecimal(GetCellValue(row.Cell(9)), 0);
-                decimal wholesalePrice = colMap.ContainsKey("wholesalePrice") ? ParseDecimal(GetCellValue(row.Cell(colMap["wholesalePrice"])), 0) : ParseDecimal(GetCellValue(row.Cell(10)), 0);
-                decimal initialStock = colMap.ContainsKey("initialStock") ? ParseDecimal(GetCellValue(row.Cell(colMap["initialStock"])), 0) : ParseDecimal(GetCellValue(row.Cell(11)), 0);
-                decimal reorderLevel = colMap.ContainsKey("reorderLevel") ? ParseDecimal(GetCellValue(row.Cell(colMap["reorderLevel"])), 5) : ParseDecimal(GetCellValue(row.Cell(12)), 5);
-                decimal maxStockLevel = colMap.ContainsKey("maxStockLevel") ? ParseDecimal(GetCellValue(row.Cell(colMap["maxStockLevel"])), 100) : ParseDecimal(GetCellValue(row.Cell(13)), 100);
-                decimal taxRate = colMap.ContainsKey("taxRate") ? ParseDecimal(GetCellValue(row.Cell(colMap["taxRate"])), 0) : ParseDecimal(GetCellValue(row.Cell(14)), 0);
+                bool isWeighable = colMap.ContainsKey("isWeighable") && ParseBool(GetCellValue(row.Cell(colMap["isWeighable"])));
+                bool trackExpiry = colMap.ContainsKey("trackExpiry") && ParseBool(GetCellValue(row.Cell(colMap["trackExpiry"])));
+                int shelfLifeDays = colMap.ContainsKey("shelfLifeDays") ? (int)ParseDecimal(GetCellValue(row.Cell(colMap["shelfLifeDays"])), 0) : 0;
+                int expiryAlertDays = colMap.ContainsKey("expiryAlertDays") ? (int)ParseDecimal(GetCellValue(row.Cell(colMap["expiryAlertDays"])), 3) : 3;
 
-                bool trackExpiry = colMap.ContainsKey("trackExpiry") ? ParseBool(GetCellValue(row.Cell(colMap["trackExpiry"]))) : ParseBool(GetCellValue(row.Cell(16)));
-                int shelfLifeDays = colMap.ContainsKey("shelfLifeDays") ? (int)ParseDecimal(GetCellValue(row.Cell(colMap["shelfLifeDays"])), 0) : (int)ParseDecimal(GetCellValue(row.Cell(17)), 0);
-                int expiryAlertDays = colMap.ContainsKey("expiryAlertDays") ? (int)ParseDecimal(GetCellValue(row.Cell(colMap["expiryAlertDays"])), 3) : (int)ParseDecimal(GetCellValue(row.Cell(18)), 3);
-
-                string? rawImageUrl = colMap.ContainsKey("imageUrl") ? GetCellValue(row.Cell(colMap["imageUrl"]), checkHyperlink: true) : GetCellValue(row.Cell(19), checkHyperlink: true);
-                string? description = colMap.ContainsKey("description") ? GetCellValue(row.Cell(colMap["description"])) : GetCellValue(row.Cell(20));
-
-                // Fallback smart detection if header matching did not yield an image URL
+                // Smart fallback if rawImageUrl was in an unexpected cell
                 if (string.IsNullOrWhiteSpace(rawImageUrl))
                 {
-                    string col15 = GetCellValue(row.Cell(15), checkHyperlink: true);
-                    string col16 = GetCellValue(row.Cell(16), checkHyperlink: true);
-                    if (IsPossibleImageUrl(col15))
-                    {
-                        rawImageUrl = col15;
-                        if (string.IsNullOrWhiteSpace(description)) description = col16;
-                    }
-                    else if (IsPossibleImageUrl(col16))
-                    {
-                        rawImageUrl = col16;
-                        if (string.IsNullOrWhiteSpace(description)) description = col15;
-                    }
-                    else if (string.IsNullOrWhiteSpace(description))
-                    {
-                        description = !string.IsNullOrWhiteSpace(col15) ? col15 : col16;
-                    }
+                    string c19 = GetCellValue(row.Cell(19), checkHyperlink: true);
+                    string c20 = GetCellValue(row.Cell(20), checkHyperlink: true);
+                    if (IsPossibleImageUrl(c19)) rawImageUrl = c19;
+                    else if (IsPossibleImageUrl(c20)) rawImageUrl = c20;
                 }
 
                 // Basic Validations
@@ -266,7 +316,7 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                         RowNumber = rowNum,
                         Barcode = string.Empty,
                         ProductName = nameAr,
-                        ErrorMessage = "البار كود مطلوب ولا يمكن أن يكون فارغاً."
+                        ErrorMessage = "الباركود مطلوب ولا يمكن أن يكون فارغاً."
                     });
                     continue;
                 }
@@ -297,7 +347,6 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                     continue;
                 }
 
-                // Check duplicates within same Excel file
                 if (!batchBarcodes.Add(barcode))
                 {
                     result.ErrorCount++;
@@ -318,7 +367,7 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
 
                 // 1. Resolve Category
                 Guid categoryId;
-                string catKey = string.IsNullOrWhiteSpace(categoryName) ? "عام" : categoryName.Trim();
+                string catKey = string.IsNullOrWhiteSpace(categoryName) ? "أجهزة عامة" : categoryName.Trim();
 
                 if (categoryMap.TryGetValue(catKey, out var category))
                 {
@@ -346,7 +395,29 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                     categoryId = newCat.Id;
                 }
 
-                // 2. Resolve Unit
+                // 2. Resolve Brand
+                Guid? brandId = null;
+                if (!string.IsNullOrWhiteSpace(brandName))
+                {
+                    string bKey = brandName.Trim();
+                    if (brandMap.TryGetValue(bKey, out var existingBrand))
+                    {
+                        brandId = existingBrand.Id;
+                    }
+                    else
+                    {
+                        var brandRes = Brand.Create(bKey, bKey);
+                        if (brandRes.IsSuccess)
+                        {
+                            var newBrand = brandRes.Value!;
+                            newBrandsToAdd.Add(newBrand);
+                            brandMap[bKey] = newBrand;
+                            brandId = newBrand.Id;
+                        }
+                    }
+                }
+
+                // 3. Resolve Unit
                 Guid unitId;
                 string uKey = string.IsNullOrWhiteSpace(baseUnit) ? "قطعة" : baseUnit.Trim();
 
@@ -376,10 +447,10 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                     unitId = newUnit.Id;
                 }
 
-                // 3. Resolve Image (ZIP matched by Barcode OR Text URL string directly)
+                // 4. Resolve Image (ZIP matched by Barcode OR Text URL string directly)
                 string? resolvedImageUrl = await ProcessProductImageAsync(barcode, rawImageUrl, zipImagesByBarcode, cancellationToken);
 
-                // 4. Resolve Product in Database
+                // 5. Resolve Product in Database (Update existing vs Create new)
                 if (productMap.TryGetValue(barcode.Trim(), out var existingProduct))
                 {
                     if (!request.UpdateExisting)
@@ -400,15 +471,34 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                         : existingProduct.ImageUrl;
 
                     var updateRes = existingProduct.Update(
-                        barcode, nameAr, nameEn, description,
-                        categoryId, unitId, null,
-                        baseUnit, parentUnit, conversionFactor,
-                        shelfLifeDays > 0 ? shelfLifeDays : existingProduct.ShelfLifeDays,
-                        expiryAlertDays > 0 ? expiryAlertDays : existingProduct.ExpiryAlertDays,
-                        purchasePrice, sellingPrice, wholesalePrice,
-                        reorderLevel, maxStockLevel,
-                        isWeighable, true, trackExpiry, taxRate,
-                        finalImageUrl);
+                        barcode: barcode,
+                        nameAr: nameAr,
+                        nameEn: nameEn,
+                        description: description,
+                        categoryId: categoryId,
+                        unitId: unitId,
+                        supplierId: existingProduct.SupplierId,
+                        baseUnit: baseUnit,
+                        parentUnit: parentUnit,
+                        conversionFactor: conversionFactor,
+                        shelfLifeDays: shelfLifeDays > 0 ? shelfLifeDays : existingProduct.ShelfLifeDays,
+                        expiryAlertDays: expiryAlertDays > 0 ? expiryAlertDays : existingProduct.ExpiryAlertDays,
+                        purchasePrice: purchasePrice,
+                        sellingPrice: sellingPrice,
+                        wholesalePrice: wholesalePrice,
+                        reorderLevel: reorderLevel,
+                        maxStockLevel: maxStockLevel,
+                        isWeighable: isWeighable,
+                        isActive: true,
+                        trackExpiry: trackExpiry,
+                        taxRate: taxRate,
+                        imageUrl: finalImageUrl,
+                        brandId: brandId ?? existingProduct.BrandId,
+                        modelNumber: !string.IsNullOrWhiteSpace(modelNumber) ? modelNumber : existingProduct.ModelNumber,
+                        color: !string.IsNullOrWhiteSpace(color) ? color : existingProduct.Color,
+                        warrantyPeriodMonths: warrantyMonths > 0 ? warrantyMonths : existingProduct.WarrantyPeriodMonths,
+                        maintenanceAgent: !string.IsNullOrWhiteSpace(maintenanceAgent) ? maintenanceAgent : existingProduct.MaintenanceAgent,
+                        hasSerialNumber: hasSerialNumber);
 
                     if (updateRes.IsFailure)
                     {
@@ -436,16 +526,37 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                 }
                 else
                 {
-                    // Create New Product
+                    // Create New Appliance Product with all specifications
                     var productRes = Product.Create(
-                        barcode, nameAr, nameEn,
-                        categoryId, unitId,
-                        purchasePrice, sellingPrice, wholesalePrice,
-                        null, description,
-                        baseUnit, parentUnit, conversionFactor,
-                        shelfLifeDays, expiryAlertDays,
-                        reorderLevel, maxStockLevel,
-                        isWeighable, true, trackExpiry, taxRate, resolvedImageUrl);
+                        barcode: barcode,
+                        nameAr: nameAr,
+                        nameEn: nameEn,
+                        categoryId: categoryId,
+                        unitId: unitId,
+                        purchasePrice: purchasePrice,
+                        sellingPrice: sellingPrice,
+                        wholesalePrice: wholesalePrice,
+                        supplierId: null,
+                        description: description,
+                        baseUnit: baseUnit,
+                        parentUnit: parentUnit,
+                        conversionFactor: conversionFactor,
+                        shelfLifeDays: shelfLifeDays,
+                        expiryAlertDays: expiryAlertDays,
+                        reorderLevel: reorderLevel,
+                        maxStockLevel: maxStockLevel,
+                        isWeighable: isWeighable,
+                        isActive: true,
+                        trackExpiry: trackExpiry,
+                        taxRate: taxRate,
+                        imageUrl: resolvedImageUrl,
+                        id: null,
+                        brandId: brandId,
+                        modelNumber: modelNumber,
+                        color: color,
+                        warrantyPeriodMonths: warrantyMonths,
+                        maintenanceAgent: maintenanceAgent,
+                        hasSerialNumber: hasSerialNumber);
 
                     if (productRes.IsFailure)
                     {
@@ -464,6 +575,36 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                     if (initialStock > 0)
                     {
                         newProd.AdjustStock(initialStock, allowNegativeStock: true);
+
+                        var batchResult = InventoryBatch.Create(
+                            productId: newProd.Id,
+                            originalQuantity: initialStock,
+                            originalUnit: newProd.BaseUnit,
+                            baseQuantity: initialStock,
+                            unitCost: newProd.PurchasePrice,
+                            purchaseDate: DateTime.UtcNow,
+                            expiryDate: newProd.TrackExpiry && newProd.ShelfLifeDays > 0 ? DateTime.UtcNow.AddDays(newProd.ShelfLifeDays) : null,
+                            batchNumber: $"IMPORT-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}"
+                        );
+
+                        if (batchResult.IsSuccess)
+                        {
+                            newBatchesToAdd.Add(batchResult.Value!);
+                        }
+
+                        var movementResult = StockMovement.Create(
+                            newProd.Id,
+                            initialStock,
+                            StockMovementType.Adjustment,
+                            Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                            reference: "استيراد إكسيل",
+                            notes: $"تسجيل رصيد أولي عبر استيراد إكسيل: {initialStock} {newProd.BaseUnit}"
+                        );
+
+                        if (movementResult.IsSuccess)
+                        {
+                            newMovementsToAdd.Add(movementResult.Value!);
+                        }
                     }
 
                     newProductsToAdd.Add(newProd);
@@ -472,7 +613,12 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                 }
             }
 
-            // Bulk Insert Categories and Units if any missing ones were auto-created
+            // Save any newly created Brands, Categories, and Units
+            if (newBrandsToAdd.Count > 0)
+            {
+                await _unitOfWork.BrandRepository.AddRangeAsync(newBrandsToAdd);
+            }
+
             if (newCategoriesToAdd.Count > 0)
             {
                 await _unitOfWork.CategoryRepository.AddRangeAsync(newCategoriesToAdd);
@@ -483,9 +629,23 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                 await _unitOfWork.UnitRepository.AddRangeAsync(newUnitsToAdd);
             }
 
-            if (newCategoriesToAdd.Count > 0 || newUnitsToAdd.Count > 0)
+            if (newBrandsToAdd.Count > 0 || newCategoriesToAdd.Count > 0 || newUnitsToAdd.Count > 0)
             {
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            // Save Batches and Stock Movements
+            if (newBatchesToAdd.Count > 0)
+            {
+                foreach (var b in newBatchesToAdd)
+                {
+                    await _unitOfWork.BatchRepository.AddAsync(b, cancellationToken);
+                }
+            }
+
+            if (newMovementsToAdd.Count > 0)
+            {
+                await _unitOfWork.StockMovementRepository.AddRangeAsync(newMovementsToAdd);
             }
 
             // Chunked Insert Products for fast database performance
@@ -497,17 +657,44 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
-            // If there were modified products that were not in newProductsToAdd, save any remaining tracked changes
+            // If there were modified existing products, commit changes
             if (request.UpdateExisting)
             {
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
+            // Invalidate caches
             await _cacheService.RemoveByPrefixAsync("products_", cancellationToken);
             await _cacheService.RemoveByPrefixAsync("product_", cancellationToken);
             await _cacheService.RemoveByPrefixAsync("dashboard_", cancellationToken);
+            await _cacheService.RemoveByPrefixAsync("brands_", cancellationToken);
+            await _cacheService.RemoveByPrefixAsync("categories_", cancellationToken);
 
             return Result<ProductImportResultDto>.Success(result);
+        }
+
+        private static int ParseWarrantyMonths(string val)
+        {
+            if (string.IsNullOrWhiteSpace(val)) return 12;
+            var trimmed = val.Trim().ToLowerInvariant();
+
+            if (trimmed.Contains("10 سن") || trimmed.Contains("10سن") || trimmed.Contains("10 year")) return 120;
+            if (trimmed.Contains("7 سن") || trimmed.Contains("7سن")) return 84;
+            if (trimmed.Contains("5 سن") || trimmed.Contains("5سن") || trimmed.Contains("5 year")) return 60;
+            if (trimmed.Contains("3 سن") || trimmed.Contains("3سن") || trimmed.Contains("3 year")) return 36;
+            if (trimmed.Contains("سنتين") || trimmed.Contains("2 سن") || trimmed.Contains("2سن") || trimmed.Contains("2 year")) return 24;
+            if (trimmed.Contains("سنة") || trimmed.Contains("سنه") || trimmed.Contains("1 سن") || trimmed.Contains("1سن") || trimmed.Contains("1 year")) return 12;
+            if (trimmed.Contains("6 شهر") || trimmed.Contains("6 شهور") || trimmed.Contains("6 month")) return 6;
+            if (trimmed.Contains("بدون") || trimmed == "0" || trimmed == "لا يوجد") return 0;
+
+            if (int.TryParse(trimmed, out var num))
+            {
+                // In home appliances, values <= 10 without unit are typically years
+                if (num <= 10 && num > 0) return num * 12;
+                return num >= 0 ? num : 12;
+            }
+
+            return 12;
         }
 
         private async Task<string?> ProcessProductImageAsync(
@@ -602,7 +789,6 @@ namespace Inventory.Application.Catalog.Products.Commands.ImportProductsFromExce
         {
             if (cell == null || cell.IsEmpty()) return string.Empty;
 
-            // Direct string conversion first (instantaneous, avoids XML relation scans)
             var val = cell.Value;
             if (val.IsBlank) return string.Empty;
 

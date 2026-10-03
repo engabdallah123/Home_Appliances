@@ -32,6 +32,8 @@
 **/publish/
 **/publish_cloudapi/
 **/installer/
+Cashier_System_Publish/
+**/Cashier_System_Publish/
 *.suo
 *.user
 *.userosscache

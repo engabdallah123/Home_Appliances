@@ -530,8 +530,15 @@ class SalesProvider with ChangeNotifier {
 
       final res = await _apiClient.get(ApiEndpoints.sales, queryParams: queryParams);
 
-      if (res != null && res is Map<String, dynamic> && res['items'] != null) {
-        final loaded = (res['items'] as List).map((i) => SaleSummaryModel.fromJson(i)).toList();
+      List rawList = [];
+      if (res is List) {
+        rawList = res;
+      } else if (res is Map<String, dynamic> && res['items'] is List) {
+        rawList = res['items'] as List;
+      }
+
+      if (rawList.isNotEmpty) {
+        final loaded = rawList.map((i) => SaleSummaryModel.fromJson(i as Map<String, dynamic>)).toList();
         if (refresh) {
           _sales = loaded;
         } else {

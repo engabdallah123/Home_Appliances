@@ -268,9 +268,14 @@ class _DebtsScreenState extends State<DebtsScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            "${currencyFormatter.format(amount)} ج.م",
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              "${currencyFormatter.format(amount)} ج.م",
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
+              maxLines: 1,
+            ),
           ),
         ],
       ),

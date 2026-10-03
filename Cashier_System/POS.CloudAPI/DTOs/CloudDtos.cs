@@ -626,6 +626,10 @@ namespace POS.CloudAPI.DTOs
         bool IsReserved = false,
         DateTime? TargetDeliveryDate = null);
 
+    public record PayCloudInstallmentRequest(
+        decimal Amount,
+        string? Notes = null);
+
     public record CloudSaleItemDto(
         Guid Id,
         Guid ProductId,

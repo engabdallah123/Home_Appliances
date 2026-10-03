@@ -580,30 +580,34 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Big Selling Price Display
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      currencyFormatter.format(product.sellingPrice),
-                      style: const TextStyle(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.success,
-                        letterSpacing: -0.5,
+                // Big Selling Price Display (Guaranteed Zero Overflow)
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        currencyFormatter.format(product.sellingPrice),
+                        style: const TextStyle(
+                          fontSize: 34,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.success,
+                          letterSpacing: -0.5,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      "ج.م",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.getTextMuted(isDark),
+                      const SizedBox(width: 6),
+                      Text(
+                        "ج.م",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.getTextMuted(isDark),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 12),
@@ -615,22 +619,31 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     if (product.wholesalePrice > 0)
-                      Text(
-                        "سعر الجملة: ${currencyFormatter.format(product.wholesalePrice)} ج.م",
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.getTextSecondary(isDark),
+                      Flexible(
+                        child: Text(
+                          "سعر الجملة: ${currencyFormatter.format(product.wholesalePrice)} ج.م",
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.getTextSecondary(isDark),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       )
                     else
                       const SizedBox.shrink(),
-                    Text(
-                      "رصيد المخزن: ${product.stockQuantity.toInt()} ${product.baseUnit}",
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.bold,
-                        color: inStock ? AppColors.success : AppColors.danger,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        "رصيد المخزن: ${product.stockQuantity.toInt()} ${product.baseUnit}",
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                          color: inStock ? AppColors.success : AppColors.danger,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],

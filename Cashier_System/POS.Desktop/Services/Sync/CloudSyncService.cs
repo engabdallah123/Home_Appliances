@@ -82,7 +82,7 @@ namespace POS.Desktop.Services.Sync
                 }
             }
             catch { }
-            return "http://localhost:5100/";
+            return "https://homecashier.tryasp.net/";
         }
 
         public static void SaveCloudBaseUrl(string url)

@@ -97,5 +97,32 @@ namespace POS.CloudAPI.Controllers
                 }
             });
         }
+
+        [Authorize]
+        [HttpGet("users")]
+        public async Task<IActionResult> GetTenantUsers()
+        {
+            var tenantIdClaim = User.FindFirstValue("TenantId");
+            if (!Guid.TryParse(tenantIdClaim, out var tenantId))
+                return Unauthorized();
+
+            var users = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.TenantId == tenantId)
+                .OrderBy(u => u.FullName)
+                .Select(u => new
+                {
+                    u.Id,
+                    u.Username,
+                    u.FullName,
+                    u.Role,
+                    u.Phone,
+                    u.IsActive,
+                    u.CreatedAt
+                })
+                .ToListAsync();
+
+            return Ok(users);
+        }
     }
 }

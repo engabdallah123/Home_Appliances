@@ -296,9 +296,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    "${currencyFormatter.format(prov.totalAmount)} ج.م",
-                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      "${currencyFormatter.format(prov.totalAmount)} ج.م",
+                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                    ),
                   ),
                   Text(
                     "${prov.expenses.length} حركة مصروف مسجلة",
@@ -426,9 +430,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            "- ${currencyFormatter.format(exp.amount)} ج.م",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.danger),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              "- ${currencyFormatter.format(exp.amount)} ج.م",
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.danger),
+            ),
           ),
         ],
       ),

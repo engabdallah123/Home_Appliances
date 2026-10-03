@@ -9,6 +9,8 @@ import '../models/product_model.dart';
 import '../providers/products_provider.dart';
 import 'add_edit_product_screen.dart';
 import 'brands_list_screen.dart';
+import 'categories_list_screen.dart';
+import 'offers_screen.dart';
 import 'price_check_screen.dart';
 
 class ProductsCatalogScreen extends StatefulWidget {
@@ -84,30 +86,75 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.verified_rounded, color: AppColors.accent),
-            tooltip: "الماركات التجارية",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const BrandsListScreen()),
-              );
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            tooltip: "خيارات إضافية",
+            onSelected: (val) {
+              if (val == 'categories') {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesListScreen()));
+              } else if (val == 'brands') {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const BrandsListScreen()));
+              } else if (val == 'offers') {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const OffersScreen()));
+              } else if (val == 'low_stock') {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const LowStockNotificationsScreen()));
+              } else if (val == 'refresh') {
+                _refreshData();
+              }
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.inventory_2_outlined, color: AppColors.warning),
-            tooltip: "نواقص المخزون",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LowStockNotificationsScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.refresh_rounded, color: AppColors.getTextPrimary(isDark)),
-            tooltip: "تحديث",
-            onPressed: _refreshData,
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'categories',
+                child: Row(
+                  children: [
+                    Icon(Icons.category_rounded, size: 18, color: AppColors.primaryLight),
+                    SizedBox(width: 8),
+                    Text("إدارة التصنيفات والأقسام"),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'brands',
+                child: Row(
+                  children: [
+                    Icon(Icons.verified_rounded, size: 18, color: AppColors.accent),
+                    SizedBox(width: 8),
+                    Text("الماركات التجارية (LG, شارب..)"),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'offers',
+                child: Row(
+                  children: [
+                    Icon(Icons.local_offer_rounded, size: 18, color: AppColors.purple),
+                    SizedBox(width: 8),
+                    Text("عروض وبكجات العروسة"),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'low_stock',
+                child: Row(
+                  children: [
+                    Icon(Icons.inventory_2_outlined, size: 18, color: AppColors.warning),
+                    SizedBox(width: 8),
+                    Text("نواقص المخزون"),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'refresh',
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text("تحديث البيانات"),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -423,9 +470,13 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
                         if (p.brandName != null && p.brandName!.isNotEmpty) ...[
                           const Icon(Icons.verified_rounded, size: 12, color: AppColors.accent),
                           const SizedBox(width: 3),
-                          Text(
-                            p.brandName!,
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.accent),
+                          Flexible(
+                            child: Text(
+                              p.brandName!,
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.accent),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                           const SizedBox(width: 6),
                         ],
@@ -498,31 +549,40 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
               ),
             ),
 
-            // Right: Price & Stock
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  "${currencyFormatter.format(p.sellingPrice)} ج.م",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.success),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isLowStock ? AppColors.danger.withOpacity(0.12) : AppColors.getSurfaceElevated(isDark),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    stockDisplay,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: isLowStock ? AppColors.danger : AppColors.getTextSecondary(isDark),
+            // Right: Price & Stock (Protected from overflow)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 110),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "${currencyFormatter.format(p.sellingPrice)} ج.م",
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.success),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isLowStock ? AppColors.danger.withOpacity(0.12) : AppColors.getSurfaceElevated(isDark),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      stockDisplay,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isLowStock ? AppColors.danger : AppColors.getTextSecondary(isDark),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

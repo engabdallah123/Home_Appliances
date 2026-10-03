@@ -200,6 +200,8 @@ namespace POS.CloudAPI.Controllers
         [HttpGet]
         public async Task<IActionResult> GetSales(
             [FromQuery] string? search,
+            [FromQuery] bool? isInstallment = null,
+            [FromQuery] bool? isReserved = null,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 30)
         {
@@ -209,6 +211,16 @@ namespace POS.CloudAPI.Controllers
             var query = _db.Sales
                 .AsNoTracking()
                 .Where(s => s.TenantId == tenantId);
+
+            if (isInstallment.HasValue)
+            {
+                query = query.Where(s => s.IsInstallment == isInstallment.Value);
+            }
+
+            if (isReserved.HasValue)
+            {
+                query = query.Where(s => s.IsReserved == isReserved.Value);
+            }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -317,6 +329,45 @@ namespace POS.CloudAPI.Controllers
                     i.Total)).ToList());
 
             return Ok(dto);
+        }
+
+        [HttpPost("{id:guid}/pay-installment")]
+        public async Task<IActionResult> PayInstallment(Guid id, [FromBody] PayCloudInstallmentRequest req)
+        {
+            var tenantId = GetTenantId();
+            if (tenantId == Guid.Empty) return Unauthorized();
+
+            var sale = await _db.Sales.FirstOrDefaultAsync(s => s.Id == id && s.TenantId == tenantId);
+            if (sale == null) return NotFound(new { message = "عقد التقسيط غير موجود." });
+
+            if (req.Amount <= 0) return BadRequest(new { message = "يرجى إدخال مبلغ سداد صحيح أكبر من الصفر." });
+
+            var payAmt = Math.Min(req.Amount, sale.RemainingAmount);
+            sale.PaidAmount += payAmt;
+            sale.RemainingAmount = Math.Max(0, sale.RemainingAmount - payAmt);
+
+            _db.DebtPayments.Add(new CloudDebtPayment
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                DebtType = "Customer",
+                ReferenceId = sale.Id,
+                Amount = payAmt,
+                Notes = req.Notes ?? $"سداد قسط مبيعات رقم {sale.InvoiceNumber}",
+                SyncStatus = SyncStatus.PendingSync,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true,
+                saleId = sale.Id,
+                paidAmount = sale.PaidAmount,
+                remainingAmount = sale.RemainingAmount,
+                message = $"تم سداد مبلغ {payAmt:N2} ج.م بنجاح."
+            });
         }
     }
 }

@@ -131,33 +131,46 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         // App Logo / Store Icon
                         Container(
-                          width: 84,
-                          height: 84,
+                          width: 88,
+                          height: 88,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppColors.primary, AppColors.primaryLight],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            color: Colors.transparent,
                             borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary.withOpacity(0.35),
+                                color: AppColors.primary.withOpacity(0.25),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
                             ],
                           ),
-                          child: const Icon(
-                            Icons.storefront_rounded,
-                            size: 46,
-                            color: Colors.white,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: Image.asset(
+                              'assets/images/app_logo.png',
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => Container(
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [AppColors.primary, AppColors.primaryLight],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: const Icon(
+                                  Icons.tv_rounded,
+                                  size: 46,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 18),
 
                         const Text(
-                          "كاشير الموبايل",
+                          "إلكترو كاشير",
                           style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
@@ -166,9 +179,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 6),
                         const Text(
-                          "إدارة المشتريات والموردين لصاحب المحل",
+                          "إدارة معارض ومخازن الأجهزة المنزلية والكهربائية",
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             color: AppColors.textSecondary,
                           ),
                         ),

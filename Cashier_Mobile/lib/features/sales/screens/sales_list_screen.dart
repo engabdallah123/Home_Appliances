@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/sale_model.dart';
 import '../providers/sales_provider.dart';
+import 'installments_screen.dart';
+import 'reservations_screen.dart';
 
 class SalesListScreen extends StatefulWidget {
   const SalesListScreen({super.key});
@@ -38,9 +40,26 @@ class _SalesListScreenState extends State<SalesListScreen> {
       backgroundColor: AppColors.getBackground(isDark),
       appBar: AppBar(
         title: const Text(
-          "فواتير مبيعات الموبايل",
+          "فواتير مبيعات الصالة",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.request_quote_rounded, color: AppColors.purple),
+            tooltip: "دفتر الأقساط",
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InstallmentsScreen())),
+          ),
+          IconButton(
+            icon: const Icon(Icons.favorite_rounded, color: AppColors.rose),
+            tooltip: "حجوزات جهاز العروسة",
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReservationsScreen())),
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: "تحديث",
+            onPressed: () => salesProv.fetchSalesList(search: _searchController.text.trim()),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -185,45 +204,56 @@ class _SalesListScreenState extends State<SalesListScreen> {
 
             const Divider(height: 16),
 
-            // Bottom Row: Amounts and Payment Method
+            // Bottom Row: Amounts and Payment Method (Protected from overflow)
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4F46E5).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    _formatPaymentMethod(sale.paymentMethod),
-                    style: const TextStyle(
-                      color: Color(0xFF4F46E5),
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4F46E5).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _formatPaymentMethod(sale.paymentMethod),
+                          style: const TextStyle(
+                            color: Color(0xFF4F46E5),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (sale.isDelivery)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF06B6D4).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            "توصيل",
+                            style: TextStyle(color: Color(0xFF06B6D4), fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                if (sale.isDelivery) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF06B6D4).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
+                const SizedBox(width: 8),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "${sale.totalAmount.toStringAsFixed(0)} ج.م",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(0xFF10B981),
                     ),
-                    child: const Text(
-                      "توصيل",
-                      style: TextStyle(color: Color(0xFF06B6D4), fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-                const Spacer(),
-                Text(
-                  "${sale.totalAmount.toStringAsFixed(0)} ج.م",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Color(0xFF10B981),
                   ),
                 ),
               ],

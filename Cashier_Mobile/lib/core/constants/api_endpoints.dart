@@ -3,21 +3,25 @@ import 'package:flutter/foundation.dart';
 import 'dart:io' show Platform;
 
 class ApiEndpoints {
-  // Web/Desktop uses localhost:5100, Android emulator uses 10.0.2.2:5100, real phone uses LAN IP
-  static String get defaultBaseUrl {
-    if (kIsWeb) return "http://localhost:5100";
-    try {
-      if (Platform.isAndroid) return "http://10.0.2.2:5100";
-    } catch (_) {}
-    return "http://localhost:5100";
-  }
+  // Live Cloud Server URL
+  static String get defaultBaseUrl => "https://homecashier.tryasp.net";
 
   // Auth
   static const String login = "/api/cloud/auth/login";
   static const String profile = "/api/cloud/auth/me";
 
-  // Dashboard
+  // Dashboard & Financial Reports
   static const String dashboard = "/api/cloud/dashboard";
+  static const String monthlyReport = "/api/cloud/dashboard/monthly-report";
+
+  // Users & Staff
+  static const String users = "/api/cloud/auth/users";
+
+  // Audit Logs (سجل الرقابة والعمليات)
+  static const String auditLogs = "/api/cloud/audit";
+
+  // Offers & Bride Packages (عروض وبكجات العروسة)
+  static const String offers = "/api/cloud/offers";
 
   // Suppliers
   static const String suppliers = "/api/cloud/suppliers";
@@ -41,6 +45,7 @@ class ApiEndpoints {
   // Installments (الأقساط والعقود)
   static const String installments = "/api/cloud/installments";
   static String payInstallment(String id) => "/api/cloud/installments/$id/pay";
+  static String paySaleInstallment(String id) => "/api/cloud/sales/$id/pay-installment";
 
   // Expenses
   static const String expenses = "/api/cloud/expenses";
