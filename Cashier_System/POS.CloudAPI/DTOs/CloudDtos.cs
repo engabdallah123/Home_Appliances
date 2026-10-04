@@ -714,5 +714,86 @@ namespace POS.CloudAPI.DTOs
         bool HasPendingNotificationActions,
         bool HasPendingCategories,
         DateTime ServerTime,
-        bool HasPendingSales = false);
+        bool HasPendingSales = false,
+        bool HasPendingProducts = false);
+
+    // Sales Push DTOs
+    public record PushSaleItemDto(
+        Guid Id,
+        Guid ProductId,
+        string ProductName,
+        string? Barcode,
+        string? ModelNumber,
+        string? BrandName,
+        string? SerialNumber,
+        int WarrantyPeriodMonths,
+        decimal Quantity,
+        decimal UnitPrice,
+        decimal Discount,
+        decimal Tax,
+        decimal Total);
+
+    public record PushSaleDto(
+        Guid Id,
+        string InvoiceNumber,
+        Guid? CustomerId,
+        string? CustomerName,
+        string? CustomerPhone,
+        DateTime SaleDate,
+        decimal SubTotal,
+        decimal DiscountAmount,
+        decimal TaxAmount,
+        decimal TotalAmount,
+        decimal PaidAmount,
+        decimal RemainingAmount,
+        string PaymentMethod,
+        string? Notes,
+        bool IsDelivery,
+        string? RecipientName,
+        string? RecipientPhone,
+        string? DeliveryAddress,
+        string? DeliveryFloor,
+        decimal DeliveryFee,
+        bool IsInstallment,
+        string? GuarantorName,
+        string? GuarantorPhone,
+        decimal InterestPercentage,
+        int NumberOfMonths,
+        bool IsReserved,
+        DateTime? TargetDeliveryDate,
+        List<PushSaleItemDto> Items);
+
+    public record PushSalesRequest(List<PushSaleDto> Sales);
+
+    // Offers Push DTOs
+    public record PushOfferItemDto(
+        Guid Id,
+        Guid ProductId,
+        string ProductName,
+        string? ProductBarcode,
+        decimal Quantity,
+        decimal OriginalUnitPrice);
+
+    public record PushOfferDto(
+        Guid Id,
+        string Title,
+        string? Description,
+        int Type,
+        string OfferType,
+        decimal? DiscountPercentage,
+        decimal? FixedDiscountAmount,
+        decimal? BundlePrice,
+        DateTime StartDate,
+        DateTime EndDate,
+        bool IsActive,
+        Guid? TargetProductId,
+        string? TargetProductName,
+        Guid? TargetCategoryId,
+        string? TargetCategoryName,
+        Guid? TargetBrandId,
+        string? TargetBrandName,
+        List<PushOfferItemDto>? Items);
+
+    public record PushOffersRequest(List<PushOfferDto> Offers);
 }
+

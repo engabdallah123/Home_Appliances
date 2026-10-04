@@ -27,30 +27,53 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
   List<SaleSummaryModel> _contracts = [];
   int _selectedFilter = -1; // -1: All, 1: Active, 2: Completed, 3: Overdue
 
+  final ScrollController _scrollController = ScrollController();
+  int _currentPage = 1;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  static const int _pageSize = 20;
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _fetchContracts();
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _fetchContracts() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoadingMore &&
+        _hasMore &&
+        !_isLoading) {
+      _loadMoreContracts();
+    }
+  }
+
+  Future<void> _fetchContracts({bool refresh = true}) async {
+    if (refresh) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+        _currentPage = 1;
+        _hasMore = true;
+      });
+    }
 
     try {
       final res = await _apiClient.get(
         ApiEndpoints.sales,
         queryParams: {
           'isInstallment': 'true',
-          'pageSize': 100,
+          'page': _currentPage,
+          'pageSize': _pageSize,
         },
       );
 
@@ -62,15 +85,31 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
       }
 
       setState(() {
-        _contracts = loaded;
+        if (refresh) {
+          _contracts = loaded;
+        } else {
+          _contracts.addAll(loaded);
+        }
+        _hasMore = loaded.length >= _pageSize;
         _isLoading = false;
+        _isLoadingMore = false;
       });
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
+        _isLoadingMore = false;
       });
     }
+  }
+
+  Future<void> _loadMoreContracts() async {
+    if (_isLoadingMore || !_hasMore || _isLoading) return;
+    setState(() {
+      _isLoadingMore = true;
+      _currentPage++;
+    });
+    await _fetchContracts(refresh: false);
   }
 
   List<SaleSummaryModel> get _filteredContracts {
@@ -431,19 +470,26 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
 
           const SizedBox(height: 10),
 
-          // Status Filter Pills Bar (Horizontal Scroll to avoid overflow)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
+          // Status Filter 2x2 Grid (No horizontal scroll per user requirement)
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
+            child: Column(
               children: [
-                _buildFilterChip(isDark, "الكل (${_contracts.length})", -1),
-                const SizedBox(width: 8),
-                _buildFilterChip(isDark, "جاري السداد ($_activeCount)", 1),
-                const SizedBox(width: 8),
-                _buildFilterChip(isDark, "مسدد بالكامل ($_completedCount)", 2),
-                const SizedBox(width: 8),
-                _buildFilterChip(isDark, "متأخر ومستحق ($_overdueCount)", 3),
+                Row(
+                  children: [
+                    Expanded(child: _buildFilterChip(isDark, "الكل (${_contracts.length})", -1)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildFilterChip(isDark, "جاري السداد ($_activeCount)", 1)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(child: _buildFilterChip(isDark, "مسدد بالكامل ($_completedCount)", 2)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildFilterChip(isDark, "متأخر ومستحق ($_overdueCount)", 3)),
+                  ],
+                ),
               ],
             ),
           ),
@@ -484,12 +530,21 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
                             ),
                           )
                         : RefreshIndicator(
-                            onRefresh: _fetchContracts,
+                            onRefresh: () => _fetchContracts(refresh: true),
                             child: ListView.separated(
+                              controller: _scrollController,
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-                              itemCount: filtered.length,
+                              itemCount: filtered.length + (_isLoadingMore ? 1 : 0),
                               separatorBuilder: (_, __) => const SizedBox(height: 12),
                               itemBuilder: (ctx, idx) {
+                                if (idx == filtered.length) {
+                                  return const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 16),
+                                    child: Center(
+                                      child: CircularProgressIndicator(color: AppColors.primaryLight, strokeWidth: 2),
+                                    ),
+                                  );
+                                }
                                 final contract = filtered[idx];
                                 return _buildContractCard(contract, isDark);
                               },
@@ -546,21 +601,26 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
 
   Widget _buildFilterChip(bool isDark, String label, int filterVal) {
     final isSelected = _selectedFilter == filterVal;
-    return GestureDetector(
+    return InkWell(
       onTap: () => setState(() => _selectedFilter = filterVal),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary : AppColors.getSurface(isDark),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: isSelected ? AppColors.primary : AppColors.getBorder(isDark)),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.getTextSecondary(isDark),
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            fontSize: 12,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : AppColors.getTextSecondary(isDark),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              fontSize: 11.5,
+            ),
           ),
         ),
       ),

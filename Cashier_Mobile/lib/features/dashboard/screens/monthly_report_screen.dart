@@ -90,11 +90,11 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
-    final totalSales = (_reportData?['totalSales'] as num?)?.toDouble() ?? 0.0;
-    final totalPurchases = (_reportData?['totalPurchases'] as num?)?.toDouble() ?? 0.0;
-    final totalExpenses = (_reportData?['totalExpenses'] as num?)?.toDouble() ?? 0.0;
-    final netProfit = (_reportData?['netProfit'] as num?)?.toDouble() ?? 0.0;
-    final dailyStats = (_reportData?['dailyStats'] as List?) ?? [];
+    final totalSales = ((_reportData?['totalSales'] ?? _reportData?['TotalSales']) as num?)?.toDouble() ?? 0.0;
+    final totalPurchases = ((_reportData?['totalPurchases'] ?? _reportData?['TotalPurchases']) as num?)?.toDouble() ?? 0.0;
+    final totalExpenses = ((_reportData?['totalExpenses'] ?? _reportData?['TotalExpenses']) as num?)?.toDouble() ?? 0.0;
+    final netProfit = ((_reportData?['netProfit'] ?? _reportData?['NetProfit']) as num?)?.toDouble() ?? 0.0;
+    final dailyStats = ((_reportData?['dailyStats'] ?? _reportData?['DailyStats']) as List?) ?? [];
 
     return Scaffold(
       backgroundColor: AppColors.getBackground(isDark),
@@ -309,13 +309,13 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
   }
 
   Widget _buildDailyStatCard(dynamic d, bool isDark) {
-    final dayNum = d['day'] ?? 1;
-    final dayName = d['dayName'] ?? '';
-    final sales = (d['sales'] as num?)?.toDouble() ?? 0.0;
-    final purchases = (d['purchases'] as num?)?.toDouble() ?? 0.0;
-    final expenses = (d['expenses'] as num?)?.toDouble() ?? 0.0;
-    final net = (d['net'] as num?)?.toDouble() ?? 0.0;
-    final count = d['salesCount'] ?? 0;
+    final dayNum = d['day'] ?? d['Day'] ?? 1;
+    final dayName = d['dayName'] ?? d['DayName'] ?? '';
+    final sales = ((d['sales'] ?? d['Sales']) as num?)?.toDouble() ?? 0.0;
+    final purchases = ((d['purchases'] ?? d['Purchases']) as num?)?.toDouble() ?? 0.0;
+    final expenses = ((d['expenses'] ?? d['Expenses']) as num?)?.toDouble() ?? 0.0;
+    final net = ((d['net'] ?? d['Net']) as num?)?.toDouble() ?? 0.0;
+    final count = d['salesCount'] ?? d['SalesCount'] ?? 0;
 
     final hasActivity = sales > 0 || purchases > 0 || expenses > 0;
 

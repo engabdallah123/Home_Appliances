@@ -34,6 +34,9 @@ class SalesProvider with ChangeNotifier {
   bool _isInstallment = false;
   String? _guarantorName;
   String? _guarantorPhone;
+  String? _guarantorNationalId;
+  String? _guarantorAddress;
+  String? _guarantorNotes;
   double _interestPercentage = 0;
   int _numberOfMonths = 12;
 
@@ -77,6 +80,9 @@ class SalesProvider with ChangeNotifier {
   bool get isInstallment => _isInstallment;
   String? get guarantorName => _guarantorName;
   String? get guarantorPhone => _guarantorPhone;
+  String? get guarantorNationalId => _guarantorNationalId;
+  String? get guarantorAddress => _guarantorAddress;
+  String? get guarantorNotes => _guarantorNotes;
   double get interestPercentage => _interestPercentage;
   int get numberOfMonths => _numberOfMonths;
 
@@ -220,6 +226,9 @@ class SalesProvider with ChangeNotifier {
     _isInstallment = false;
     _guarantorName = null;
     _guarantorPhone = null;
+    _guarantorNationalId = null;
+    _guarantorAddress = null;
+    _guarantorNotes = null;
     _interestPercentage = 0;
     _numberOfMonths = 12;
     _isReserved = false;
@@ -280,16 +289,82 @@ class SalesProvider with ChangeNotifier {
     required bool enabled,
     String? guarantorName,
     String? guarantorPhone,
+    String? guarantorNationalId,
+    String? guarantorAddress,
+    String? guarantorNotes,
     int numberOfMonths = 12,
     double interestPercentage = 0,
+    double? downPayment,
   }) {
     _isInstallment = enabled;
     _guarantorName = guarantorName?.trim();
     _guarantorPhone = guarantorPhone?.trim();
+    _guarantorNationalId = guarantorNationalId?.trim();
+    _guarantorAddress = guarantorAddress?.trim();
+    _guarantorNotes = guarantorNotes?.trim();
     _numberOfMonths = numberOfMonths > 0 ? numberOfMonths : 12;
     _interestPercentage = interestPercentage >= 0 ? interestPercentage : 0;
     if (enabled) {
       _paymentMethod = "Installment";
+      if (downPayment != null && downPayment >= 0) {
+        _paidAmount = downPayment;
+      } else if (_paidAmount == 0 || _paidAmount == grandTotal) {
+        _paidAmount = (grandTotal * 0.20).roundToDouble(); // 20% down payment
+      }
+    }
+    _autoSyncPaidAmount();
+    notifyListeners();
+  }
+
+  void applyOffer(Map<String, dynamic> offer, List<ProductModel> catalog) {
+    final items = offer['items'];
+    if (items is List && items.isNotEmpty) {
+      for (final rawItem in items) {
+        final itm = rawItem is Map<String, dynamic> ? rawItem : <String, dynamic>{};
+        final pId = itm['productId']?.toString();
+        final pName = itm['productName']?.toString();
+        final qty = (itm['quantity'] as num?)?.toDouble() ?? 1.0;
+        final specialPrice = (itm['specialPrice'] as num?)?.toDouble();
+
+        ProductModel? prod;
+        if (pId != null && pId.isNotEmpty) {
+          prod = catalog.where((p) => p.id == pId).firstOrNull;
+        }
+        if (prod == null && pName != null && pName.isNotEmpty) {
+          prod = catalog.where((p) => p.nameAr.toLowerCase() == pName.toLowerCase()).firstOrNull;
+        }
+        if (prod != null) {
+          addProduct(prod, quantity: qty);
+        } else if (pId != null && pId.isNotEmpty) {
+          // Fallback placeholder item
+          _cartItems.add(
+            CartItemModel(
+              productId: pId,
+              productName: pName ?? "جهاز كهربائي",
+              quantity: qty,
+              unitPrice: specialPrice ?? 0,
+              warrantyPeriodMonths: 12,
+            ),
+          );
+        }
+      }
+    }
+
+    final pkgPrice = (offer['packagePrice'] as num?)?.toDouble() ?? 0.0;
+    final discountPercent = (offer['discountPercent'] as num?)?.toDouble() ?? 0.0;
+    final discountAmount = (offer['discountAmount'] as num?)?.toDouble() ?? 0.0;
+
+    if (pkgPrice > 0) {
+      final currentSub = subTotal;
+      if (currentSub > pkgPrice) {
+        setDiscountAmount(currentSub - pkgPrice);
+      } else {
+        setDiscountAmount(0);
+      }
+    } else if (discountPercent > 0) {
+      setDiscountAmount(subTotal * (discountPercent / 100));
+    } else if (discountAmount > 0) {
+      setDiscountAmount(discountAmount);
     }
     _autoSyncPaidAmount();
     notifyListeners();
@@ -484,6 +559,9 @@ class SalesProvider with ChangeNotifier {
         isInstallment: _isInstallment,
         guarantorName: _guarantorName,
         guarantorPhone: _guarantorPhone,
+        guarantorNationalId: _guarantorNationalId,
+        guarantorAddress: _guarantorAddress,
+        guarantorNotes: _guarantorNotes,
         interestPercentage: _interestPercentage,
         numberOfMonths: _numberOfMonths,
         isReserved: _isReserved,

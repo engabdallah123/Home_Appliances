@@ -30,6 +30,8 @@ namespace POS.CloudAPI.Database
         public DbSet<CloudReturn> Returns => Set<CloudReturn>();
         public DbSet<CloudSale> Sales => Set<CloudSale>();
         public DbSet<CloudSaleItem> SaleItems => Set<CloudSaleItem>();
+        public DbSet<CloudOffer> Offers => Set<CloudOffer>();
+        public DbSet<CloudOfferItem> OfferItems => Set<CloudOfferItem>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -568,6 +570,49 @@ BEGIN
     CREATE INDEX [IX_Returns_TenantId_Type] ON [Returns] ([TenantId], [Type]);
     CREATE INDEX [IX_Returns_TenantId_ReturnDate] ON [Returns] ([TenantId], [ReturnDate]);
     CREATE INDEX [IX_Returns_TenantId_ReturnNumber] ON [Returns] ([TenantId], [ReturnNumber]);
+END
+
+-- Offers table
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Offers')
+BEGIN
+    CREATE TABLE [Offers] (
+        [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+        [TenantId] UNIQUEIDENTIFIER NOT NULL,
+        [Title] NVARCHAR(200) NOT NULL,
+        [Description] NVARCHAR(500) NULL,
+        [Type] INT NOT NULL CONSTRAINT DF_Offers_Type DEFAULT 3,
+        [OfferType] NVARCHAR(50) NOT NULL CONSTRAINT DF_Offers_OfferType DEFAULT 'BundlePackage',
+        [DiscountPercentage] DECIMAL(18,2) NULL,
+        [FixedDiscountAmount] DECIMAL(18,2) NULL,
+        [BundlePrice] DECIMAL(18,2) NULL,
+        [StartDate] DATETIME2 NOT NULL CONSTRAINT DF_Offers_StartDate DEFAULT GETUTCDATE(),
+        [EndDate] DATETIME2 NOT NULL CONSTRAINT DF_Offers_EndDate DEFAULT GETUTCDATE(),
+        [IsActive] BIT NOT NULL CONSTRAINT DF_Offers_IsActive DEFAULT 1,
+        [TargetProductId] UNIQUEIDENTIFIER NULL,
+        [TargetProductName] NVARCHAR(200) NULL,
+        [TargetCategoryId] UNIQUEIDENTIFIER NULL,
+        [TargetCategoryName] NVARCHAR(150) NULL,
+        [TargetBrandId] UNIQUEIDENTIFIER NULL,
+        [TargetBrandName] NVARCHAR(150) NULL,
+        [SyncStatus] INT NOT NULL CONSTRAINT DF_Offers_SyncStatus DEFAULT 2,
+        [CreatedAt] DATETIME2 NOT NULL CONSTRAINT DF_Offers_CreatedAt DEFAULT GETUTCDATE(),
+        [UpdatedAt] DATETIME2 NULL
+    );
+    CREATE INDEX [IX_Offers_TenantId] ON [Offers] ([TenantId]);
+END
+
+-- OfferItems table
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'OfferItems')
+BEGIN
+    CREATE TABLE [OfferItems] (
+        [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+        [OfferId] UNIQUEIDENTIFIER NOT NULL FOREIGN KEY REFERENCES [Offers]([Id]) ON DELETE CASCADE,
+        [ProductId] UNIQUEIDENTIFIER NOT NULL,
+        [ProductName] NVARCHAR(200) NOT NULL,
+        [ProductBarcode] NVARCHAR(100) NULL,
+        [Quantity] DECIMAL(18,2) NOT NULL CONSTRAINT DF_OfferItems_Quantity DEFAULT 1,
+        [OriginalUnitPrice] DECIMAL(18,2) NOT NULL CONSTRAINT DF_OfferItems_OriginalUnitPrice DEFAULT 0
+    );
 END
 ";
                 await Database.ExecuteSqlRawAsync(sql);

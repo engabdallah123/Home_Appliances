@@ -17,9 +17,12 @@ class SalesListScreen extends StatefulWidget {
 class _SalesListScreenState extends State<SalesListScreen> {
   final TextEditingController _searchController = TextEditingController();
 
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<SalesProvider>(context, listen: false).fetchSalesList();
     });
@@ -27,8 +30,16 @@ class _SalesListScreenState extends State<SalesListScreen> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      Provider.of<SalesProvider>(context, listen: false).fetchMoreSales();
+    }
   }
 
   @override
@@ -50,8 +61,8 @@ class _SalesListScreenState extends State<SalesListScreen> {
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InstallmentsScreen())),
           ),
           IconButton(
-            icon: const Icon(Icons.favorite_rounded, color: AppColors.rose),
-            tooltip: "حجوزات جهاز العروسة",
+            icon: const Icon(Icons.bookmark_added_rounded, color: AppColors.accent),
+            tooltip: "حجوزات الأجهزة",
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReservationsScreen())),
           ),
           IconButton(
@@ -96,10 +107,19 @@ class _SalesListScreenState extends State<SalesListScreen> {
                     : RefreshIndicator(
                         onRefresh: () => salesProv.fetchSalesList(search: _searchController.text.trim()),
                         child: ListView.separated(
+                          controller: _scrollController,
                           padding: const EdgeInsets.all(16),
-                          itemCount: salesProv.sales.length,
+                          itemCount: salesProv.sales.length + (salesProv.isLoadingMore ? 1 : 0),
                           separatorBuilder: (_, __) => const SizedBox(height: 12),
                           itemBuilder: (ctx, index) {
+                            if (index == salesProv.sales.length) {
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                child: Center(
+                                  child: CircularProgressIndicator(color: AppColors.primaryLight, strokeWidth: 2),
+                                ),
+                              );
+                            }
                             final sale = salesProv.sales[index];
                             return _buildSaleCard(context, sale, salesProv, isDark);
                           },

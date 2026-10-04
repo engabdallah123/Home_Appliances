@@ -285,6 +285,12 @@ namespace POS.Desktop.Services.Sync
                 // 11. Push Sales & Purchase Returns to Cloud
                 await PushReturnsToCloudAsync();
 
+                // 11.5 Push Local Sales, Reservations & Installments to Cloud
+                await PushSalesToCloudAsync();
+
+                // 11.6 Push Active Offers & Bride Packages to Cloud
+                await PushOffersToCloudAsync();
+
                 // 12. Push Dashboard snapshot & Debts (Every 60s or if items imported)
                 if (purchasesCount > 0 || salesCount > 0 || debtsCount > 0 || expensesCount > 0 || (DateTime.UtcNow - _lastDashboardPush) > TimeSpan.FromSeconds(60))
                 {
@@ -500,8 +506,12 @@ namespace POS.Desktop.Services.Sync
 
                 var categories = await _posApi.GetCategoriesAsync();
                 var units = await _posApi.GetUnitsAsync();
-                var defaultCatId = categories.FirstOrDefault()?.Id ?? Guid.Empty;
-                var defaultUnitId = units.FirstOrDefault()?.Id ?? Guid.Empty;
+                var defaultCatId = categories?.FirstOrDefault()?.Id ?? Guid.Empty;
+                if (defaultCatId == Guid.Empty)
+                {
+                    defaultCatId = await _posApi.CreateCategoryAsync(new CreateCategoryRequest("أجهزة كهربائية عامة")) ?? Guid.Empty;
+                }
+                var defaultUnitId = units?.FirstOrDefault()?.Id ?? Guid.Empty;
 
                 var localProducts = await _posApi.GetProductsAsync();
                 var localById = localProducts?.ToDictionary(p => p.Id) ?? new();
@@ -536,9 +546,15 @@ namespace POS.Desktop.Services.Sync
                         ReorderLevel = prod.ReorderLevel,
                         IsWeighable = prod.IsWeighable,
                         TrackExpiry = prod.TrackExpiry,
-                        CategoryId = prod.CategoryId ?? defaultCatId,
+                        CategoryId = (prod.CategoryId.HasValue && prod.CategoryId.Value != Guid.Empty) ? prod.CategoryId.Value : defaultCatId,
                         UnitId = defaultUnitId,
-                        InitialStock = prod.StockQuantity
+                        InitialStock = prod.StockQuantity,
+                        BrandId = prod.BrandId,
+                        ModelNumber = prod.ModelNumber,
+                        Color = prod.Color,
+                        WarrantyPeriodMonths = prod.WarrantyPeriodMonths > 0 ? prod.WarrantyPeriodMonths : 12,
+                        MaintenanceAgent = prod.MaintenanceAgent,
+                        HasSerialNumber = prod.HasSerialNumber
                     };
 
                     var (productId, error) = await _posApi.CreateProductAsync(formModel);
@@ -1224,6 +1240,125 @@ namespace POS.Desktop.Services.Sync
                 if (itemsToPush.Any())
                 {
                     await _cloudHttp.PostAsJsonAsync("api/sync/returns/push", new PushReturnsRequest(itemsToPush));
+                }
+            }
+            catch { }
+        }
+
+        private async Task PushSalesToCloudAsync()
+        {
+            try
+            {
+                var localSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddDays(-60), DateTime.UtcNow.AddDays(1));
+                if (localSales == null || !localSales.Any()) return;
+
+                var customerDebts = await _posApi.GetCustomerDebtsAsync();
+                var remainingMap = customerDebts?.ToDictionary(d => d.SaleId, d => d.RemainingAmount) ?? new();
+
+                var installmentContracts = await _posApi.GetInstallmentContractsAsync();
+                var contractMap = installmentContracts?.ToDictionary(c => c.SaleId, c => c) ?? new();
+
+                var salesToPush = localSales.Select(s =>
+                {
+                    decimal remaining = remainingMap.TryGetValue(s.Id, out var rem) ? rem : Math.Max(0, s.TotalAmount - s.PaidAmount);
+                    bool isInst = s.IsInstallment || s.PaymentMethod == "Installment" || s.PaymentMethod == "تقسيط" || contractMap.ContainsKey(s.Id);
+
+                    InstallmentContractDto? contract = null;
+                    if (s.InstallmentContractId.HasValue) contractMap.TryGetValue(s.InstallmentContractId.Value, out contract);
+                    if (contract == null) contractMap.TryGetValue(s.Id, out contract);
+
+                    return new CloudSaleSyncDto(
+                        Id: s.Id,
+                        InvoiceNumber: s.InvoiceNumber,
+                        CustomerId: s.CustomerId,
+                        CustomerName: s.CustomerName,
+                        CustomerPhone: s.RecipientPhone,
+                        SaleDate: s.SaleDate,
+                        SubTotal: s.SubTotal,
+                        DiscountAmount: s.DiscountAmount,
+                        TaxAmount: s.TaxAmount,
+                        TotalAmount: s.TotalAmount,
+                        PaidAmount: s.PaidAmount,
+                        RemainingAmount: remaining,
+                        PaymentMethod: s.PaymentMethod ?? "Cash",
+                        Notes: s.Notes,
+                        IsDelivery: s.IsDelivery,
+                        RecipientName: s.RecipientName,
+                        RecipientPhone: s.RecipientPhone,
+                        DeliveryAddress: s.DeliveryAddress,
+                        DeliveryFloor: s.DeliveryFloor,
+                        DeliveryFee: s.DeliveryFee,
+                        IsInstallment: isInst,
+                        GuarantorName: contract?.GuarantorName,
+                        GuarantorPhone: contract?.GuarantorPhone,
+                        InterestPercentage: contract?.InterestPercentage ?? 0,
+                        NumberOfMonths: contract?.NumberOfMonths ?? 12,
+                        IsReserved: s.IsReserved,
+                        TargetDeliveryDate: s.TargetDeliveryDate,
+                        Items: (s.Items ?? new List<SaleItemDto>()).Select(i => new CloudSaleItemSyncDto(
+                            Id: i.Id != Guid.Empty ? i.Id : Guid.NewGuid(),
+                            ProductId: i.ProductId,
+                            ProductName: i.ProductName ?? "منتج",
+                            Barcode: i.Barcode,
+                            ModelNumber: null,
+                            BrandName: null,
+                            SerialNumber: i.SerialNumber,
+                            WarrantyPeriodMonths: 12,
+                            Quantity: i.Quantity,
+                            UnitPrice: i.UnitPrice,
+                            Discount: i.Discount,
+                            Tax: i.Tax,
+                            Total: i.Total
+                        )).ToList()
+                    );
+                }).ToList();
+
+                if (salesToPush.Any())
+                {
+                    await _cloudHttp.PostAsJsonAsync("api/sync/sales/push", new PushSalesRequest(salesToPush));
+                }
+            }
+            catch { }
+        }
+
+        private async Task PushOffersToCloudAsync()
+        {
+            try
+            {
+                var localOffers = await _posApi.GetOffersAsync();
+                if (localOffers == null || !localOffers.Any()) return;
+
+                var offersToPush = localOffers.Select(o => new PushOfferDto(
+                    Id: o.Id,
+                    Title: o.Title,
+                    Description: o.Description,
+                    Type: o.Type,
+                    OfferType: o.OfferType,
+                    DiscountPercentage: o.DiscountPercentage,
+                    FixedDiscountAmount: o.FixedDiscountAmount,
+                    BundlePrice: o.BundlePrice,
+                    StartDate: o.StartDate,
+                    EndDate: o.EndDate,
+                    IsActive: o.IsActive,
+                    TargetProductId: o.TargetProductId,
+                    TargetProductName: o.TargetProductName,
+                    TargetCategoryId: o.TargetCategoryId,
+                    TargetCategoryName: o.TargetCategoryName,
+                    TargetBrandId: o.TargetBrandId,
+                    TargetBrandName: o.TargetBrandName,
+                    Items: o.Items?.Select(i => new PushOfferItemDto(
+                        Id: i.Id,
+                        ProductId: i.ProductId,
+                        ProductName: i.ProductName,
+                        ProductBarcode: i.ProductBarcode,
+                        Quantity: i.Quantity,
+                        OriginalUnitPrice: i.OriginalUnitPrice
+                    )).ToList()
+                )).ToList();
+
+                if (offersToPush.Any())
+                {
+                    await _cloudHttp.PostAsJsonAsync("api/sync/offers/push", new PushOffersRequest(offersToPush));
                 }
             }
             catch { }

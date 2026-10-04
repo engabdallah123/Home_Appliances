@@ -66,7 +66,7 @@ class _OffersScreenState extends State<OffersScreen> {
         backgroundColor: AppColors.getSurface(isDark),
         elevation: 0,
         title: Text(
-          "العروض وبكجات جهاز العروسة",
+          "عروض وبكجات الأجهزة الكهربائية",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.getTextPrimary(isDark)),
         ),
         actions: [
@@ -99,7 +99,7 @@ class _OffersScreenState extends State<OffersScreen> {
                 children: [
                   _buildFilterChip(isDark, "جميع العروض (${_offers.length})", null),
                   const SizedBox(width: 8),
-                  _buildFilterChip(isDark, "🎁 بكجات جهاز العروسة", "BundlePackage"),
+                  _buildFilterChip(isDark, "🎁 البكجات المجمعة", "BundlePackage"),
                   const SizedBox(width: 8),
                   _buildFilterChip(isDark, "🏷️ خصومات الماركات", "BrandDiscount"),
                 ],
@@ -193,10 +193,10 @@ class _OffersScreenState extends State<OffersScreen> {
       decoration: BoxDecoration(
         color: AppColors.getSurface(isDark),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isBundle ? const Color(0xFFEC4899).withOpacity(0.35) : AppColors.getBorder(isDark)),
+        border: Border.all(color: isBundle ? AppColors.warning.withOpacity(0.35) : AppColors.getBorder(isDark)),
         boxShadow: [
           BoxShadow(
-            color: isBundle ? const Color(0xFFEC4899).withOpacity(0.06) : Colors.black.withOpacity(0.03),
+            color: isBundle ? AppColors.warning.withOpacity(0.06) : Colors.black.withOpacity(0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -218,7 +218,7 @@ class _OffersScreenState extends State<OffersScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    isBundle ? "بكج جهاز العروسة المجمع 🎁" : "خصم الماركة 🏷️",
+                    isBundle ? "بكج أجهزة مجمّع 🎁" : "خصم الماركة 🏷️",
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                     overflow: TextOverflow.ellipsis,
                   ),

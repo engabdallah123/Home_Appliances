@@ -25,7 +25,6 @@ class NotificationsProvider extends ChangeNotifier {
   String? get error => _error;
 
   int get totalAlertsCount =>
-      _expiryNotifications.length +
       _lowStockProducts.length +
       _shiftSummaries.where((s) => !s.isReadByOwner).length;
 
@@ -68,7 +67,6 @@ class NotificationsProvider extends ChangeNotifier {
 
     try {
       await Future.wait([
-        fetchExpiryNotifications(),
         fetchLowStockNotifications(),
         fetchShiftSummaries(),
       ]);
@@ -82,14 +80,8 @@ class NotificationsProvider extends ChangeNotifier {
   }
 
   Future<void> fetchExpiryNotifications() async {
-    try {
-      final res = await _apiClient.get('/api/cloud/notifications/expiry');
-      if (res is List) {
-        _expiryNotifications = res.map((item) => ExpiryNotificationModel.fromJson(item)).toList();
-      }
-    } catch (e) {
-      debugPrint('fetchExpiryNotifications error: $e');
-    }
+    // Expiry notifications disabled for Home Appliances
+    _expiryNotifications = [];
   }
 
   Future<void> fetchLowStockNotifications() async {
@@ -115,23 +107,7 @@ class NotificationsProvider extends ChangeNotifier {
   }
 
   void _checkAndTriggerSystemNotifications() {
-    // 1. Expiry Notifications
-    for (final exp in _expiryNotifications) {
-      final key = 'exp_${exp.id}_${exp.daysRemaining}';
-      if (!_notifiedItemKeys.contains(key)) {
-        _saveNotifiedKey(key);
-        _notificationService.showNotification(
-          id: exp.id.hashCode,
-          title: exp.isExpired
-              ? '🚨 تنبيه انتهاء صلاحية: ${exp.productName}'
-              : '⚠️ اقتراب انتهاء صلاحية: ${exp.productName}',
-          body: exp.isExpired
-              ? 'الدفعة ${exp.batchNumber ?? ""} منتهية الصلاحية! المتبقي: ${exp.remainingQuantity.toInt()} ${exp.unit}'
-              : 'متبقي ${exp.daysRemaining} يوم على انتهاء صلاحية ${exp.remainingQuantity.toInt()} ${exp.unit}',
-          isUrgent: true,
-        );
-      }
-    }
+    // Expiry alerts removed for Home Appliances per requirement
 
     // 2. Low Stock and Out-of-Stock Notifications
     for (final prod in _lowStockProducts) {

@@ -86,6 +86,9 @@ class CreateSaleModel {
   final bool isInstallment;
   final String? guarantorName;
   final String? guarantorPhone;
+  final String? guarantorNationalId;
+  final String? guarantorAddress;
+  final String? guarantorNotes;
   final double interestPercentage;
   final int numberOfMonths;
 
@@ -113,6 +116,9 @@ class CreateSaleModel {
     this.isInstallment = false,
     this.guarantorName,
     this.guarantorPhone,
+    this.guarantorNationalId,
+    this.guarantorAddress,
+    this.guarantorNotes,
     this.interestPercentage = 0,
     this.numberOfMonths = 12,
     this.isReserved = false,
@@ -143,6 +149,9 @@ class CreateSaleModel {
         'isInstallment': isInstallment,
         'guarantorName': guarantorName,
         'guarantorPhone': guarantorPhone,
+        'guarantorNationalId': guarantorNationalId,
+        'guarantorAddress': guarantorAddress,
+        'guarantorNotes': guarantorNotes,
         'interestPercentage': interestPercentage,
         'numberOfMonths': numberOfMonths,
         'isReserved': isReserved,

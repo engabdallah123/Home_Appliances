@@ -4,7 +4,6 @@ import '../dashboard/screens/dashboard_screen.dart';
 import '../dashboard/screens/monthly_report_screen.dart';
 import '../debts/screens/debts_screen.dart';
 import '../expenses/screens/expenses_screen.dart';
-import '../notifications/screens/expiry_notifications_screen.dart';
 import '../notifications/screens/low_stock_notifications_screen.dart';
 import '../notifications/screens/shift_summaries_screen.dart';
 import '../products/screens/add_edit_product_screen.dart';
@@ -148,9 +147,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   onTap: () => _navigate(ctx, const InstallmentsScreen()),
                 ),
                 _HubItem(
-                  title: "حجوزات العروسة",
-                  icon: Icons.favorite_rounded,
-                  color: const Color(0xFFEC4899),
+                  title: "حجوزات الأجهزة",
+                  icon: Icons.bookmark_added_rounded,
+                  color: AppColors.accent,
                   onTap: () => _navigate(ctx, const ReservationsScreen()),
                 ),
                 _HubItem(
@@ -232,7 +231,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 _HubItem(
                   title: "عروض وبكجات",
                   icon: Icons.card_giftcard_rounded,
-                  color: const Color(0xFFEC4899),
+                  color: AppColors.orange,
                   onTap: () => _navigate(ctx, const OffersScreen()),
                 ),
               ], isDark),
@@ -269,12 +268,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               _buildCategoryHeader("الرقابة والورديات والتنبيهات", Icons.security_rounded, AppColors.purple, isDark),
               const SizedBox(height: 8),
               _buildHubGrid([
-                _HubItem(
-                  title: "الصلاحية والهالك",
-                  icon: Icons.timelapse_rounded,
-                  color: AppColors.danger,
-                  onTap: () => _navigate(ctx, const ExpiryNotificationsScreen()),
-                ),
                 _HubItem(
                   title: "نواقص المخزون",
                   icon: Icons.warning_amber_rounded,
@@ -408,7 +401,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
         child: BottomNavigationBar(
-          currentIndex: _currentIndex,
+          currentIndex: _currentIndex >= 2 ? _currentIndex + 1 : _currentIndex,
           onTap: (idx) {
             if (idx == 2) {
               // Open quick hub modal

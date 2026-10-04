@@ -30,107 +30,80 @@ namespace POS.CloudAPI.Controllers
             var tenantId = GetTenantId();
             if (tenantId == Guid.Empty) return Unauthorized();
 
-            // Load top appliance products to dynamically build bundle offers and brand discounts
-            var topBrands = await _db.Brands
+            var query = _db.Offers
                 .AsNoTracking()
-                .Where(b => b.TenantId == tenantId && b.IsActive)
-                .Take(6)
-                .ToListAsync();
-
-            var topProducts = await _db.Products
-                .AsNoTracking()
-                .Where(p => p.TenantId == tenantId && p.IsActive)
-                .OrderByDescending(p => p.SellingPrice)
-                .Take(12)
-                .ToListAsync();
-
-            var now = DateTime.UtcNow;
-
-            var offers = new List<object>
-            {
-                new
-                {
-                    Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                    TitleAr = "بكج جهاز العروسة الماسي المتكامل 🎁",
-                    TitleEn = "Diamond Bride Appliance Package",
-                    Description = "ثلاجة نوفروست + غسالة فول أوتوماتيك + بوتاجاز أمان كامل 5 شعلة + شاشة سمارت 55 بوصة بخصم خاص وهدية مكنسة كهربائية.",
-                    OfferType = "BundlePackage",
-                    DiscountPercentage = 15.0,
-                    OriginalPrice = 75000.0,
-                    DiscountedPrice = 63750.0,
-                    StartDate = now.AddDays(-10),
-                    EndDate = now.AddDays(30),
-                    IsActive = true,
-                    IsCurrentlyValid = true,
-                    Items = topProducts.Take(4).Select(p => new
-                    {
-                        p.Id,
-                        p.NameAr,
-                        p.BrandName,
-                        p.ModelNumber,
-                        p.SellingPrice
-                    }).ToList()
-                },
-                new
-                {
-                    Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-                    TitleAr = "بكج المطبخ الاقتصادي (3 أجهزة)",
-                    TitleEn = "Economy Kitchen Bundle",
-                    Description = "ثلاجة 14 قدم + بوتاجاز 4 شعلة + غسالة فوق أوتوماتيك مع ضمان شامل وسداد ميسر على 12 شهر.",
-                    OfferType = "BundlePackage",
-                    DiscountPercentage = 10.0,
-                    OriginalPrice = 38000.0,
-                    DiscountedPrice = 34200.0,
-                    StartDate = now.AddDays(-5),
-                    EndDate = now.AddDays(45),
-                    IsActive = true,
-                    IsCurrentlyValid = true,
-                    Items = topProducts.Skip(4).Take(3).Select(p => new
-                    {
-                        p.Id,
-                        p.NameAr,
-                        p.BrandName,
-                        p.ModelNumber,
-                        p.SellingPrice
-                    }).ToList()
-                }
-            };
-
-            // Add brand discounts if brands exist
-            if (topBrands.Any())
-            {
-                var firstBrand = topBrands.First();
-                offers.Add(new
-                {
-                    Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-                    TitleAr = $"خصم خاص على جميع أجهزة {firstBrand.Name} 🏷️",
-                    TitleEn = $"Special Discount on {firstBrand.Name} Appliances",
-                    Description = $"خصم فوري 8% عند شراء أي جهاز من ماركة {firstBrand.Name} كاش أو تقسيط.",
-                    OfferType = "BrandDiscount",
-                    BrandName = firstBrand.Name,
-                    DiscountPercentage = 8.0,
-                    OriginalPrice = 0.0,
-                    DiscountedPrice = 0.0,
-                    StartDate = now.AddDays(-2),
-                    EndDate = now.AddDays(20),
-                    IsActive = true,
-                    IsCurrentlyValid = true,
-                    Items = new List<object>()
-                });
-            }
+                .Include(o => o.Items)
+                .Where(o => o.TenantId == tenantId && o.IsActive);
 
             if (!string.IsNullOrWhiteSpace(type))
             {
-                // Filter by type if passed
-                var filtered = offers.Where(o =>
-                {
-                    var prop = o.GetType().GetProperty("OfferType");
-                    return prop != null && (prop.GetValue(o)?.ToString() == type);
-                }).ToList();
-                return Ok(filtered);
+                query = query.Where(o => o.OfferType == type);
             }
 
-            return Ok(offers);
+            var dbOffers = await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
+
+            if (dbOffers.Any())
+            {
+                var result = dbOffers.Select(o =>
+                {
+                    decimal origPrice = o.Items.Sum(i => i.Quantity * i.OriginalUnitPrice);
+                    decimal discPrice = origPrice;
+
+                    if (o.BundlePrice.HasValue && o.BundlePrice.Value > 0)
+                    {
+                        discPrice = o.BundlePrice.Value;
+                    }
+                    else if (o.FixedDiscountAmount.HasValue && o.FixedDiscountAmount.Value > 0)
+                    {
+                        discPrice = Math.Max(0, origPrice - o.FixedDiscountAmount.Value);
+                    }
+                    else if (o.DiscountPercentage.HasValue && o.DiscountPercentage.Value > 0)
+                    {
+                        discPrice = Math.Max(0, origPrice * (1 - (o.DiscountPercentage.Value / 100m)));
+                    }
+
+                    return new
+                    {
+                        Id = o.Id,
+                        TitleAr = o.Title,
+                        TitleEn = (string?)null,
+                        Description = o.Description,
+                        OfferType = o.OfferType,
+                        Type = o.Type,
+                        DiscountPercentage = (double)(o.DiscountPercentage ?? 0),
+                        FixedDiscountAmount = (double)(o.FixedDiscountAmount ?? 0),
+                        OriginalPrice = (double)origPrice,
+                        DiscountedPrice = (double)discPrice,
+                        BundlePrice = (double)(o.BundlePrice ?? 0),
+                        StartDate = o.StartDate,
+                        EndDate = o.EndDate,
+                        IsActive = o.IsActive,
+                        IsCurrentlyValid = o.IsActive && o.StartDate <= DateTime.UtcNow && o.EndDate >= DateTime.UtcNow,
+                        TargetProductId = o.TargetProductId,
+                        TargetProductName = o.TargetProductName,
+                        TargetCategoryId = o.TargetCategoryId,
+                        TargetCategoryName = o.TargetCategoryName,
+                        TargetBrandId = o.TargetBrandId,
+                        TargetBrandName = o.TargetBrandName,
+                        Items = o.Items.Select(i => new
+                        {
+                            Id = i.Id,
+                            ProductId = i.ProductId,
+                            ProductName = i.ProductName,
+                            ProductBarcode = i.ProductBarcode,
+                            Quantity = (double)i.Quantity,
+                            UnitPrice = (double)i.OriginalUnitPrice,
+                            SellingPrice = (double)i.OriginalUnitPrice,
+                            OriginalUnitPrice = (double)i.OriginalUnitPrice
+                        }).ToList()
+                    };
+                }).ToList();
+
+                return Ok(result);
+            }
+
+            return Ok(new List<object>());
         }
     }
 }
+

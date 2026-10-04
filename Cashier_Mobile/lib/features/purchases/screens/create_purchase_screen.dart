@@ -67,12 +67,8 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
   double get _paid => double.tryParse(_paidController.text) ?? 0.0;
   double get _remaining => (_total - _paid) > 0 ? (_total - _paid) : 0.0;
 
-  // Breakdown Metrics
-  int get _regularItemsCount => _items.where((i) => !i.isWeighable).length;
-  double get _regularItemsTotal => _items.where((i) => !i.isWeighable).fold(0.0, (sum, i) => sum + i.total);
-  int get _weighedItemsCount => _items.where((i) => i.isWeighable).length;
-  double get _weighedItemsTotal => _items.where((i) => i.isWeighable).fold(0.0, (sum, i) => sum + i.total);
-  double get _totalWeighedKg => _items.where((i) => i.isWeighable).fold(0.0, (sum, i) => sum + i.quantity);
+  // Total pieces count for appliances
+  int get _totalPieces => _items.fold(0, (sum, i) => sum + i.quantity.toInt());
 
   void _setFullPayment() {
     setState(() {
@@ -96,8 +92,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
     ProductModel? matched;
     try {
       matched = prov.products.firstWhere(
-        (p) => p.barcode.trim().toLowerCase() == clean ||
-               (p.isWeighable && (clean.contains(p.barcode.trim().toLowerCase()) || p.barcode.trim().toLowerCase().endsWith(clean))),
+        (p) => p.barcode.trim().toLowerCase() == clean,
       );
     } catch (_) {
       matched = null;
@@ -135,7 +130,6 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
   void _openProductPicker() {
     final prodProv = Provider.of<ProductsProvider>(context, listen: false);
     final searchCtrl = TextEditingController();
-    String typeFilter = "all"; // 'all', 'regular', 'weighed'
     final isDark = Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
 
     showModalBottomSheet(
@@ -170,7 +164,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  "اختر الصنف لإضافته إلى الفاتورة",
+                                  "اختر الجهاز لإضافته إلى الفاتورة",
                                   style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 16),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -194,7 +188,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                         setModalState(() {});
                       },
                       decoration: InputDecoration(
-                        hintText: "ابحث بالاسم أو الباركود...",
+                        hintText: "ابحث بالاسم، الموديل أو الباركود...",
                         hintStyle: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 13),
                         prefixIcon: const Icon(Icons.search, color: AppColors.primaryLight),
                         suffixIcon: IconButton(
@@ -216,27 +210,6 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.getBorder(isDark))),
                       ),
                     ),
-                    const SizedBox(height: 10),
-
-                    // Filter chips: All, Regular, Weighed
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _buildPickerChip(isDark, "الكل", typeFilter == "all", () {
-                            setModalState(() => typeFilter = "all");
-                          }),
-                          const SizedBox(width: 8),
-                          _buildPickerChip(isDark, "منتجات عادية 📦", typeFilter == "regular", () {
-                            setModalState(() => typeFilter = "regular");
-                          }),
-                          const SizedBox(width: 8),
-                          _buildPickerChip(isDark, "منتجات بالوزن ⚖️", typeFilter == "weighed", () {
-                            setModalState(() => typeFilter = "weighed");
-                          }),
-                        ],
-                      ),
-                    ),
                     const SizedBox(height: 12),
 
                     // Products list
@@ -247,16 +220,11 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                             return const Center(child: CircularProgressIndicator(color: AppColors.primaryLight));
                           }
 
-                          var filtered = prov.products;
-                          if (typeFilter == "regular") {
-                            filtered = filtered.where((p) => !p.isWeighable).toList();
-                          } else if (typeFilter == "weighed") {
-                            filtered = filtered.where((p) => p.isWeighable).toList();
-                          }
+                          final filtered = prov.products;
 
                           if (filtered.isEmpty) {
                             return Center(
-                              child: Text("لا توجد أصناف مطابقة للبحث.", style: TextStyle(color: AppColors.getTextMuted(isDark))),
+                              child: Text("لا توجد أجهزة مطابقة للبحث.", style: TextStyle(color: AppColors.getTextMuted(isDark))),
                             );
                           }
 
@@ -287,74 +255,60 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                 }
                                 final p = filtered[idx];
                                 return ListTile(
-                                contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                                leading: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: p.isWeighable ? AppColors.cyan.withOpacity(0.12) : AppColors.primary.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(10),
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                                  leading: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.inventory_2_outlined,
+                                      color: AppColors.primaryLight,
+                                      size: 22,
+                                    ),
                                   ),
-                                  child: Icon(
-                                    p.isWeighable ? Icons.scale_rounded : Icons.inventory_2_outlined,
-                                    color: p.isWeighable ? AppColors.cyan : AppColors.primaryLight,
-                                    size: 22,
+                                  title: Text(
+                                    p.nameAr,
+                                    style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.w600, fontSize: 14),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                                title: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        p.nameAr,
-                                        style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.w600, fontSize: 14),
-                                      ),
-                                    ),
-                                    if (p.isWeighable)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.cyan.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: const Text("بالوزن ⚖️", style: TextStyle(color: AppColors.cyan, fontSize: 10, fontWeight: FontWeight.bold)),
-                                      ),
-                                  ],
-                                ),
-                                subtitle: Wrap(
-                                  spacing: 8,
-                                  children: [
-                                    Text(
-                                      p.barcode,
-                                      style: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 11, fontFamily: 'monospace'),
-                                    ),
-                                    Text(
-                                      "شراء: ${p.purchasePrice > 0 ? p.purchasePrice.toStringAsFixed(2) : p.sellingPrice.toStringAsFixed(2)} ج.م${p.isWeighable ? '/كجم' : ''}",
-                                      style: const TextStyle(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.w600),
-                                    ),
-                                    if (p.trackExpiry)
+                                  subtitle: Wrap(
+                                    spacing: 8,
+                                    children: [
                                       Text(
-                                        "صلاحية: ${p.shelfLifeDays} يوم",
-                                        style: TextStyle(color: Colors.amber.shade700, fontSize: 11),
+                                        p.barcode,
+                                        style: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 11, fontFamily: 'monospace'),
                                       ),
-                                  ],
-                                ),
-                                trailing: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      Text(
+                                        "شراء: ${p.purchasePrice > 0 ? p.purchasePrice.toStringAsFixed(2) : p.sellingPrice.toStringAsFixed(2)} ج.م",
+                                        style: const TextStyle(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.w600),
+                                      ),
+                                      if (p.modelNumber != null && p.modelNumber!.isNotEmpty)
+                                        Text(
+                                          "موديل: ${p.modelNumber}",
+                                          style: TextStyle(color: AppColors.accent, fontSize: 11),
+                                        ),
+                                    ],
                                   ),
-                                  onPressed: () {
-                                    Navigator.pop(ctx);
-                                    _openItemConfigDialog(p);
-                                  },
-                                  child: const Text("تحديد", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                                ),
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
+                                  trailing: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      _openItemConfigDialog(p);
+                                    },
+                                    child: const Text("تحديد", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),
@@ -366,45 +320,14 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
     );
   }
 
-  Widget _buildPickerChip(bool isDark, String label, bool isSelected, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.getBackground(isDark),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? AppColors.primary : AppColors.getBorder(isDark)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.getTextSecondary(isDark),
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            fontSize: 12,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Full Feature Item Configuration Dialog (Weighed vs Carton/Piece, Expiry Tracking)
+  // Item Configuration Dialog for Home Appliances
   void _openItemConfigDialog(ProductModel product, [CreatePurchaseItemModel? existingItem]) {
     final isDark = Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
-    final isWeighed = product.isWeighable;
 
-    // State variables
-    String unitType = 'piece';
-    double qty = existingItem?.quantity ?? (isWeighed ? 1.0 : 1.0);
+    double qty = existingItem?.quantity ?? 1.0;
     double cost = existingItem?.unitCost ?? (product.purchasePrice > 0 ? product.purchasePrice : product.sellingPrice * 0.8);
-    int factor = 1;
-    DateTime? expiryDate = existingItem?.expiryDate ?? DateTime.now().add(Duration(days: product.shelfLifeDays > 0 ? product.shelfLifeDays : 365));
-    String batch = existingItem?.batchNumber ?? '';
-
-    final qtyCtrl = TextEditingController(text: isWeighed ? qty.toStringAsFixed(3) : qty.toStringAsFixed(0));
+    final qtyCtrl = TextEditingController(text: qty.toInt().toString());
     final costCtrl = TextEditingController(text: cost.toStringAsFixed(2));
-    final factorCtrl = TextEditingController(text: factor.toString());
-    final batchCtrl = TextEditingController(text: batch);
 
     showModalBottomSheet(
       context: context,
@@ -418,15 +341,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
           builder: (context, setDialogState) {
             final currentQty = double.tryParse(qtyCtrl.text) ?? 0.0;
             final currentCost = double.tryParse(costCtrl.text) ?? 0.0;
-            final currentFactor = int.tryParse(factorCtrl.text) ?? 1;
             final itemTotal = currentQty * currentCost;
-            final pieceCost = currentCost;
-            final totalPieces = currentQty;
-
-            int daysLeft = 0;
-            if (expiryDate != null) {
-              daysLeft = expiryDate!.difference(DateTime.now()).inDays;
-            }
 
             return Padding(
               padding: EdgeInsets.only(
@@ -446,12 +361,12 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: isWeighed ? AppColors.cyan.withOpacity(0.15) : AppColors.primary.withOpacity(0.15),
+                            color: AppColors.primary.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Icon(
-                            isWeighed ? Icons.scale_rounded : Icons.all_inbox_rounded,
-                            color: isWeighed ? AppColors.cyan : AppColors.primaryLight,
+                          child: const Icon(
+                            Icons.all_inbox_rounded,
+                            color: AppColors.primaryLight,
                             size: 24,
                           ),
                         ),
@@ -465,8 +380,8 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                 style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 16),
                               ),
                               Text(
-                                isWeighed ? "صنف بالوزن (كجم)" : "صنف عادي (${product.baseUnit})",
-                                style: TextStyle(color: isWeighed ? AppColors.cyan : AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.w600),
+                                "جهاز كهربائي (${product.modelNumber ?? 'عام'}) - وحدة الصنف: قطعة",
+                                style: const TextStyle(color: AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -479,213 +394,84 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                     ),
                     const Divider(height: 20),
 
-                    // WEIGHED PRODUCT SECTION
-                    if (isWeighed) ...[
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.cyan.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.cyan.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.scale_rounded, color: AppColors.cyan, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                "توريد بالكيلوجرام (كجم): أدخل الوزن بدقة حتى 3 خانات عشرية",
-                                style: const TextStyle(color: AppColors.cyan, fontSize: 12, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Weight Input
-                      Text("الوزن المورّد (كجم) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: qtyCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 16),
-                        decoration: InputDecoration(
-                          hintText: "مثلاً: 12.500",
-                          suffixText: "كجم",
-                          filled: true,
-                          fillColor: AppColors.getBackground(isDark),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.cyan)),
-                        ),
-                        onChanged: (_) => setDialogState(() {}),
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Quick Weight Buttons (+1kg, +5kg, +10kg, +25kg)
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          _buildQuickWeightButton("+1 كجم", 1.0, qtyCtrl, setDialogState),
-                          _buildQuickWeightButton("+5 كجم", 5.0, qtyCtrl, setDialogState),
-                          _buildQuickWeightButton("+10 كجم", 10.0, qtyCtrl, setDialogState),
-                          _buildQuickWeightButton("+25 كجم (شيكارة)", 25.0, qtyCtrl, setDialogState),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Price per Kg
-                      Text("سعر شراء الكيلو (ج.م / كجم) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: costCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 16),
-                        decoration: InputDecoration(
-                          hintText: "0.00",
-                          suffixText: "ج.م / كجم",
-                          filled: true,
-                          fillColor: AppColors.getBackground(isDark),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onChanged: (_) => setDialogState(() {}),
-                      ),
-                    ] else ...[
-                      // REGULAR PRODUCT SECTION (Always by Piece for Home Appliances)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text("الكمية (قطعة) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 4),
-                                TextField(
-                                  controller: qtyCtrl,
-                                  keyboardType: TextInputType.number,
-                                  style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold),
-                                  decoration: InputDecoration(
-                                    suffixText: "قطعة",
-                                    filled: true,
-                                    fillColor: AppColors.getBackground(isDark),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                  onChanged: (_) => setDialogState(() {}),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text("سعر شراء القطعة (ج.م) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 4),
-                                TextField(
-                                  controller: costCtrl,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold),
-                                  decoration: InputDecoration(
-                                    suffixText: "ج.م",
-                                    filled: true,
-                                    fillColor: AppColors.getBackground(isDark),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                  onChanged: (_) => setDialogState(() {}),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-
-                    // EXPIRY TRACKING SECTION
-                    if (product.trackExpiry) ...[
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.warning.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.warning.withOpacity(0.3)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.timelapse_rounded, color: AppColors.warning, size: 18),
-                                const SizedBox(width: 6),
-                                const Text("تتبع الصلاحية وتاريخ الانتهاء", style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.bold, fontSize: 13)),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      side: BorderSide(color: AppColors.getBorder(isDark)),
-                                    ),
-                                    icon: const Icon(Icons.calendar_today_rounded, size: 16),
-                                    label: Text(
-                                      expiryDate != null ? DateFormat('dd/MM/yyyy').format(expiryDate!) : "تاريخ الانتهاء",
-                                      style: TextStyle(fontSize: 12, color: AppColors.getTextPrimary(isDark)),
-                                    ),
-                                    onPressed: () async {
-                                      final picked = await showDatePicker(
-                                        context: context,
-                                        initialDate: expiryDate ?? DateTime.now().add(const Duration(days: 30)),
-                                        firstDate: DateTime(2020),
-                                        lastDate: DateTime(2035),
-                                      );
-                                      if (picked != null) {
-                                        setDialogState(() => expiryDate = picked);
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: TextField(
-                                    controller: batchCtrl,
-                                    style: TextStyle(color: AppColors.getTextPrimary(isDark), fontSize: 13),
-                                    decoration: InputDecoration(
-                                      hintText: "رقم التشغيلة (Batch)",
-                                      hintStyle: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 11),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (expiryDate != null) ...[
+                    // Quantity and Unit Price
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("الكمية المورّدة (قطعة) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
                               const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Icon(daysLeft <= 0 ? Icons.error_outline : Icons.check_circle_outline, size: 14, color: daysLeft <= 0 ? AppColors.danger : AppColors.success),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    daysLeft <= 0 ? "تنبيه: الصنف منتهي الصلاحية!" : "متبقي على الصلاحية: $daysLeft يوم",
-                                    style: TextStyle(color: daysLeft <= 0 ? AppColors.danger : AppColors.success, fontWeight: FontWeight.bold, fontSize: 11),
-                                  ),
-                                ],
+                              TextField(
+                                controller: qtyCtrl,
+                                keyboardType: TextInputType.number,
+                                style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 16),
+                                decoration: InputDecoration(
+                                  suffixText: "قطعة",
+                                  filled: true,
+                                  fillColor: AppColors.getBackground(isDark),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onChanged: (_) => setDialogState(() {}),
                               ),
                             ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("سعر شراء القطعة (ج.م) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 6),
+                              TextField(
+                                controller: costCtrl,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 16),
+                                decoration: InputDecoration(
+                                  suffixText: "ج.م",
+                                  filled: true,
+                                  fillColor: AppColors.getBackground(isDark),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onChanged: (_) => setDialogState(() {}),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    if (product.hasSerialNumber) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.qr_code_2_rounded, size: 16, color: AppColors.primaryLight),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                "هذا الجهاز يدعم تتبع أرقام السيريال للضمان.",
+                                style: TextStyle(color: AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     ],
 
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
                     // Live Total Banner
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
                         color: AppColors.getBackground(isDark),
                         borderRadius: BorderRadius.circular(10),
@@ -694,7 +480,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text("إجمالي البند:", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 13)),
+                          Text("إجمالي البند:", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 13, fontWeight: FontWeight.bold)),
                           Text(
                             "${itemTotal.toStringAsFixed(2)} ج.م",
                             style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, fontSize: 16),
@@ -707,7 +493,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                     // Add / Save Button
                     SizedBox(
                       width: double.infinity,
-                      height: 46,
+                      height: 48,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
@@ -715,13 +501,13 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                         ),
                         icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
                         label: Text(
-                          existingItem != null ? "تحديث البند في الفاتورة" : "إضافة البند إلى الفاتورة",
+                          existingItem != null ? "تحديث البند في الفاتورة" : "إضافة الجهاز إلى الفاتورة",
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         onPressed: () {
                           if (currentQty <= 0) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("يرجى إدخال كمية أو وزن صحيح.")),
+                              const SnackBar(content: Text("يرجى إدخال كمية صحيحة.")),
                             );
                             return;
                           }
@@ -730,14 +516,11 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                             if (existingItem != null) {
                               existingItem.quantity = currentQty;
                               existingItem.unitCost = currentCost;
-                              existingItem.unit = isWeighed ? product.baseUnit : 'قطعة';
+                              existingItem.unit = 'قطعة';
                               existingItem.conversionFactor = 1;
-                              existingItem.isWeighable = isWeighed;
-                              existingItem.expiryDate = expiryDate;
-                              existingItem.batchNumber = batchCtrl.text.trim().isNotEmpty ? batchCtrl.text.trim() : null;
+                              existingItem.isWeighable = false;
                             } else {
-                              // Check if item already exists in items list
-                              final idx = _items.indexWhere((i) => i.productId == product.id && i.unit == (isWeighed ? product.baseUnit : 'قطعة'));
+                              final idx = _items.indexWhere((i) => i.productId == product.id);
                               if (idx >= 0) {
                                 _items[idx].quantity += currentQty;
                                 _items[idx].unitCost = currentCost;
@@ -748,14 +531,14 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                   barcode: product.barcode,
                                   quantity: currentQty,
                                   unitCost: currentCost,
-                                  unit: isWeighed ? product.baseUnit : 'قطعة',
-                                  isWeighable: isWeighed,
+                                  unit: 'قطعة',
+                                  isWeighable: false,
                                   conversionFactor: 1,
                                   parentUnit: 'قطعة',
                                   baseUnit: 'قطعة',
-                                  shelfLifeDays: product.shelfLifeDays,
-                                  expiryDate: expiryDate,
-                                  batchNumber: batchCtrl.text.trim().isNotEmpty ? batchCtrl.text.trim() : null,
+                                  shelfLifeDays: null,
+                                  expiryDate: null,
+                                  batchNumber: null,
                                 ));
                               }
                             }
@@ -772,20 +555,6 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
             );
           },
         );
-      },
-    );
-  }
-
-  Widget _buildQuickWeightButton(String label, double addWeight, TextEditingController qtyCtrl, StateSetter setDialogState) {
-    return ActionChip(
-      label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.cyan)),
-      backgroundColor: AppColors.cyan.withOpacity(0.12),
-      side: BorderSide(color: AppColors.cyan.withOpacity(0.4)),
-      onPressed: () {
-        final current = double.tryParse(qtyCtrl.text) ?? 0.0;
-        setDialogState(() {
-          qtyCtrl.text = (current + addWeight).toStringAsFixed(3);
-        });
       },
     );
   }
@@ -1056,48 +825,23 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Metrics Summary Separating Regular and Weighed Items
+                    // Metrics Summary for Appliances Items
                     if (_items.isNotEmpty)
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                        ),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.inventory_2_rounded, size: 16, color: AppColors.primaryLight),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    "أصناف عادية: $_regularItemsCount صنف (${currencyFormatter.format(_regularItemsTotal)} ج.م)",
-                                    style: const TextStyle(color: AppColors.primaryLight, fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            const Icon(Icons.inventory_2_rounded, size: 16, color: AppColors.primaryLight),
                             const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: AppColors.cyan.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppColors.cyan.withOpacity(0.3)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.scale_rounded, size: 16, color: AppColors.cyan),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    "أصناف بالوزن: $_weighedItemsCount صنف — ${_totalWeighedKg.toStringAsFixed(3)} كجم (${currencyFormatter.format(_weighedItemsTotal)} ج.م)",
-                                    style: const TextStyle(color: AppColors.cyan, fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ],
-                              ),
+                            Text(
+                              "إجمالي الأجهزة: $_totalPieces قطعة (${currencyFormatter.format(_subTotal)} ج.م)",
+                              style: const TextStyle(color: AppColors.primaryLight, fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                           ],
                         ),
@@ -1179,7 +923,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                 return Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: item.isWeighable ? AppColors.cyan.withOpacity(0.04) : Colors.transparent,
+                                    color: Colors.transparent,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Column(
@@ -1191,12 +935,12 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: item.isWeighable ? AppColors.cyan.withOpacity(0.15) : AppColors.primary.withOpacity(0.15),
+                                              color: AppColors.primary.withOpacity(0.15),
                                               borderRadius: BorderRadius.circular(4),
                                             ),
-                                            child: Text(
-                                              item.isWeighable ? "⚖️ بالوزن" : "📦 عادي",
-                                              style: TextStyle(color: item.isWeighable ? AppColors.cyan : AppColors.primaryLight, fontSize: 10, fontWeight: FontWeight.bold),
+                                            child: const Text(
+                                              "📦 جهاز",
+                                              style: TextStyle(color: AppColors.primaryLight, fontSize: 10, fontWeight: FontWeight.bold),
                                             ),
                                           ),
                                           const SizedBox(width: 8),
@@ -1204,6 +948,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                             child: Text(
                                               item.productName,
                                               style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 14),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                           IconButton(
@@ -1216,51 +961,36 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                         ],
                                       ),
                                       const SizedBox(height: 6),
-                                       Row(
-                                         children: [
-                                           Expanded(
-                                             flex: 4,
-                                             child: Text(
-                                               item.isWeighable
-                                                   ? "${item.quantity.toStringAsFixed(3)} ${item.unit ?? 'كجم'}"
-                                                   : "${item.quantity.toStringAsFixed(0)} ${item.unit ?? 'قطعة'}",
-                                               style: TextStyle(color: item.isWeighable ? AppColors.cyan : AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 13),
-                                               overflow: TextOverflow.ellipsis,
-                                             ),
-                                           ),
-                                           Expanded(
-                                             flex: 4,
-                                             child: Text(
-                                               "سعر: ${item.unitCost.toStringAsFixed(2)} ج.م",
-                                               textAlign: TextAlign.center,
-                                               style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12),
-                                               overflow: TextOverflow.ellipsis,
-                                             ),
-                                           ),
-                                           Expanded(
-                                             flex: 4,
-                                             child: Text(
-                                               "${currencyFormatter.format(item.total)} ج.م",
-                                               textAlign: TextAlign.end,
-                                               style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 13),
-                                               overflow: TextOverflow.ellipsis,
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            flex: 4,
+                                            child: Text(
+                                              "${item.quantity.toInt()} قطعة",
+                                              style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 13),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 4,
+                                            child: Text(
+                                              "سعر: ${item.unitCost.toStringAsFixed(2)} ج.م",
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 4,
+                                            child: Text(
+                                              "${currencyFormatter.format(item.total)} ج.م",
+                                              textAlign: TextAlign.end,
+                                              style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 13),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                         ],
                                       ),
-                                      if (item.expiryDate != null) ...[
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.timelapse_rounded, size: 12, color: AppColors.warning),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              "الصلاحية: ${DateFormat('dd/MM/yyyy').format(item.expiryDate!)}${item.batchNumber != null ? ' (تشغيلة: ${item.batchNumber})' : ''}",
-                                              style: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 11),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
                                     ],
                                   ),
                                 );

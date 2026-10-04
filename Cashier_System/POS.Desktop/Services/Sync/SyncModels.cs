@@ -180,7 +180,14 @@ namespace POS.Desktop.Services.Sync
         int ShelfLifeDays,
         int ExpiryAlertDays,
         decimal ReorderLevel,
-        bool TrackExpiry);
+        bool TrackExpiry,
+        Guid? BrandId = null,
+        string? BrandName = null,
+        string? ModelNumber = null,
+        string? Color = null,
+        int WarrantyPeriodMonths = 12,
+        string? MaintenanceAgent = null,
+        bool HasSerialNumber = false);
 
     public record PendingCloudSupplierDto(
         Guid Id,
@@ -268,7 +275,8 @@ namespace POS.Desktop.Services.Sync
         bool HasPendingNotificationActions,
         bool HasPendingCategories,
         DateTime ServerTime,
-        bool HasPendingSales = false);
+        bool HasPendingSales = false,
+        bool HasPendingProducts = false);
 
     public record CloudSaleItemSyncDto(
         Guid Id,
@@ -315,6 +323,8 @@ namespace POS.Desktop.Services.Sync
         DateTime? TargetDeliveryDate,
         List<CloudSaleItemSyncDto> Items);
 
+    public record PushSalesRequest(List<CloudSaleSyncDto> Sales);
+
     public record ReturnItemSyncDto(
         Guid Id,
         Guid ProductId,
@@ -342,4 +352,35 @@ namespace POS.Desktop.Services.Sync
         int ItemsCount);
 
     public record PushReturnsRequest(List<PushReturnSyncItem> Returns);
+
+    // Offers Push DTOs
+    public record PushOfferItemDto(
+        Guid Id,
+        Guid ProductId,
+        string ProductName,
+        string? ProductBarcode,
+        decimal Quantity,
+        decimal OriginalUnitPrice);
+
+    public record PushOfferDto(
+        Guid Id,
+        string Title,
+        string? Description,
+        int Type,
+        string OfferType,
+        decimal? DiscountPercentage,
+        decimal? FixedDiscountAmount,
+        decimal? BundlePrice,
+        DateTime StartDate,
+        DateTime EndDate,
+        bool IsActive,
+        Guid? TargetProductId,
+        string? TargetProductName,
+        Guid? TargetCategoryId,
+        string? TargetCategoryName,
+        Guid? TargetBrandId,
+        string? TargetBrandName,
+        List<PushOfferItemDto>? Items);
+
+    public record PushOffersRequest(List<PushOfferDto> Offers);
 }

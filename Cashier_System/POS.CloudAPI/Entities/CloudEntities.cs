@@ -797,4 +797,72 @@ namespace POS.CloudAPI.Entities
         [Column(TypeName = "decimal(18,2)")]
         public decimal Total { get; set; }
     }
+
+    public class CloudOffer
+    {
+        [Key]
+        public Guid Id { get; set; } = Guid.NewGuid();
+
+        public Guid TenantId { get; set; }
+
+        [Required, MaxLength(200)]
+        public string Title { get; set; } = default!;
+
+        [MaxLength(500)]
+        public string? Description { get; set; }
+
+        public int Type { get; set; } // 0: Product, 1: Category, 2: Brand, 3: BundlePackage
+
+        [MaxLength(50)]
+        public string OfferType { get; set; } = "BundlePackage";
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? DiscountPercentage { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? FixedDiscountAmount { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? BundlePrice { get; set; }
+
+        public DateTime StartDate { get; set; } = DateTime.UtcNow;
+        public DateTime EndDate { get; set; } = DateTime.UtcNow.AddMonths(1);
+
+        public bool IsActive { get; set; } = true;
+
+        public Guid? TargetProductId { get; set; }
+        [MaxLength(200)] public string? TargetProductName { get; set; }
+        public Guid? TargetCategoryId { get; set; }
+        [MaxLength(150)] public string? TargetCategoryName { get; set; }
+        public Guid? TargetBrandId { get; set; }
+        [MaxLength(150)] public string? TargetBrandName { get; set; }
+
+        public SyncStatus SyncStatus { get; set; } = SyncStatus.Synced;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAt { get; set; }
+
+        public List<CloudOfferItem> Items { get; set; } = new();
+    }
+
+    public class CloudOfferItem
+    {
+        [Key]
+        public Guid Id { get; set; } = Guid.NewGuid();
+
+        public Guid OfferId { get; set; }
+        public Guid ProductId { get; set; }
+
+        [Required, MaxLength(200)]
+        public string ProductName { get; set; } = default!;
+
+        [MaxLength(100)]
+        public string? ProductBarcode { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal Quantity { get; set; } = 1;
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal OriginalUnitPrice { get; set; } = 0;
+    }
 }
+

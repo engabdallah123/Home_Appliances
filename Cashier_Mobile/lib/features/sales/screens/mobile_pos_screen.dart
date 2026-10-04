@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../core/constants/api_endpoints.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/widgets/camera_barcode_scanner.dart';
 import '../../products/models/product_model.dart';
 import '../../products/providers/products_provider.dart';
@@ -135,6 +138,7 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
           Row(
             children: [
               Expanded(
+                flex: 3,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
@@ -143,10 +147,13 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 24),
-                  label: const Text(
-                    "مسح باركود الجهاز بالكاميرا",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "مسح باركود الجهاز",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
                   ),
                   onPressed: () async {
                     await salesProv.scanBarcodeAndAdd(context, catalog: prodProv.products);
@@ -154,6 +161,28 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
                 ),
               ),
               const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF59E0B),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.card_giftcard_rounded, size: 18),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "عروض وبكجات 🎁",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                  onPressed: () => _showOffersAndBundlesModal(context, salesProv, prodProv, isDark),
+                ),
+              ),
+              const SizedBox(width: 6),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
@@ -693,16 +722,46 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildPaymentMethodChip("Cash", "نقداً", Icons.payments_outlined, salesProv),
+                _buildPaymentMethodChip("Cash", "نقداً", Icons.payments_outlined, salesProv, isDark),
                 const SizedBox(width: 8),
-                _buildPaymentMethodChip("Card", "فيزا / بطاقة", Icons.credit_card_rounded, salesProv),
+                _buildPaymentMethodChip("Card", "فيزا / بطاقة", Icons.credit_card_rounded, salesProv, isDark),
                 const SizedBox(width: 8),
-                _buildPaymentMethodChip("Installment", "تقسيط", Icons.event_repeat_rounded, salesProv),
+                _buildPaymentMethodChip("Installment", "تقسيط", Icons.event_repeat_rounded, salesProv, isDark),
                 const SizedBox(width: 8),
-                _buildPaymentMethodChip("Credit", "آجل / ذمم", Icons.account_balance_wallet_outlined, salesProv),
+                _buildPaymentMethodChip("Credit", "آجل / ذمم", Icons.account_balance_wallet_outlined, salesProv, isDark),
               ],
             ),
           ),
+
+          if (salesProv.isInstallment) ...[
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () => _showInstallmentOptionsModal(context, salesProv, isDark),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.35)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.description_rounded, size: 16, color: Color(0xFF6366F1)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        "عقد تقسيط: ${salesProv.numberOfMonths} شهر | فائدة ${salesProv.interestPercentage.toStringAsFixed(0)}% | قسط: ${salesProv.monthlyInstallmentAmount.toStringAsFixed(0)} ج.م/ش",
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF6366F1)),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF6366F1)),
+                  ],
+                ),
+              ),
+            ),
+          ],
 
           const SizedBox(height: 10),
 
@@ -774,11 +833,17 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
     String label,
     IconData icon,
     SalesProvider salesProv,
+    bool isDark,
   ) {
     final isSelected = salesProv.paymentMethod == method;
     return ChoiceChip(
       selected: isSelected,
-      onSelected: (_) => salesProv.setPaymentMethod(method),
+      onSelected: (_) {
+        salesProv.setPaymentMethod(method);
+        if (method == "Installment") {
+          _showInstallmentOptionsModal(context, salesProv, isDark);
+        }
+      },
       avatar: Icon(
         icon,
         size: 16,
@@ -1163,5 +1228,636 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _showInstallmentOptionsModal(
+    BuildContext context,
+    SalesProvider salesProv,
+    bool isDark,
+  ) async {
+    int months = salesProv.numberOfMonths > 0 ? salesProv.numberOfMonths : 12;
+    double interestPct = salesProv.interestPercentage;
+    final total = salesProv.grandTotal;
+    double downPayment = salesProv.paidAmount > 0 && salesProv.paidAmount < total
+        ? salesProv.paidAmount
+        : (total * 0.20).roundToDouble();
+
+    final downPaymentCtrl = TextEditingController(text: downPayment.toStringAsFixed(0));
+    final interestCtrl = TextEditingController(text: interestPct.toStringAsFixed(1));
+    final nameCtrl = TextEditingController(text: salesProv.guarantorName ?? '');
+    final phoneCtrl = TextEditingController(text: salesProv.guarantorPhone ?? '');
+    final nationalIdCtrl = TextEditingController(text: salesProv.guarantorNationalId ?? '');
+    final addressCtrl = TextEditingController(text: salesProv.guarantorAddress ?? '');
+    final notesCtrl = TextEditingController(text: salesProv.guarantorNotes ?? '');
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.getSurface(isDark),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final curDown = double.tryParse(downPaymentCtrl.text) ?? 0.0;
+            final curInterest = double.tryParse(interestCtrl.text) ?? 0.0;
+            final financedPrincipal = (total - curDown) > 0 ? (total - curDown) : 0.0;
+            final totalInterest = financedPrincipal * (curInterest / 100) * (months / 12);
+            final totalFinancedWithInterest = financedPrincipal + totalInterest;
+            final monthlyAmount = months > 0 ? (totalFinancedWithInterest / months) : 0.0;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 14,
+                bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 16,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF6366F1), size: 20),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "عقد تمويل وتقسيط الأجهزة الكهربائية",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: AppColors.getTextPrimary(isDark),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                "خيارات التمويل، جدول الأقساط الشهرية، وبيانات الضامن المعتمد",
+                                style: TextStyle(fontSize: 11, color: AppColors.getTextMuted(isDark)),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 20),
+
+                    // Months and Interest Row
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("مدة التقسيط", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              DropdownButtonFormField<int>(
+                                value: months,
+                                decoration: InputDecoration(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                items: const [
+                                  DropdownMenuItem(value: 3, child: Text("3 أشهر")),
+                                  DropdownMenuItem(value: 6, child: Text("6 أشهر")),
+                                  DropdownMenuItem(value: 9, child: Text("9 أشهر")),
+                                  DropdownMenuItem(value: 12, child: Text("12 شهر (سنة)")),
+                                  DropdownMenuItem(value: 18, child: Text("18 شهر")),
+                                  DropdownMenuItem(value: 24, child: Text("24 شهر (سنتين)")),
+                                  DropdownMenuItem(value: 30, child: Text("30 شهر")),
+                                  DropdownMenuItem(value: 36, child: Text("36 شهر (3 سنين)")),
+                                  DropdownMenuItem(value: 48, child: Text("48 شهر")),
+                                  DropdownMenuItem(value: 60, child: Text("60 شهر (5 سنين)")),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) setModalState(() => months = val);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("الفائدة السنوية (%)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              TextField(
+                                controller: interestCtrl,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                onChanged: (_) => setModalState(() {}),
+                                decoration: InputDecoration(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  suffixText: "%",
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("المقدم المدفوع (ج.م)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: downPaymentCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: (_) => setModalState(() {}),
+                          decoration: InputDecoration(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            prefixIcon: const Icon(Icons.payments_outlined, size: 18),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Financial Calculations Card
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6366F1).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text("المقدم المدفوع:", style: TextStyle(fontSize: 12, color: AppColors.getTextMuted(isDark))),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text("${curDown.toStringAsFixed(0)} ج.م", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF10B981))),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text("أصل التمويل المتبقي:", style: TextStyle(fontSize: 12, color: AppColors.getTextMuted(isDark))),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text("${financedPrincipal.toStringAsFixed(0)} ج.م", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.getTextPrimary(isDark))),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text("إجمالي الفائدة المحتسبة:", style: TextStyle(fontSize: 12, color: AppColors.getTextMuted(isDark))),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text("+${totalInterest.toStringAsFixed(0)} ج.م", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFF59E0B))),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("القسط الشهري المستحق:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF6366F1))),
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text("${monthlyAmount.toStringAsFixed(0)} ج.م / شهر", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF6366F1))),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Guarantor Section
+                    Text("بيانات الضامن (اختياري / موثق):", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.getTextPrimary(isDark))),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: nameCtrl,
+                            decoration: const InputDecoration(
+                              labelText: "اسم الضامن",
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: phoneCtrl,
+                            keyboardType: TextInputType.phone,
+                            decoration: const InputDecoration(
+                              labelText: "هاتف الضامن",
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: nationalIdCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: "الرقم القومي للضامن",
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: addressCtrl,
+                            decoration: const InputDecoration(
+                              labelText: "عنوان ومحل سكن الضامن",
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: notesCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "ملاحظات الضامن / جهة العمل",
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6366F1),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(Icons.check_circle_rounded),
+                        label: const Text("تأكيد وتطبيق شروط التقسيط", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        onPressed: () {
+                          salesProv.setInstallment(
+                            enabled: true,
+                            numberOfMonths: months,
+                            interestPercentage: double.tryParse(interestCtrl.text) ?? 0,
+                            downPayment: double.tryParse(downPaymentCtrl.text),
+                            guarantorName: nameCtrl.text,
+                            guarantorPhone: phoneCtrl.text,
+                            guarantorNationalId: nationalIdCtrl.text,
+                            guarantorAddress: addressCtrl.text,
+                            guarantorNotes: notesCtrl.text,
+                          );
+                          Navigator.pop(sheetCtx);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showOffersAndBundlesModal(
+    BuildContext context,
+    SalesProvider salesProv,
+    ProductsProvider prodProv,
+    bool isDark,
+  ) async {
+    final apiClient = ApiClient();
+    List<dynamic> offers = [];
+    bool isLoading = true;
+    String? error;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.getSurface(isDark),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            if (isLoading) {
+              apiClient.get(ApiEndpoints.offers).then((res) {
+                if (sheetCtx.mounted) {
+                  setSheetState(() {
+                    isLoading = false;
+                    offers = res is List ? res : [];
+                  });
+                }
+              }).catchError((e) {
+                if (sheetCtx.mounted) {
+                  setSheetState(() {
+                    isLoading = false;
+                    error = e.toString();
+                  });
+                }
+              });
+            }
+
+            return Container(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetCtx).size.height * 0.85),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFF59E0B), size: 22),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "عروض وبكجات الأجهزة الكهربائية",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: AppColors.getTextPrimary(isDark),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              "اختر البكج لإضافته دفعة واحدة للسلة مع تطبيق السعر الترويجي",
+                              style: TextStyle(fontSize: 11, color: AppColors.getTextMuted(isDark)),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(sheetCtx),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  if (isLoading)
+                    const Expanded(
+                      child: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (error != null)
+                    Expanded(
+                      child: Center(
+                        child: Text("خطأ في جلب العروض: $error", style: const TextStyle(color: Colors.redAccent)),
+                      ),
+                    )
+                  else if (offers.isEmpty)
+                    Expanded(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.card_giftcard_outlined, size: 48, color: Colors.grey),
+                            const SizedBox(height: 10),
+                            Text(
+                              "لا توجد عروض أو بكجات نشطة حالياً",
+                              style: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: offers.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (c, idx) {
+                          final off = offers[idx] as Map<String, dynamic>;
+                          final title = off['titleAr']?.toString() ?? 'عرض ترويجي';
+                          final desc = off['description']?.toString() ?? '';
+                          final isBundle = off['offerType'] == 'BundlePackage';
+                          final pkgPrice = (off['packagePrice'] as num?)?.toDouble() ?? 0.0;
+                          final discPct = (off['discountPercent'] as num?)?.toDouble() ?? 0.0;
+                          final items = (off['items'] as List?) ?? [];
+
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isBundle
+                                    ? const Color(0xFFF59E0B).withOpacity(0.4)
+                                    : const Color(0xFF6366F1).withOpacity(0.4),
+                              ),
+                            ),
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        title,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: AppColors.getTextPrimary(isDark),
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: isBundle
+                                            ? const Color(0xFFF59E0B).withOpacity(0.15)
+                                            : const Color(0xFF6366F1).withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        isBundle ? "🎁 بكج مجمّع" : "🏷️ خصم ترويجي",
+                                        style: TextStyle(
+                                          color: isBundle ? const Color(0xFFF59E0B) : const Color(0xFF6366F1),
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (desc.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    desc,
+                                    style: TextStyle(fontSize: 11.5, color: AppColors.getTextSecondary(isDark)),
+                                  ),
+                                ],
+                                if (items.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF0F172A) : Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          "الأجهزة المشمولة في البكج:",
+                                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.grey),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        ...items.map((it) {
+                                          final pName = it['productName']?.toString() ?? 'جهاز';
+                                          final q = (it['quantity'] as num?)?.toDouble() ?? 1.0;
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(vertical: 1.5),
+                                            child: Row(
+                                              children: [
+                                                const Icon(Icons.check, size: 12, color: Color(0xFF10B981)),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    "$pName (${q.toInt()} قطعة)",
+                                                    style: const TextStyle(fontSize: 11),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 10),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    if (pkgPrice > 0)
+                                      Text(
+                                        "${pkgPrice.toStringAsFixed(0)} ج.م",
+                                        style: const TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w900,
+                                          color: Color(0xFFF59E0B),
+                                        ),
+                                      )
+                                    else if (discPct > 0)
+                                      Text(
+                                        "خصم ${discPct.toStringAsFixed(0)}%",
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFFF59E0B),
+                                        ),
+                                      )
+                                    else
+                                      const SizedBox.shrink(),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: isBundle ? const Color(0xFFF59E0B) : const Color(0xFF4F46E5),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      icon: const Icon(Icons.add_shopping_cart_rounded, size: 16),
+                                      label: Text(
+                                        isBundle ? "إضافة الباكدج للسلة" : "تطبيق الخصم",
+                                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                                      ),
+                                      onPressed: () {
+                                        salesProv.applyOffer(off, prodProv.products);
+                                        Navigator.pop(sheetCtx);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text("تم تطبيق: $title بنجاح!"),
+                                            backgroundColor: const Color(0xFF10B981),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

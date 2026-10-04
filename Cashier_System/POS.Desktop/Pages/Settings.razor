@@ -252,16 +252,16 @@
                         <input type="checkbox" @bind="enableDepletedBatchAlert" id="depletedBatchToggle" style="width: 20px; height: 20px; cursor: pointer;" />
                         <div>
                             <label for="depletedBatchToggle" style="font-size: 0.95rem; font-weight: 700; cursor: pointer; display: block;">
-                                إشعار وتنبيه نفاد كميات الأصناف في شاشة نقاط البيع (POS)
+                                إشعار وتنبيه نفاد ونقص كميات الأصناف في شاشة نقاط البيع (POS)
                             </label>
                             <span style="font-size: 0.8rem; color: var(--text-secondary);">
-                                عند نفاد رصيد صنف أثناء البيع، تظهر نافذة تفاعلية لتنبيه الكاشير وتحديث الرصيد الفعلي إن وُجد بالمخزن.
+                                عند وصول الصنف لحد الطلب أو نفاد رصيده أثناء البيع، يظهر إشعار تنبيهي فوري على الشاشة (مثل: ⚠️ تنبيه: الصنف وصل لحد الطلب!).
                             </span>
                         </div>
                     </div>
                     <span class="badge @(enableDepletedBatchAlert ? "badge-green" : "badge-amber")" style="font-size: 0.8rem; white-space: nowrap;">
                         <i class="fa-solid @(enableDepletedBatchAlert ? "fa-circle-check" : "fa-ban") me-1"></i>
-                        @(enableDepletedBatchAlert ? "تنبيه الدفعات مفعل" : "تنبيه الدفعات معطل")
+                        @(enableDepletedBatchAlert ? "تنبيهات المخزون مفعلة" : "تنبيهات المخزون معطلة")
                     </span>
                 </div>
             </div>

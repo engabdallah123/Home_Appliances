@@ -129,7 +129,7 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
                   children: [
                     Icon(Icons.local_offer_rounded, size: 18, color: AppColors.purple),
                     SizedBox(width: 8),
-                    Text("عروض وبكجات العروسة"),
+                    Text("عروض وبكجات الأجهزة"),
                   ],
                 ),
               ),
@@ -258,7 +258,7 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
 
           const SizedBox(height: 6),
 
-          // Quick Filter Chips (All, Low Stock, Weighable, Expiry)
+          // Quick Filter Chips (All, Low Stock, Warranty, Serial Number)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -268,9 +268,9 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
                 const SizedBox(width: 8),
                 _buildQuickFilter(isDark, "نواقص المخزن ⚠️", "low_stock", prov),
                 const SizedBox(width: 8),
-                _buildQuickFilter(isDark, "بالوزن ⚖️", "weighable", prov),
+                _buildQuickFilter(isDark, "أجهزة بضمان 🛡️", "warranty", prov),
                 const SizedBox(width: 8),
-                _buildQuickFilter(isDark, "تتبع الصلاحية ⏳", "expiry", prov),
+                _buildQuickFilter(isDark, "تتبع السيريال 🏷️", "serial", prov),
               ],
             ),
           ),

@@ -60,8 +60,9 @@ namespace POS.CloudAPI.Controllers
             bool hasPendingNotificationActions = await _db.ExpiryNotifications.AnyAsync(n => n.TenantId == tenant.Id && n.ActionType != null && n.SyncStatus == SyncStatus.PendingSync);
             bool hasPendingCategories = await _db.Categories.AnyAsync(c => c.TenantId == tenant.Id && c.SyncStatus == SyncStatus.PendingSync);
             bool hasPendingSales = await _db.Sales.AnyAsync(s => s.TenantId == tenant.Id && s.SyncStatus == SyncStatus.PendingSync);
+            bool hasPendingProducts = await _db.Products.AnyAsync(p => p.TenantId == tenant.Id && p.SyncStatus == SyncStatus.PendingSync);
 
-            bool hasPending = hasPendingPurchases || hasPendingSuppliers || hasPendingDebts || hasPendingNotificationActions || hasPendingCategories || hasPendingSales;
+            bool hasPending = hasPendingPurchases || hasPendingSuppliers || hasPendingDebts || hasPendingNotificationActions || hasPendingCategories || hasPendingSales || hasPendingProducts;
 
             return Ok(new CloudSyncStatusDto(
                 HasPending: hasPending,
@@ -71,7 +72,8 @@ namespace POS.CloudAPI.Controllers
                 HasPendingNotificationActions: hasPendingNotificationActions,
                 HasPendingCategories: hasPendingCategories,
                 ServerTime: DateTime.UtcNow,
-                HasPendingSales: hasPendingSales
+                HasPendingSales: hasPendingSales,
+                HasPendingProducts: hasPendingProducts
             ));
         }
 
@@ -313,6 +315,193 @@ namespace POS.CloudAPI.Controllers
 
             await _db.SaveChangesAsync();
             return Ok(new { success = true, syncStatus = "SyncFailed" });
+        }
+
+        [HttpPost("sales/push")]
+        public async Task<IActionResult> PushSales([FromBody] PushSalesRequest req)
+        {
+            var tenant = await AuthenticateSyncClientAsync();
+            if (tenant == null) return Unauthorized();
+
+            if (req.Sales == null || !req.Sales.Any())
+                return Ok(new { success = true, count = 0 });
+
+            int syncedCount = 0;
+            foreach (var s in req.Sales)
+            {
+                var existing = await _db.Sales
+                    .Include(x => x.Items)
+                    .FirstOrDefaultAsync(x => x.TenantId == tenant.Id && (x.Id == s.Id || x.InvoiceNumber == s.InvoiceNumber));
+
+                if (existing != null)
+                {
+                    existing.PaidAmount = s.PaidAmount;
+                    existing.RemainingAmount = s.RemainingAmount;
+                    existing.Notes = s.Notes;
+                    existing.PaymentMethod = s.PaymentMethod ?? "Cash";
+                    existing.IsInstallment = s.IsInstallment;
+                    existing.IsReserved = s.IsReserved;
+                    existing.TargetDeliveryDate = s.TargetDeliveryDate;
+                    existing.GuarantorName = s.GuarantorName;
+                    existing.GuarantorPhone = s.GuarantorPhone;
+                    existing.InterestPercentage = s.InterestPercentage;
+                    existing.NumberOfMonths = s.NumberOfMonths;
+                    existing.SyncStatus = SyncStatus.Synced;
+                    existing.SyncedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    var cloudSale = new CloudSale
+                    {
+                        Id = s.Id != Guid.Empty ? s.Id : Guid.NewGuid(),
+                        TenantId = tenant.Id,
+                        InvoiceNumber = s.InvoiceNumber,
+                        CustomerId = s.CustomerId,
+                        CustomerName = s.CustomerName,
+                        CustomerPhone = s.CustomerPhone,
+                        SaleDate = s.SaleDate,
+                        SubTotal = s.SubTotal,
+                        DiscountAmount = s.DiscountAmount,
+                        TaxAmount = s.TaxAmount,
+                        TotalAmount = s.TotalAmount,
+                        PaidAmount = s.PaidAmount,
+                        RemainingAmount = s.RemainingAmount,
+                        PaymentMethod = s.PaymentMethod ?? "Cash",
+                        Notes = s.Notes,
+                        IsDelivery = s.IsDelivery,
+                        RecipientName = s.RecipientName,
+                        RecipientPhone = s.RecipientPhone,
+                        DeliveryAddress = s.DeliveryAddress,
+                        DeliveryFloor = s.DeliveryFloor,
+                        DeliveryFee = s.DeliveryFee,
+                        IsInstallment = s.IsInstallment,
+                        GuarantorName = s.GuarantorName,
+                        GuarantorPhone = s.GuarantorPhone,
+                        InterestPercentage = s.InterestPercentage,
+                        NumberOfMonths = s.NumberOfMonths,
+                        IsReserved = s.IsReserved,
+                        TargetDeliveryDate = s.TargetDeliveryDate,
+                        SyncStatus = SyncStatus.Synced,
+                        SyncedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow,
+                        Items = (s.Items ?? new List<PushSaleItemDto>()).Select(i => new CloudSaleItem
+                        {
+                            Id = i.Id != Guid.Empty ? i.Id : Guid.NewGuid(),
+                            ProductId = i.ProductId,
+                            ProductName = i.ProductName,
+                            Barcode = i.Barcode,
+                            ModelNumber = i.ModelNumber,
+                            BrandName = i.BrandName,
+                            SerialNumber = i.SerialNumber,
+                            WarrantyPeriodMonths = i.WarrantyPeriodMonths,
+                            Quantity = i.Quantity,
+                            UnitPrice = i.UnitPrice,
+                            Discount = i.Discount,
+                            Tax = i.Tax,
+                            Total = i.Total
+                        }).ToList()
+                    };
+                    _db.Sales.Add(cloudSale);
+                }
+                syncedCount++;
+            }
+
+            await _db.SaveChangesAsync();
+            return Ok(new { success = true, count = syncedCount });
+        }
+
+        [HttpPost("offers/push")]
+        public async Task<IActionResult> PushOffers([FromBody] PushOffersRequest req)
+        {
+            var tenant = await AuthenticateSyncClientAsync();
+            if (tenant == null) return Unauthorized();
+
+            if (req.Offers == null)
+                return Ok(new { success = true, count = 0 });
+
+            int syncedCount = 0;
+            foreach (var o in req.Offers)
+            {
+                var existing = await _db.Offers
+                    .Include(x => x.Items)
+                    .FirstOrDefaultAsync(x => x.TenantId == tenant.Id && (x.Id == o.Id || x.Title == o.Title));
+
+                if (existing != null)
+                {
+                    existing.Title = o.Title;
+                    existing.Description = o.Description;
+                    existing.Type = o.Type;
+                    existing.OfferType = o.OfferType;
+                    existing.DiscountPercentage = o.DiscountPercentage;
+                    existing.FixedDiscountAmount = o.FixedDiscountAmount;
+                    existing.BundlePrice = o.BundlePrice;
+                    existing.StartDate = o.StartDate;
+                    existing.EndDate = o.EndDate;
+                    existing.IsActive = o.IsActive;
+                    existing.TargetProductId = o.TargetProductId;
+                    existing.TargetProductName = o.TargetProductName;
+                    existing.TargetCategoryId = o.TargetCategoryId;
+                    existing.TargetCategoryName = o.TargetCategoryName;
+                    existing.TargetBrandId = o.TargetBrandId;
+                    existing.TargetBrandName = o.TargetBrandName;
+                    existing.UpdatedAt = DateTime.UtcNow;
+
+                    if (o.Items != null)
+                    {
+                        _db.OfferItems.RemoveRange(existing.Items);
+                        existing.Items = o.Items.Select(i => new CloudOfferItem
+                        {
+                            Id = i.Id != Guid.Empty ? i.Id : Guid.NewGuid(),
+                            OfferId = existing.Id,
+                            ProductId = i.ProductId,
+                            ProductName = i.ProductName,
+                            ProductBarcode = i.ProductBarcode,
+                            Quantity = i.Quantity,
+                            OriginalUnitPrice = i.OriginalUnitPrice
+                        }).ToList();
+                    }
+                }
+                else
+                {
+                    var newOffer = new CloudOffer
+                    {
+                        Id = o.Id != Guid.Empty ? o.Id : Guid.NewGuid(),
+                        TenantId = tenant.Id,
+                        Title = o.Title,
+                        Description = o.Description,
+                        Type = o.Type,
+                        OfferType = o.OfferType,
+                        DiscountPercentage = o.DiscountPercentage,
+                        FixedDiscountAmount = o.FixedDiscountAmount,
+                        BundlePrice = o.BundlePrice,
+                        StartDate = o.StartDate,
+                        EndDate = o.EndDate,
+                        IsActive = o.IsActive,
+                        TargetProductId = o.TargetProductId,
+                        TargetProductName = o.TargetProductName,
+                        TargetCategoryId = o.TargetCategoryId,
+                        TargetCategoryName = o.TargetCategoryName,
+                        TargetBrandId = o.TargetBrandId,
+                        TargetBrandName = o.TargetBrandName,
+                        SyncStatus = SyncStatus.Synced,
+                        CreatedAt = DateTime.UtcNow,
+                        Items = (o.Items ?? new List<PushOfferItemDto>()).Select(i => new CloudOfferItem
+                        {
+                            Id = i.Id != Guid.Empty ? i.Id : Guid.NewGuid(),
+                            ProductId = i.ProductId,
+                            ProductName = i.ProductName,
+                            ProductBarcode = i.ProductBarcode,
+                            Quantity = i.Quantity,
+                            OriginalUnitPrice = i.OriginalUnitPrice
+                        }).ToList()
+                    };
+                    _db.Offers.Add(newOffer);
+                }
+                syncedCount++;
+            }
+
+            await _db.SaveChangesAsync();
+            return Ok(new { success = true, count = syncedCount });
         }
 
         // ==================== 2. FAST STOCK & SUPPLIER BALANCES UPDATE ====================
@@ -572,7 +761,14 @@ namespace POS.CloudAPI.Controllers
                 p.ReorderLevel,
                 p.TrackExpiry,
                 p.IsActive,
-                p.SyncStatus.ToString()
+                p.SyncStatus.ToString(),
+                p.BrandId,
+                p.BrandName,
+                p.ModelNumber,
+                p.Color,
+                p.WarrantyPeriodMonths,
+                p.MaintenanceAgent,
+                p.HasSerialNumber
             )));
         }
 

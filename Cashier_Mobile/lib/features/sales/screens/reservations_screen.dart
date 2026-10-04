@@ -26,30 +26,53 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   List<SaleSummaryModel> _reservations = [];
   int _selectedFilter = -1; // -1: All, 1: Stored in warehouse, 2: Partial delivery, 3: Completed
 
+  final ScrollController _scrollController = ScrollController();
+  int _currentPage = 1;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  static const int _pageSize = 20;
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _fetchReservations();
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _fetchReservations() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoadingMore &&
+        _hasMore &&
+        !_isLoading) {
+      _loadMoreReservations();
+    }
+  }
+
+  Future<void> _fetchReservations({bool refresh = true}) async {
+    if (refresh) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+        _currentPage = 1;
+        _hasMore = true;
+      });
+    }
 
     try {
       final res = await _apiClient.get(
         ApiEndpoints.sales,
         queryParams: {
           'isReserved': 'true',
-          'pageSize': 100,
+          'page': _currentPage,
+          'pageSize': _pageSize,
         },
       );
 
@@ -61,15 +84,31 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       }
 
       setState(() {
-        _reservations = loaded;
+        if (refresh) {
+          _reservations = loaded;
+        } else {
+          _reservations.addAll(loaded);
+        }
+        _hasMore = loaded.length >= _pageSize;
         _isLoading = false;
+        _isLoadingMore = false;
       });
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
+        _isLoadingMore = false;
       });
     }
+  }
+
+  Future<void> _loadMoreReservations() async {
+    if (_isLoadingMore || !_hasMore || _isLoading) return;
+    setState(() {
+      _isLoadingMore = true;
+      _currentPage++;
+    });
+    await _fetchReservations(refresh: false);
   }
 
   List<SaleSummaryModel> get _filteredReservations {
@@ -111,7 +150,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
         backgroundColor: AppColors.getSurface(isDark),
         elevation: 0,
         title: Text(
-          "حجوزات الأجهزة الكهربائية (جهاز العروسة)",
+          "حجوزات الأجهزة الكهربائية",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.getTextPrimary(isDark)),
         ),
         actions: [
@@ -123,9 +162,9 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFFEC4899),
+        backgroundColor: AppColors.primary,
         icon: const Icon(Icons.bookmark_add_rounded, color: Colors.white),
-        label: const Text("تسجيل حجز جهاز عروسة (POS)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text("تسجيل حجز أجهزة كهربائية (POS)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         onPressed: () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const MobilePosScreen()));
         },
@@ -147,9 +186,9 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                 controller: _searchCtrl,
                 style: TextStyle(color: AppColors.getTextPrimary(isDark), fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: "بحث برقم الحجز، اسم العروسة/العميل، أو الهاتف...",
+                  hintText: "بحث برقم الحجز، اسم العميل، أو الهاتف...",
                   hintStyle: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 13),
-                  prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFFEC4899)),
+                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary),
                   suffixIcon: _searchCtrl.text.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear_rounded, size: 18),
@@ -178,8 +217,8 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                     title: "إجمالي الحجوزات",
                     value: "${_reservations.length}",
                     sub: "طلب حجز أجهزة",
-                    color: const Color(0xFFEC4899),
-                    icon: Icons.inventory_2_rounded,
+                    color: AppColors.primary,
+                    icon: Icons.bookmark_added_rounded,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -188,7 +227,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                     isDark,
                     title: "بضاعة محجوزة بالمخزن",
                     value: "$_storedCount",
-                    sub: "بانتظار موعد الفرح",
+                    sub: "بانتظار موعد التسليم",
                     color: AppColors.warning,
                     icon: Icons.warehouse_rounded,
                   ),
@@ -250,7 +289,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
           // Reservations List
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFFEC4899)))
+                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
                 : _errorMessage != null
                     ? Center(
                         child: Padding(
@@ -272,21 +311,30 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.archive_outlined, size: 56, color: Color(0xFFEC4899)),
+                                const Icon(Icons.bookmark_border_rounded, size: 56, color: AppColors.primary),
                                 const SizedBox(height: 12),
                                 Text("لا توجد حجوزات أجهزة مسجلة", style: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 14)),
                                 const SizedBox(height: 4),
-                                Text("يمكنك تفعيل خيار (حجز مسبق / جهاز عروسة) في شاشة البيع POS", style: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 11)),
+                                Text("يمكنك تفعيل خيار (حجز مسبق للأجهزة) في شاشة البيع POS", style: TextStyle(color: AppColors.getTextMuted(isDark), fontSize: 11)),
                               ],
                             ),
                           )
                         : RefreshIndicator(
-                            onRefresh: _fetchReservations,
+                            onRefresh: () => _fetchReservations(refresh: true),
                             child: ListView.separated(
+                              controller: _scrollController,
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-                              itemCount: filtered.length,
+                              itemCount: filtered.length + (_isLoadingMore ? 1 : 0),
                               separatorBuilder: (_, __) => const SizedBox(height: 12),
                               itemBuilder: (ctx, idx) {
+                                if (idx == filtered.length) {
+                                  return const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 16),
+                                    child: Center(
+                                      child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
+                                    ),
+                                  );
+                                }
                                 final r = filtered[idx];
                                 return _buildReservationCard(r, isDark);
                               },
@@ -348,9 +396,9 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFEC4899) : AppColors.getSurface(isDark),
+          color: isSelected ? AppColors.primary : AppColors.getSurface(isDark),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? const Color(0xFFEC4899) : AppColors.getBorder(isDark)),
+          border: Border.all(color: isSelected ? AppColors.primary : AppColors.getBorder(isDark)),
         ),
         child: Text(
           label,
@@ -373,7 +421,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
         color: AppColors.getSurface(isDark),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDelivered ? AppColors.success.withOpacity(0.3) : const Color(0xFFEC4899).withOpacity(0.3),
+          color: isDelivered ? AppColors.success.withOpacity(0.3) : AppColors.primary.withOpacity(0.3),
         ),
       ),
       child: Column(
@@ -385,7 +433,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
               Expanded(
                 child: Row(
                   children: [
-                    const Icon(Icons.inventory_2_rounded, size: 16, color: Color(0xFFEC4899)),
+                    const Icon(Icons.bookmark_added_rounded, size: 16, color: AppColors.primary),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -401,7 +449,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isDelivered ? AppColors.success.withOpacity(0.15) : const Color(0xFFEC4899).withOpacity(0.15),
+                  color: isDelivered ? AppColors.success.withOpacity(0.15) : AppColors.primary.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -409,7 +457,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                   style: TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.bold,
-                    color: isDelivered ? AppColors.success : const Color(0xFFEC4899),
+                    color: isDelivered ? AppColors.success : AppColors.primary,
                   ),
                 ),
               ),
@@ -421,7 +469,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
           // Customer line
           Row(
             children: [
-              const Icon(Icons.person_rounded, size: 15, color: Color(0xFFEC4899)),
+              const Icon(Icons.person_rounded, size: 15, color: AppColors.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(

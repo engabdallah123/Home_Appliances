@@ -5,154 +5,187 @@
 @inject IJSRuntime JS
 
 <div class="activation-page-wrapper">
-    <!-- Topbar for Theme Switching & System Info -->
+    <!-- Topbar (Clean, Theme button removed per user request) -->
     <div class="activation-topbar">
         <div class="activation-brand-badge">
-            <i class="fa-solid fa-shield-halved text-indigo me-1"></i>
-            <span>نظام إدارة وترخيص البرنامج</span>
+            <i class="fa-solid fa-shield-halved text-indigo me-2"></i>
+            <span>نظام إدارة وترخيص البرنامج — معارض الأجهزة الكهربائية</span>
         </div>
-        <button type="button" class="btn-theme-toggle" @onclick="ToggleTheme" title="تبديل المظهر (فاتح / داكن)">
-            <i class="fa-solid @(isDarkMode ? "fa-sun text-warning" : "fa-moon text-indigo")"></i>
-            <span>@(isDarkMode ? "المظهر الفاتح" : "المظهر الداكن")</span>
-        </button>
+        @if (LicenseState.IsLicensed)
+        {
+            <span class="status-badge badge-success">
+                <i class="fa-solid fa-circle-check me-1"></i> الترخيص مفعّل وصالح
+            </span>
+        }
+        else
+        {
+            <span class="status-badge badge-danger">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i> غير مفعّل
+            </span>
+        }
     </div>
 
     <div class="activation-content-area">
         <div class="activation-card">
-            <!-- Header -->
-            <div class="activation-header">
-                <div class="activation-icon-wrapper">
-                    <i class="fa-solid fa-shield-halved"></i>
-                </div>
-                <h2 class="activation-title">تفعيل وترخيص النظام</h2>
-                <p class="activation-subtitle">POS Supermarket Cashier System — ترخيص البرنامج المعتمد</p>
-            </div>
-
-            <!-- Machine ID Box -->
-            <div class="machine-id-section">
-                <label class="section-label">معرّف هذا الجهاز (Machine ID):</label>
-                <div class="machine-id-box">
-                    <span class="machine-id-text">@LicenseState.MachineId</span>
-                    <button type="button" class="btn btn-copy" @onclick="CopyMachineId" title="نسخ معرّف الجهاز">
-                        <i class="fa-regular @(isCopied ? "fa-circle-check text-success" : "fa-copy")"></i>
-                        <span>@(isCopied ? "تم النسخ!" : "نسخ")</span>
-                    </button>
-                </div>
-                <small class="text-muted d-block mt-1">
-                    <i class="fa-solid fa-circle-info me-1"></i>
-                    أرسل هذا المعرّف للشركة المزوّدة للحصول على ملف الترخيص المعتمد الخاص بك.
-                </small>
-            </div>
-
-            <!-- License Status Display -->
-            <div class="license-status-card @(LicenseState.IsLicensed ? "status-valid" : "status-invalid")">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div>
-                        <span class="status-badge @(LicenseState.IsLicensed ? "badge-success" : "badge-danger")">
-                            <i class="fa-solid @(LicenseState.IsLicensed ? "fa-check-circle" : "fa-triangle-exclamation") me-1"></i>
-                            @(LicenseState.IsLicensed ? "الترخيص مفعل وصالح" : GetStatusArabic(LicenseState.CurrentResult.Status))
-                        </span>
+            <!-- Horizontal Header -->
+            <div class="activation-header-horizontal">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="activation-icon-wrapper-compact">
+                        <i class="fa-solid fa-shield-halved"></i>
                     </div>
-                    @if (LicenseState.IsLicensed && LicenseState.CurrentResult.Payload != null)
-                    {
-                        <span class="status-time-text">
-                            @(LicenseState.CurrentResult.RemainingDays.HasValue ? $"متبقي {LicenseState.CurrentResult.RemainingDays} يوم" : "مدى الحياة")
-                        </span>
-                    }
+                    <div>
+                        <h2 class="activation-title">تفعيل وترخيص النظام</h2>
+                        <p class="activation-subtitle mb-0">نظام إدارة مبيعات ومعارض الأجهزة الكهربائية والمنزلية — ترخيص البرنامج المعتمد</p>
+                    </div>
                 </div>
-
                 @if (LicenseState.IsLicensed && LicenseState.CurrentResult.Payload != null)
                 {
-                    <div class="license-details-grid mt-3">
-                        <div class="detail-item">
-                            <span class="detail-label">العميل:</span>
-                            <span class="detail-value">@LicenseState.CurrentResult.Payload.CustomerName</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">نوع الترخيص:</span>
-                            <span class="detail-value">@LicenseState.CurrentResult.Payload.LicenseType</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">تاريخ الانتهاء:</span>
-                            <span class="detail-value">@(LicenseState.CurrentResult.Payload.ExpiresAtUtc.HasValue ? LicenseState.CurrentResult.Payload.ExpiresAtUtc.Value.ToString("yyyy-MM-dd") : "غير محدد (دائم)")</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">رقم الترخيص:</span>
-                            <span class="detail-value text-truncate" title="@LicenseState.CurrentResult.Payload.LicenseId">@LicenseState.CurrentResult.Payload.LicenseId</span>
+                    <div class="text-start">
+                        <span class="status-badge badge-success">
+                            <i class="fa-solid fa-check-circle me-1"></i> الترخيص مفعّل
+                        </span>
+                        <div class="status-time-text mt-1">
+                            @(LicenseState.CurrentResult.RemainingDays.HasValue ? $"متبقي {LicenseState.CurrentResult.RemainingDays} يوم" : "مدى الحياة (دائم)")
                         </div>
                     </div>
                 }
                 else
                 {
-                    <p class="status-message mt-2 mb-0">@LicenseState.CurrentResult.Message</p>
-
-                    @if (LicenseState.CurrentResult.Status == LicenseValidationStatus.ClockRollbackDetected)
-                    {
-                        <div style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
-                            <span style="font-size: 0.82rem; color: #f59e0b;">
-                                <i class="fa-solid fa-clock-rotate-left me-1"></i> تم تغيير تاريخ الويندوز مسبقاً. بعد ضبط تاريخ اليوم بالويندوز، اضغط هنا لتصفير أمان الوقت.
-                            </span>
-                            <button type="button" class="btn btn-warning btn-sm" style="font-weight: 700; font-size: 0.8rem; padding: 0.35rem 0.75rem;" @onclick="ResetClockProtection">
-                                <i class="fa-solid fa-arrows-rotate me-1"></i> تصفير أمان الوقت وإعادة التحقق
-                            </button>
-                        </div>
-                    }
+                    <span class="status-badge badge-danger">
+                        <i class="fa-solid fa-triangle-exclamation me-1"></i> @GetStatusArabic(LicenseState.CurrentResult.Status)
+                    </span>
                 }
             </div>
 
-            <!-- Import / Upload Section -->
-            <div class="activation-action-section mt-4">
-                <label class="section-label">تفعيل بواسطة ملف ترخيص (.lic):</label>
-                <div class="file-upload-dropzone">
-                    <InputFile OnChange="HandleFileSelected" accept=".lic,.json" id="licenseFileInput" class="d-none" />
-                    <label for="licenseFileInput" class="btn btn-select-file">
-                        <i class="fa-solid fa-file-import me-2"></i>
-                        <span>اختيار ملف الترخيص (Browse .lic)</span>
-                    </label>
-                    @if (!string.IsNullOrEmpty(selectedFileName))
-                    {
-                        <div class="selected-file-info mt-2">
-                            <i class="fa-solid fa-file-lines me-1 text-primary"></i>
-                            <span>@selectedFileName</span>
+            <!-- Two-Column Grid (Horizontal Layout with Zero Vertical Scroll) -->
+            <div class="activation-body-grid">
+                <!-- Column 1: Machine ID & License Details -->
+                <div class="activation-col">
+                    <!-- Machine ID Box -->
+                    <div class="machine-id-section">
+                        <label class="section-label">معرّف هذا الجهاز (Machine ID):</label>
+                        <div class="machine-id-box">
+                            <span class="machine-id-text">@LicenseState.MachineId</span>
+                            <button type="button" class="btn btn-copy" @onclick="CopyMachineId" title="نسخ معرّف الجهاز">
+                                <i class="fa-regular @(isCopied ? "fa-circle-check text-success" : "fa-copy")"></i>
+                                <span>@(isCopied ? "تم النسخ!" : "نسخ")</span>
+                            </button>
                         </div>
-                    }
+                        <small class="text-muted d-block mt-1">
+                            <i class="fa-solid fa-circle-info me-1"></i>
+                            أرسل هذا المعرّف للشركة المزوّدة للحصول على ملف الترخيص المعتمد.
+                        </small>
+                    </div>
+
+                    <!-- License Status Details -->
+                    <div class="license-status-card @(LicenseState.IsLicensed ? "status-valid" : "status-invalid")">
+                        @if (LicenseState.IsLicensed && LicenseState.CurrentResult.Payload != null)
+                        {
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <strong class="text-success" style="font-size: 0.88rem;"><i class="fa-solid fa-certificate me-1"></i> تفاصيل بيانات الترخيص:</strong>
+                                <span class="badge bg-success text-white" style="font-size: 0.75rem;">صالح</span>
+                            </div>
+                            <div class="license-details-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">العميل / المعرض:</span>
+                                    <span class="detail-value text-truncate">@LicenseState.CurrentResult.Payload.CustomerName</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">نوع الترخيص:</span>
+                                    <span class="detail-value">@LicenseState.CurrentResult.Payload.LicenseType</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">تاريخ الانتهاء:</span>
+                                    <span class="detail-value">@(LicenseState.CurrentResult.Payload.ExpiresAtUtc.HasValue ? LicenseState.CurrentResult.Payload.ExpiresAtUtc.Value.ToString("yyyy-MM-dd") : "غير محدد (دائم)")</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">رقم الترخيص:</span>
+                                    <span class="detail-value text-truncate" title="@LicenseState.CurrentResult.Payload.LicenseId">@LicenseState.CurrentResult.Payload.LicenseId</span>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex align-items-center gap-2 text-danger mb-1">
+                                <i class="fa-solid fa-circle-xmark fs-6"></i>
+                                <strong style="font-size: 0.88rem;">حالة التفعيل: @GetStatusArabic(LicenseState.CurrentResult.Status)</strong>
+                            </div>
+                            <p class="status-message mb-0">@LicenseState.CurrentResult.Message</p>
+
+                            @if (LicenseState.CurrentResult.Status == LicenseValidationStatus.ClockRollbackDetected)
+                            {
+                                <div class="clock-rollback-box mt-2">
+                                    <span style="font-size: 0.78rem; color: #f59e0b;">
+                                        <i class="fa-solid fa-clock-rotate-left me-1"></i> تم تغيير تاريخ الويندوز مسبقاً. بعد ضبط التاريخ، اضغط لتصفير أمان الوقت.
+                                    </span>
+                                    <button type="button" class="btn btn-warning btn-sm mt-1" style="font-weight: 700; font-size: 0.75rem; padding: 0.25rem 0.6rem;" @onclick="ResetClockProtection">
+                                        <i class="fa-solid fa-arrows-rotate me-1"></i> تصفير أمان الوقت
+                                    </button>
+                                </div>
+                            }
+                        }
+                    </div>
                 </div>
 
-                @if (!string.IsNullOrEmpty(feedbackMessage))
-                {
-                    <div class="alert @(isSuccess ? "alert-success" : "alert-danger") mt-3 mb-0" role="alert">
-                        <i class="fa-solid @(isSuccess ? "fa-check-circle" : "fa-circle-exclamation") me-2"></i>
-                        @feedbackMessage
+                <!-- Column 2: Upload File & Action Buttons -->
+                <div class="activation-col">
+                    <div class="activation-action-section">
+                        <label class="section-label">تفعيل بواسطة ملف ترخيص (.lic):</label>
+                        <div class="file-upload-dropzone">
+                            <InputFile OnChange="HandleFileSelected" accept=".lic,.json" id="licenseFileInput" class="d-none" />
+                            <label for="licenseFileInput" class="btn btn-select-file mb-1">
+                                <i class="fa-solid fa-file-import me-2"></i>
+                                <span>اختيار ملف الترخيص (Browse .lic)</span>
+                            </label>
+                            <div class="text-muted" style="font-size: 0.78rem;">
+                                قم بتحديد ملف التفعيل الصادر لجهازك
+                            </div>
+                            @if (!string.IsNullOrEmpty(selectedFileName))
+                            {
+                                <div class="selected-file-info mt-2">
+                                    <i class="fa-solid fa-file-lines me-1 text-primary"></i>
+                                    <span>@selectedFileName</span>
+                                </div>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(feedbackMessage))
+                        {
+                            <div class="alert @(isSuccess ? "alert-success" : "alert-danger") mt-3 mb-0 py-2" role="alert" style="font-size: 0.85rem;">
+                                <i class="fa-solid @(isSuccess ? "fa-check-circle" : "fa-circle-exclamation") me-2"></i>
+                                @feedbackMessage
+                            </div>
+                        }
+
+                        <div class="action-buttons mt-3 d-flex gap-2">
+                            @if (!string.IsNullOrEmpty(licenseFileContent))
+                            {
+                                <button type="button" class="btn btn-primary flex-grow-1 py-2" @onclick="ProcessActivation" disabled="@isProcessing">
+                                    @if (isProcessing)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span>جاري التفعيل...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-solid fa-key me-2"></i>
+                                        <span>تأكيد التفعيل</span>
+                                    }
+                                </button>
+                            }
+
+                            @if (LicenseState.IsLicensed)
+                            {
+                                <button type="button" class="btn btn-success flex-grow-1 py-2" @onclick="GoToApp">
+                                    <i class="fa-solid fa-cash-register me-2"></i>
+                                    <span>الدخول إلى النظام</span>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" @onclick="RemoveLicense" title="إزالة الترخيص">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            }
+                        </div>
                     </div>
-                }
-
-                <div class="action-buttons mt-4 d-flex gap-2">
-                    @if (!string.IsNullOrEmpty(licenseFileContent))
-                    {
-                        <button type="button" class="btn btn-primary flex-grow-1" @onclick="ProcessActivation" disabled="@isProcessing">
-                            @if (isProcessing)
-                            {
-                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                <span>جاري التفعيل...</span>
-                            }
-                            else
-                            {
-                                <i class="fa-solid fa-key me-2"></i>
-                                <span>تأكيد التفعيل</span>
-                            }
-                        </button>
-                    }
-
-                    @if (LicenseState.IsLicensed)
-                    {
-                        <button type="button" class="btn btn-success flex-grow-1" @onclick="GoToApp">
-                            <i class="fa-solid fa-cash-register me-2"></i>
-                            <span>الدخول إلى النظام</span>
-                        </button>
-                        <button type="button" class="btn btn-outline-danger" @onclick="RemoveLicense" title="إزالة الترخيص">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
-                    }
                 </div>
             </div>
         </div>
@@ -161,14 +194,15 @@
 
 <style>
     .activation-page-wrapper {
-        min-height: 100%;
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
         background-color: var(--bg-primary);
         color: var(--text-primary);
         font-family: var(--font-family);
         position: relative;
-        padding: 0 1rem 1.5rem 1rem;
+        padding: 0 1.5rem 1rem 1.5rem;
+        box-sizing: border-box;
     }
 
     .activation-topbar {
@@ -176,7 +210,7 @@
         justify-content: space-between;
         align-items: center;
         padding: 0.75rem 0.5rem;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.25rem;
     }
 
     .activation-brand-badge {
@@ -185,36 +219,10 @@
         color: var(--text-primary);
         display: flex;
         align-items: center;
-        gap: 0.5rem;
     }
 
     .text-indigo {
         color: var(--accent-indigo);
-    }
-
-    .text-warning {
-        color: var(--accent-amber);
-    }
-
-    .btn-theme-toggle {
-        background: var(--bg-secondary);
-        border: 1px solid var(--border-color-light);
-        color: var(--text-secondary);
-        font-size: 0.82rem;
-        font-weight: 600;
-        padding: 0.45rem 0.9rem;
-        border-radius: 20px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        transition: all 0.2s ease;
-    }
-
-    .btn-theme-toggle:hover {
-        background: var(--bg-card-hover);
-        color: var(--text-primary);
-        border-color: var(--border-color);
     }
 
     .activation-content-area {
@@ -222,6 +230,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        padding: 0.5rem 0;
     }
 
     .activation-card {
@@ -230,49 +239,66 @@
         border-radius: 16px;
         box-shadow: var(--shadow-lg);
         width: 100%;
-        max-width: 580px;
-        padding: 2.2rem;
+        max-width: 1040px;
+        padding: 1.5rem 2rem;
         color: var(--text-primary);
         transition: background-color 0.2s, border-color 0.2s;
     }
 
-    .activation-header {
-        text-align: center;
-        margin-bottom: 1.8rem;
+    .activation-header-horizontal {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 1rem;
+        margin-bottom: 1.25rem;
+        border-bottom: 1px solid var(--border-color-light);
     }
 
-    .activation-icon-wrapper {
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
+    .activation-icon-wrapper-compact {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
         background: linear-gradient(135deg, var(--accent-indigo), #4f46e5);
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.8rem;
+        font-size: 1.35rem;
         color: #ffffff;
-        box-shadow: var(--shadow-glow);
-        margin-bottom: 1rem;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+        flex-shrink: 0;
     }
 
     .activation-title {
-        font-size: 1.5rem;
+        font-size: 1.3rem;
         font-weight: 700;
         margin: 0;
         color: var(--text-primary);
     }
 
     .activation-subtitle {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         color: var(--text-secondary);
-        margin-top: 0.3rem;
+        margin-top: 0.2rem;
+    }
+
+    .activation-body-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.75rem;
+        align-items: stretch;
+    }
+
+    .activation-col {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
     }
 
     .section-label {
-        font-size: 0.85rem;
+        font-size: 0.83rem;
         font-weight: 600;
         color: var(--text-secondary);
-        margin-bottom: 0.4rem;
+        margin-bottom: 0.35rem;
         display: block;
     }
 
@@ -283,12 +309,12 @@
         background: var(--bg-secondary);
         border: 1px solid var(--border-color-light);
         border-radius: 10px;
-        padding: 0.65rem 1rem;
+        padding: 0.55rem 0.9rem;
     }
 
     .machine-id-text {
         font-family: 'Courier New', Courier, monospace;
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 700;
         color: var(--accent-blue);
         letter-spacing: 1px;
@@ -299,8 +325,8 @@
         color: var(--text-primary);
         border: 1px solid var(--border-color-light);
         border-radius: 6px;
-        padding: 0.35rem 0.75rem;
-        font-size: 0.8rem;
+        padding: 0.3rem 0.7rem;
+        font-size: 0.78rem;
         font-weight: 600;
         cursor: pointer;
         display: flex;
@@ -316,24 +342,25 @@
 
     .license-status-card {
         border-radius: 12px;
-        padding: 1rem 1.2rem;
-        margin-top: 1.2rem;
+        padding: 0.85rem 1rem;
+        margin-top: 0.9rem;
+        flex: 1;
     }
 
     .status-valid {
-        background: rgba(16, 185, 129, 0.1);
-        border: 1px solid rgba(16, 185, 129, 0.3);
+        background: rgba(16, 185, 129, 0.08);
+        border: 1px solid rgba(16, 185, 129, 0.25);
     }
 
     .status-invalid {
-        background: rgba(239, 68, 68, 0.1);
-        border: 1px solid rgba(239, 68, 68, 0.3);
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.25);
     }
 
     .status-badge {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         font-weight: 700;
-        padding: 0.3rem 0.7rem;
+        padding: 0.3rem 0.65rem;
         border-radius: 6px;
         display: inline-block;
     }
@@ -349,13 +376,13 @@
     }
 
     .status-time-text {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         color: var(--text-secondary);
         font-weight: 600;
     }
 
     .status-message {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         color: var(--accent-red);
         font-weight: 600;
     }
@@ -363,34 +390,46 @@
     .license-details-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 0.6rem;
+        gap: 0.5rem;
     }
 
     .detail-item {
         background: var(--bg-secondary);
         border: 1px solid var(--border-color-light);
-        padding: 0.45rem 0.75rem;
+        padding: 0.4rem 0.65rem;
         border-radius: 6px;
         display: flex;
         flex-direction: column;
     }
 
     .detail-label {
-        font-size: 0.72rem;
+        font-size: 0.7rem;
         color: var(--text-muted);
         font-weight: 600;
     }
 
     .detail-value {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         font-weight: 600;
         color: var(--text-primary);
+    }
+
+    .clock-rollback-box {
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        border-radius: 8px;
+        padding: 0.55rem 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-wrap: wrap;
     }
 
     .file-upload-dropzone {
         border: 2px dashed var(--border-color-light);
         border-radius: 12px;
-        padding: 1.5rem;
+        padding: 1.25rem 1rem;
         text-align: center;
         background: var(--bg-secondary);
         transition: border-color 0.2s, background-color 0.2s;
@@ -404,8 +443,8 @@
         background: linear-gradient(135deg, var(--accent-indigo), #4f46e5);
         color: #ffffff;
         font-weight: 600;
-        font-size: 0.9rem;
-        padding: 0.65rem 1.4rem;
+        font-size: 0.88rem;
+        padding: 0.55rem 1.25rem;
         border-radius: 8px;
         cursor: pointer;
         display: inline-block;
@@ -420,7 +459,7 @@
     }
 
     .selected-file-info {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         color: var(--text-secondary);
         font-weight: 600;
     }
@@ -429,7 +468,7 @@
         background: transparent;
         border: 1px solid var(--accent-red);
         color: var(--accent-red);
-        padding: 0.65rem 1rem;
+        padding: 0.55rem 0.9rem;
         border-radius: 0.6rem;
         cursor: pointer;
         transition: all 0.2s;
@@ -438,6 +477,12 @@
     .btn-outline-danger:hover {
         background: var(--accent-red);
         color: #ffffff;
+    }
+
+    @@media (max-width: 850px) {
+        .activation-body-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 

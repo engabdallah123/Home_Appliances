@@ -13,7 +13,6 @@ import '../../purchases/screens/create_purchase_screen.dart';
 import '../../purchases/screens/purchase_detail_screen.dart';
 import '../../purchases/screens/purchases_list_screen.dart';
 import '../../notifications/providers/notifications_provider.dart';
-import '../../notifications/screens/expiry_notifications_screen.dart';
 import '../../notifications/screens/low_stock_notifications_screen.dart';
 import '../../notifications/screens/shift_summaries_screen.dart';
 import '../../returns/screens/returns_list_screen.dart';
@@ -200,37 +199,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Consumer<NotificationsProvider>(
                             builder: (context, notif, _) {
                               final unreadShifts = notif.shiftSummaries.where((s) => !s.isReadByOwner).toList();
-                              if (notif.expiryNotifications.isEmpty && unreadShifts.isEmpty && notif.lowStockProducts.isEmpty) {
+                              if (unreadShifts.isEmpty && notif.lowStockProducts.isEmpty) {
                                 return const SizedBox.shrink();
                               }
                               return Column(
                                 children: [
-                                  if (notif.expiryNotifications.isNotEmpty)
-                                    Container(
-                                      margin: const EdgeInsets.only(bottom: 12),
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.danger.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: AppColors.danger.withOpacity(0.4)),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 24),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Text(
-                                              "تنبيه: يوجد ${notif.expiryNotifications.length} دفعة بحاجة لمتابعة الصلاحية (هالك أو تبديل مورد).",
-                                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.getTextPrimary(isDark)),
-                                            ),
-                                          ),
-                                          TextButton(
-                                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpiryNotificationsScreen())),
-                                            child: const Text("متابعة", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.danger)),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
                                   if (unreadShifts.isNotEmpty)
                                     Container(
                                       margin: const EdgeInsets.only(bottom: 12),
@@ -594,48 +567,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                           const SizedBox(height: 20),
 
-                          // Waste & Losses Card (Valued at Purchase Cost)
-                          _buildSectionHeader(isDark, "خسائر وتوالف المخزون (بسعر الشراء)", Icons.delete_outline_rounded),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: AppColors.getSurface(isDark),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.danger.withOpacity(0.25)),
-                            ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildMonthStatItem(isDark, "هالك اليوم", "${currencyFormatter.format(stats?.todayWasteLossAmount ?? 0)} ج.م", AppColors.warning),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _buildMonthStatItem(isDark, "هالك هذا الشهر", "${currencyFormatter.format(stats?.monthWasteLossAmount ?? 0)} ج.م", AppColors.danger),
-                                    ),
-                                  ],
-                                ),
-                                const Divider(height: 24),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildMonthStatItem(isDark, "إجمالي خسائر الهالك", "${currencyFormatter.format(stats?.totalWasteLossAmount ?? 0)} ج.م", AppColors.danger),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    TextButton.icon(
-                                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpiryNotificationsScreen())),
-                                      icon: const Icon(Icons.history_rounded, size: 16),
-                                      label: const Text("إدارة الهالك والصلاحية", style: TextStyle(fontSize: 12)),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 20),
 
                           // Debts Summary Card (Clickable -> DebtsScreen)
                           _buildSectionHeader(isDark, "مركز المديونية والديون", Icons.account_balance_rounded),
@@ -887,24 +818,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     decoration: BoxDecoration(
                                       color: AppColors.getSurface(isDark),
                                       borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(color: AppColors.rose.withOpacity(0.3)),
+                                      border: Border.all(color: AppColors.accent.withOpacity(0.3)),
                                     ),
                                     child: Row(
                                       children: [
                                         Container(
                                           padding: const EdgeInsets.all(7),
                                           decoration: BoxDecoration(
-                                            color: AppColors.rose.withOpacity(0.15),
+                                            color: AppColors.accent.withOpacity(0.15),
                                             shape: BoxShape.circle,
                                           ),
-                                          child: const Icon(Icons.favorite_rounded, color: AppColors.rose, size: 18),
+                                          child: const Icon(Icons.bookmark_added_rounded, color: AppColors.accent, size: 18),
                                         ),
                                         const SizedBox(width: 8),
                                         const Expanded(
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text("حجوزات العروسة", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                              Text("حجوزات الأجهزة", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                               Text("تسليمات وعربون المحل", style: TextStyle(fontSize: 10, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
                                             ],
                                           ),
@@ -1139,20 +1070,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              leading: const CircleAvatar(
-                backgroundColor: AppColors.danger,
-                child: Icon(Icons.hourglass_bottom_rounded, color: Colors.white, size: 20),
-              ),
-              title: const Text("تنبيهات الصلاحية العاجلة بالمخزن", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              subtitle: Text("يوجد ${notif.expiryNotifications.length} دفعة بحاجة لمتابعة الصلاحية والهالك", style: const TextStyle(fontSize: 12)),
-              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpiryNotificationsScreen()));
-              },
-            ),
             const SizedBox(height: 6),
             ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

@@ -18,6 +18,7 @@ class AppColors {
   static const Color cyan = Color(0xFF06B6D4);
   static const Color accent = Color(0xFF38BDF8);
   static const Color rose = Color(0xFFF43F5E);
+  static const Color orange = Color(0xFFF97316);
 
   // Dark Theme Colors
   static const Color darkBackground = Color(0xFF0F172A);
@@ -82,7 +83,7 @@ class AppColors {
   );
 
   static const LinearGradient roseGradient = LinearGradient(
-    colors: [Color(0xFFBE185D), Color(0xFFEC4899)],
+    colors: [Color(0xFFD97706), Color(0xFFF59E0B)],
     begin: Alignment.topRight,
     end: Alignment.bottomLeft,
   );

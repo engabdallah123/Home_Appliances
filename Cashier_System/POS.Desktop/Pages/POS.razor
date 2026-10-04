@@ -1209,6 +1209,8 @@
 
     private void CheckAndTriggerStockAlert(ProductDto prod, decimal nextCartQty)
     {
+        if (!StoreState.EnableDepletedBatchAlert) return;
+
         var remaining = prod.QuantityInStock - nextCartQty;
         if (remaining <= 0)
         {

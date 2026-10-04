@@ -120,10 +120,10 @@ class ProductsProvider with ChangeNotifier {
     }
     if (_activeFilter == 'low_stock') {
       queryParams['lowStockOnly'] = true;
-    } else if (_activeFilter == 'weighable') {
-      queryParams['weighableOnly'] = true;
-    } else if (_activeFilter == 'expiry') {
-      queryParams['expiryTrackedOnly'] = true;
+    } else if (_activeFilter == 'warranty') {
+      queryParams['hasWarrantyOnly'] = true;
+    } else if (_activeFilter == 'serial') {
+      queryParams['hasSerialNumberOnly'] = true;
     }
     return queryParams;
   }
