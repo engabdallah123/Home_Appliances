@@ -105,7 +105,14 @@ namespace POS.Desktop.Services.Sync
         int ShelfLifeDays,
         int ExpiryAlertDays,
         decimal ReorderLevel,
-        bool TrackExpiry);
+        bool TrackExpiry,
+        Guid? BrandId = null,
+        string? BrandName = null,
+        string? ModelNumber = null,
+        string? Color = null,
+        int WarrantyPeriodMonths = 12,
+        string? MaintenanceAgent = null,
+        bool HasSerialNumber = false);
 
     public record StockUpdateItem(
         Guid ProductId,
@@ -152,7 +159,11 @@ namespace POS.Desktop.Services.Sync
         string? MonthlySalesJson,
         decimal TodayWasteLoss = 0,
         decimal MonthWasteLoss = 0,
-        decimal TotalWasteLoss = 0);
+        decimal TotalWasteLoss = 0,
+        decimal CustomerCreditDebtsTotal = 0,
+        decimal InstallmentDebtsTotal = 0,
+        int CustomerCreditDebtsCount = 0,
+        int InstallmentContractsCount = 0);
 
     public record PendingDebtPaymentDto(
         Guid Id,
@@ -181,6 +192,8 @@ namespace POS.Desktop.Services.Sync
         int ExpiryAlertDays,
         decimal ReorderLevel,
         bool TrackExpiry,
+        bool IsActive = true,
+        string? SyncStatus = null,
         Guid? BrandId = null,
         string? BrandName = null,
         string? ModelNumber = null,
@@ -276,7 +289,8 @@ namespace POS.Desktop.Services.Sync
         bool HasPendingCategories,
         DateTime ServerTime,
         bool HasPendingSales = false,
-        bool HasPendingProducts = false);
+        bool HasPendingProducts = false,
+        bool HasPendingBrands = false);
 
     public record CloudSaleItemSyncDto(
         Guid Id,
@@ -321,7 +335,8 @@ namespace POS.Desktop.Services.Sync
         int NumberOfMonths,
         bool IsReserved,
         DateTime? TargetDeliveryDate,
-        List<CloudSaleItemSyncDto> Items);
+        List<CloudSaleItemSyncDto> Items,
+        int ReservationStatus = 0);
 
     public record PushSalesRequest(List<CloudSaleSyncDto> Sales);
 
@@ -383,4 +398,23 @@ namespace POS.Desktop.Services.Sync
         List<PushOfferItemDto>? Items);
 
     public record PushOffersRequest(List<PushOfferDto> Offers);
+
+    // Brands Sync DTOs
+    public record PushBrandDto(
+        Guid Id,
+        string NameAr,
+        string? NameEn,
+        string? Description,
+        string? LogoUrl,
+        bool IsActive);
+
+    public record PushBrandsRequest(List<PushBrandDto> Brands);
+
+    public record PendingCloudBrandDto(
+        Guid Id,
+        string NameAr,
+        string? NameEn,
+        string? Description,
+        string? LogoUrl,
+        bool IsActive);
 }

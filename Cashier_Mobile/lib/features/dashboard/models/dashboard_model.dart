@@ -10,6 +10,10 @@ class DashboardStats {
   final int monthPurchasesCount;
   final double monthExpensesAmount;
   final double customerDebtsTotal;
+  final double customerCreditDebtsTotal;
+  final double installmentDebtsTotal;
+  final int customerCreditDebtsCount;
+  final int installmentContractsCount;
   final double supplierDebtsTotal;
   final int lowStockProductsCount;
   final int expiryAlertsCount;
@@ -36,6 +40,10 @@ class DashboardStats {
     required this.monthPurchasesCount,
     required this.monthExpensesAmount,
     required this.customerDebtsTotal,
+    this.customerCreditDebtsTotal = 0.0,
+    this.installmentDebtsTotal = 0.0,
+    this.customerCreditDebtsCount = 0,
+    this.installmentContractsCount = 0,
     required this.supplierDebtsTotal,
     required this.lowStockProductsCount,
     required this.expiryAlertsCount,
@@ -71,6 +79,10 @@ class DashboardStats {
       monthPurchasesCount: json['monthPurchasesCount'] ?? 0,
       monthExpensesAmount: (json['monthExpensesAmount'] as num?)?.toDouble() ?? 0.0,
       customerDebtsTotal: (json['customerDebtsTotal'] as num?)?.toDouble() ?? 0.0,
+      customerCreditDebtsTotal: (json['customerCreditDebtsTotal'] as num?)?.toDouble() ?? 0.0,
+      installmentDebtsTotal: (json['installmentDebtsTotal'] as num?)?.toDouble() ?? 0.0,
+      customerCreditDebtsCount: (json['customerCreditDebtsCount'] as num?)?.toInt() ?? 0,
+      installmentContractsCount: (json['installmentContractsCount'] as num?)?.toInt() ?? 0,
       supplierDebtsTotal: (json['supplierDebtsTotal'] as num?)?.toDouble() ?? 0.0,
       lowStockProductsCount: json['lowStockProductsCount'] ?? 0,
       expiryAlertsCount: json['expiryAlertsCount'] ?? 0,

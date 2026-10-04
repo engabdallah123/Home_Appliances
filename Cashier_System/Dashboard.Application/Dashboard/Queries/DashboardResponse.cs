@@ -79,5 +79,11 @@ namespace Dashboard.Application.Dashboard.Queries
         decimal CashSalesAmount = 0,
         decimal CreditSalesAmount = 0,
         decimal DebtCollectionsAmount = 0,
-        decimal RealizedRevenue = 0);
+        decimal RealizedRevenue = 0,
+        decimal TotalCustomerCreditDebts = 0,
+        int CustomerCreditDebtsCount = 0,
+        decimal TotalInstallmentDebts = 0,
+        int InstallmentContractsCount = 0,
+        decimal OverdueInstallmentsAmount = 0,
+        int OverdueInstallmentsCount = 0);
 }

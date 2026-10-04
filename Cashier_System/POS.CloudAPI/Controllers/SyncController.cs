@@ -61,8 +61,9 @@ namespace POS.CloudAPI.Controllers
             bool hasPendingCategories = await _db.Categories.AnyAsync(c => c.TenantId == tenant.Id && c.SyncStatus == SyncStatus.PendingSync);
             bool hasPendingSales = await _db.Sales.AnyAsync(s => s.TenantId == tenant.Id && s.SyncStatus == SyncStatus.PendingSync);
             bool hasPendingProducts = await _db.Products.AnyAsync(p => p.TenantId == tenant.Id && p.SyncStatus == SyncStatus.PendingSync);
+            bool hasPendingBrands = await _db.Brands.AnyAsync(b => b.TenantId == tenant.Id && b.SyncStatus == SyncStatus.PendingSync);
 
-            bool hasPending = hasPendingPurchases || hasPendingSuppliers || hasPendingDebts || hasPendingNotificationActions || hasPendingCategories || hasPendingSales || hasPendingProducts;
+            bool hasPending = hasPendingPurchases || hasPendingSuppliers || hasPendingDebts || hasPendingNotificationActions || hasPendingCategories || hasPendingSales || hasPendingProducts || hasPendingBrands;
 
             return Ok(new CloudSyncStatusDto(
                 HasPending: hasPending,
@@ -73,7 +74,8 @@ namespace POS.CloudAPI.Controllers
                 HasPendingCategories: hasPendingCategories,
                 ServerTime: DateTime.UtcNow,
                 HasPendingSales: hasPendingSales,
-                HasPendingProducts: hasPendingProducts
+                HasPendingProducts: hasPendingProducts,
+                HasPendingBrands: hasPendingBrands
             ));
         }
 
@@ -252,7 +254,8 @@ namespace POS.CloudAPI.Controllers
                     i.Discount,
                     i.Tax,
                     i.Total
-                )).ToList()
+                )).ToList(),
+                s.ReservationStatus
             )).ToList();
 
             return Ok(result);
@@ -342,6 +345,7 @@ namespace POS.CloudAPI.Controllers
                     existing.IsInstallment = s.IsInstallment;
                     existing.IsReserved = s.IsReserved;
                     existing.TargetDeliveryDate = s.TargetDeliveryDate;
+                    existing.ReservationStatus = s.ReservationStatus;
                     existing.GuarantorName = s.GuarantorName;
                     existing.GuarantorPhone = s.GuarantorPhone;
                     existing.InterestPercentage = s.InterestPercentage;
@@ -381,6 +385,7 @@ namespace POS.CloudAPI.Controllers
                         NumberOfMonths = s.NumberOfMonths,
                         IsReserved = s.IsReserved,
                         TargetDeliveryDate = s.TargetDeliveryDate,
+                        ReservationStatus = s.ReservationStatus,
                         SyncStatus = SyncStatus.Synced,
                         SyncedAt = DateTime.UtcNow,
                         CreatedAt = DateTime.UtcNow,
@@ -714,6 +719,10 @@ namespace POS.CloudAPI.Controllers
             snapshot.MonthPurchases = req.MonthPurchases;
             snapshot.MonthExpenses = req.MonthExpenses;
             snapshot.CustomerDebtsTotal = req.CustomerDebtsTotal;
+            snapshot.CustomerCreditDebtsTotal = req.CustomerCreditDebtsTotal;
+            snapshot.InstallmentDebtsTotal = req.InstallmentDebtsTotal;
+            snapshot.CustomerCreditDebtsCount = req.CustomerCreditDebtsCount;
+            snapshot.InstallmentContractsCount = req.InstallmentContractsCount;
             snapshot.SupplierDebtsTotal = req.SupplierDebtsTotal;
             snapshot.LowStockCount = req.LowStockCount;
             snapshot.ExpiryAlertsCount = req.ExpiryAlertsCount;
@@ -864,7 +873,113 @@ namespace POS.CloudAPI.Controllers
             return Ok(new { success = true });
         }
 
-        // ==================== 5c. STORE SETTINGS & NAME PUSH ====================
+        // ==================== 5c. BRANDS PENDING PULL & PUSH ====================
+
+        [HttpGet("brands/pending")]
+        public async Task<IActionResult> GetPendingBrands()
+        {
+            var tenant = await AuthenticateSyncClientAsync();
+            if (tenant == null) return Unauthorized();
+
+            var pending = await _db.Brands
+                .AsNoTracking()
+                .Where(b => b.TenantId == tenant.Id && b.SyncStatus == SyncStatus.PendingSync)
+                .Take(50)
+                .ToListAsync();
+
+            return Ok(pending.Select(b => new PendingCloudBrandDto(
+                b.Id,
+                b.Name,
+                b.NameAr,
+                b.NameEn,
+                b.Description,
+                b.OriginCountry,
+                b.AgentContactNumber,
+                b.IsActive,
+                b.CreatedAt
+            )));
+        }
+
+        [HttpPost("brands/{id:guid}/acknowledge")]
+        public async Task<IActionResult> AcknowledgeBrand(Guid id)
+        {
+            var tenant = await AuthenticateSyncClientAsync();
+            if (tenant == null) return Unauthorized();
+
+            var brand = await _db.Brands.FirstOrDefaultAsync(b => b.Id == id && b.TenantId == tenant.Id);
+            if (brand == null) return NotFound();
+
+            brand.SyncStatus = SyncStatus.Synced;
+            brand.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return Ok(new { success = true });
+        }
+
+        [HttpPost("brands/push")]
+        public async Task<IActionResult> PushBrands([FromBody] PushBrandsRequest req)
+        {
+            var tenant = await AuthenticateSyncClientAsync();
+            if (tenant == null) return Unauthorized();
+
+            if (req.Brands == null || !req.Brands.Any())
+                return Ok(new { success = true, count = 0 });
+
+            int syncedCount = 0;
+            var existingBrands = await _db.Brands.Where(b => b.TenantId == tenant.Id).ToListAsync();
+            var byId = existingBrands.ToDictionary(b => b.Id);
+            var byName = existingBrands
+                .GroupBy(b => b.Name.Trim().ToLower())
+                .ToDictionary(g => g.Key, g => g.First());
+
+            foreach (var b in req.Brands)
+            {
+                CloudBrand? existing = null;
+                if (byId.TryGetValue(b.Id, out var matchId))
+                {
+                    existing = matchId;
+                }
+                else if (!string.IsNullOrWhiteSpace(b.Name) && byName.TryGetValue(b.Name.Trim().ToLower(), out var matchName))
+                {
+                    existing = matchName;
+                }
+
+                if (existing != null)
+                {
+                    existing.Name = b.Name;
+                    existing.NameAr = b.NameAr;
+                    existing.NameEn = b.NameEn;
+                    existing.Description = b.Description;
+                    existing.OriginCountry = b.OriginCountry;
+                    existing.AgentContactNumber = b.AgentContactNumber;
+                    existing.IsActive = b.IsActive;
+                    existing.SyncStatus = SyncStatus.Synced;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    _db.Brands.Add(new CloudBrand
+                    {
+                        Id = b.Id != Guid.Empty ? b.Id : Guid.NewGuid(),
+                        TenantId = tenant.Id,
+                        Name = b.Name,
+                        NameAr = b.NameAr,
+                        NameEn = b.NameEn,
+                        Description = b.Description,
+                        OriginCountry = b.OriginCountry,
+                        AgentContactNumber = b.AgentContactNumber,
+                        IsActive = b.IsActive,
+                        SyncStatus = SyncStatus.Synced,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+                syncedCount++;
+            }
+
+            await _db.SaveChangesAsync();
+            return Ok(new { success = true, count = syncedCount });
+        }
+
+        // ==================== 5d. STORE SETTINGS & NAME PUSH ====================
 
         [HttpPost("store-settings/push")]
         public async Task<IActionResult> PushStoreSettings([FromBody] PushStoreSettingsRequest req)
@@ -1025,6 +1140,13 @@ namespace POS.CloudAPI.Controllers
                         if (existing.ShelfLifeDays != prodReq.ShelfLifeDays) { existing.ShelfLifeDays = prodReq.ShelfLifeDays; changed = true; }
                         if (existing.ExpiryAlertDays != prodReq.ExpiryAlertDays) { existing.ExpiryAlertDays = prodReq.ExpiryAlertDays; changed = true; }
                         if (existing.ReorderLevel != prodReq.ReorderLevel) { existing.ReorderLevel = prodReq.ReorderLevel; changed = true; }
+                        if (existing.BrandId != prodReq.BrandId) { existing.BrandId = prodReq.BrandId; changed = true; }
+                        if (existing.BrandName != prodReq.BrandName) { existing.BrandName = prodReq.BrandName; changed = true; }
+                        if (existing.ModelNumber != prodReq.ModelNumber) { existing.ModelNumber = prodReq.ModelNumber; changed = true; }
+                        if (existing.Color != prodReq.Color) { existing.Color = prodReq.Color; changed = true; }
+                        if (existing.WarrantyPeriodMonths != prodReq.WarrantyPeriodMonths) { existing.WarrantyPeriodMonths = prodReq.WarrantyPeriodMonths; changed = true; }
+                        if (existing.MaintenanceAgent != prodReq.MaintenanceAgent) { existing.MaintenanceAgent = prodReq.MaintenanceAgent; changed = true; }
+                        if (existing.HasSerialNumber != prodReq.HasSerialNumber) { existing.HasSerialNumber = prodReq.HasSerialNumber; changed = true; }
                         if (!existing.IsActive) { existing.IsActive = true; changed = true; }
                         existing.SyncStatus = SyncStatus.Synced;
 
@@ -1074,6 +1196,13 @@ namespace POS.CloudAPI.Controllers
                             ExpiryAlertDays = prodReq.ExpiryAlertDays,
                             ReorderLevel = prodReq.ReorderLevel,
                             TrackExpiry = prodReq.TrackExpiry,
+                            BrandId = prodReq.BrandId,
+                            BrandName = prodReq.BrandName,
+                            ModelNumber = prodReq.ModelNumber,
+                            Color = prodReq.Color,
+                            WarrantyPeriodMonths = prodReq.WarrantyPeriodMonths > 0 ? prodReq.WarrantyPeriodMonths : 12,
+                            MaintenanceAgent = prodReq.MaintenanceAgent,
+                            HasSerialNumber = prodReq.HasSerialNumber,
                             IsActive = true,
                             SyncStatus = SyncStatus.Synced,
                             UpdatedAt = DateTime.UtcNow

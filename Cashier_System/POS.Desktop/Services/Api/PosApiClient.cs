@@ -470,6 +470,19 @@ namespace POS.Desktop.Services.Api
             }
         }
 
+        public async Task<Guid?> CreateUnitAsync(CreateUnitRequest request)
+        {
+            try
+            {
+                var res = await _http.PostAsJsonAsync("api/inventory/units", request);
+                return res.IsSuccessStatusCode ? await res.Content.ReadFromJsonAsync<Guid>() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         // Customers & Suppliers
         public async Task<List<CustomerDto>> GetCustomersAsync()
         {
@@ -1443,6 +1456,27 @@ namespace POS.Desktop.Services.Api
             {
                 Console.WriteLine($"Error fetching customer debts: {ex.Message}");
                 return new();
+            }
+        }
+
+
+        public async Task<(Guid? CustomerId, string? Error)> CreateCustomerAsync(string name, string? phone = null, string? address = null, string? email = null)
+        {
+            try
+            {
+                var payload = new { Name = name, Phone = phone, Address = address, Email = email };
+                var res = await _http.PostAsJsonAsync("api/customers", payload);
+                if (res.IsSuccessStatusCode)
+                {
+                    var id = await res.Content.ReadFromJsonAsync<Guid>();
+                    return (id, null);
+                }
+                var err = await res.Content.ReadAsStringAsync();
+                return (null, ExtractErrorMessage(err, "فشل إنشاء العميل."));
+            }
+            catch (Exception ex)
+            {
+                return (null, ex.Message);
             }
         }
 

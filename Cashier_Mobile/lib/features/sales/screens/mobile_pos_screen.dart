@@ -163,23 +163,30 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
               const SizedBox(width: 8),
               Expanded(
                 flex: 2,
-                child: ElevatedButton.icon(
+                child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF59E0B),
+                    backgroundColor: const Color(0xFF10B981),
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  icon: const Icon(Icons.card_giftcard_rounded, size: 18),
-                  label: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      "عروض وبكجات 🎁",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                  ),
                   onPressed: () => _showOffersAndBundlesModal(context, salesProv, prodProv, isDark),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.local_offer_rounded, size: 16),
+                      SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          "عروض وبكجات",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 6),

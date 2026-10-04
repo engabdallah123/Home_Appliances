@@ -123,6 +123,7 @@ namespace POS.CloudAPI.Controllers
                 NumberOfMonths = req.NumberOfMonths > 0 ? req.NumberOfMonths : 12,
                 IsReserved = req.IsReserved,
                 TargetDeliveryDate = req.TargetDeliveryDate,
+                ReservationStatus = req.ReservationStatus != 0 ? req.ReservationStatus : (req.IsReserved ? 1 : 0),
                 SyncStatus = SyncStatus.PendingSync,
                 Items = saleItems
             };
@@ -192,7 +193,8 @@ namespace POS.CloudAPI.Controllers
                     i.UnitPrice,
                     i.Discount,
                     i.Tax,
-                    i.Total)).ToList());
+                    i.Total)).ToList(),
+                sale.ReservationStatus);
 
             return CreatedAtAction(nameof(GetById), new { id = sale.Id }, dto);
         }
@@ -265,7 +267,8 @@ namespace POS.CloudAPI.Controllers
                     s.SyncError,
                     s.Items.Count,
                     s.CreatedAt,
-                    new List<CloudSaleItemDto>()))
+                    new List<CloudSaleItemDto>(),
+                    s.ReservationStatus))
                 .ToListAsync();
 
             return Ok(sales);
@@ -326,7 +329,8 @@ namespace POS.CloudAPI.Controllers
                     i.UnitPrice,
                     i.Discount,
                     i.Tax,
-                    i.Total)).ToList());
+                    i.Total)).ToList(),
+                sale.ReservationStatus);
 
             return Ok(dto);
         }
@@ -367,6 +371,34 @@ namespace POS.CloudAPI.Controllers
                 paidAmount = sale.PaidAmount,
                 remainingAmount = sale.RemainingAmount,
                 message = $"تم سداد مبلغ {payAmt:N2} ج.م بنجاح."
+            });
+        }
+
+        [HttpPost("{id:guid}/reservation-status")]
+        public async Task<IActionResult> UpdateReservationStatus(Guid id, [FromBody] UpdateReservationStatusRequest req)
+        {
+            var tenantId = GetTenantId();
+            if (tenantId == Guid.Empty) return Unauthorized();
+
+            var sale = await _db.Sales.FirstOrDefaultAsync(s => s.Id == id && s.TenantId == tenantId);
+            if (sale == null) return NotFound(new { message = "فاتورة الحجز غير موجودة." });
+
+            sale.ReservationStatus = req.Status;
+            sale.SyncStatus = SyncStatus.PendingSync;
+
+            if (!string.IsNullOrWhiteSpace(req.Notes))
+            {
+                sale.Notes = string.IsNullOrWhiteSpace(sale.Notes) ? req.Notes : $"{sale.Notes} | {req.Notes}";
+            }
+
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true,
+                saleId = sale.Id,
+                reservationStatus = sale.ReservationStatus,
+                message = "تم تحديث حالة الحجز بنجاح وجاهزة للتزامن مع الكاشير."
             });
         }
     }

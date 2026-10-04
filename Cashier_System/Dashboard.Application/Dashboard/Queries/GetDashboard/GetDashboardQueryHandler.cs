@@ -186,17 +186,17 @@ namespace Dashboard.Application.Dashboard.Queries.GetDashboard
                 return new PaymentMethodSummaryResponse(method, amount, count, Math.Round(pct, 1));
             }).ToList();
 
-            // Customer Debts (الديون المستحقة عند العملاء / اللي ليا بره)
-            const string customerDebtsSql = """
+            // 1. Customer Credit Debts (الديون المستحقة عن مبيعات الآجل فقط)
+            const string creditDebtsSql = """
                 SELECT 
-                    ISNULL(SUM(TotalAmount - PaidAmount), 0) AS TotalCustomerDebts,
-                    COUNT(1) AS CustomerDebtsCount
+                    ISNULL(SUM(TotalAmount - PaidAmount), 0) AS TotalCreditDebts,
+                    COUNT(1) AS CreditDebtsCount
                 FROM [Sales].[Sales]
-                WHERE Status = 1 AND (TotalAmount - PaidAmount) > 0.001
+                WHERE Status = 1 AND ISNULL(IsInstallment, 0) = 0 AND (TotalAmount - PaidAmount) > 0.001
                 """;
-            var customerDebtsRaw = await connection.QuerySingleAsync(customerDebtsSql);
-            decimal totalCustomerDebts = Convert.ToDecimal(customerDebtsRaw.TotalCustomerDebts);
-            int customerDebtsCount = Convert.ToInt32(customerDebtsRaw.CustomerDebtsCount);
+            var creditDebtsRaw = await connection.QuerySingleAsync(creditDebtsSql);
+            decimal totalCustomerCreditDebts = Convert.ToDecimal(creditDebtsRaw.TotalCreditDebts);
+            int customerCreditDebtsCount = Convert.ToInt32(creditDebtsRaw.CreditDebtsCount);
 
             const string topDebtsSql = """
                 SELECT TOP 5
@@ -208,11 +208,43 @@ namespace Dashboard.Application.Dashboard.Queries.GetDashboard
                     MAX(s.SaleDate) AS LastSaleDate
                 FROM [Sales].[Sales] s
                 LEFT JOIN [Sales].[Customers] c ON s.CustomerId = c.Id
-                WHERE s.Status = 1 AND (s.TotalAmount - s.PaidAmount) > 0.001
+                WHERE s.Status = 1 AND ISNULL(s.IsInstallment, 0) = 0 AND (s.TotalAmount - s.PaidAmount) > 0.001
                 GROUP BY s.CustomerId, c.Name, c.Phone
                 ORDER BY TotalDebtAmount DESC
                 """;
             var topCustomerDebts = (await connection.QueryAsync<CustomerDebtSummaryResponse>(topDebtsSql)).ToList();
+
+            // 2. Installment Debts (مستحقات عقود التقسيط والأقساط المطلوبة فقط)
+            const string installmentDebtsSql = """
+                SELECT 
+                    ISNULL(SUM(CASE WHEN (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) > 0 THEN (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) ELSE 0 END), 0) AS TotalInstallmentDebts,
+                    COUNT(1) AS InstallmentContractsCount
+                FROM [Sales].[InstallmentContracts] c
+                OUTER APPLY (
+                    SELECT SUM(PaidAmount) AS TotalPaid
+                    FROM [Sales].[InstallmentSchedules]
+                    WHERE ContractId = c.Id
+                ) sched
+                WHERE c.Status = 1 AND (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) > 0.001
+                """;
+            var installmentDebtsRaw = await connection.QuerySingleAsync(installmentDebtsSql);
+            decimal totalInstallmentDebts = Convert.ToDecimal(installmentDebtsRaw.TotalInstallmentDebts);
+            int installmentContractsCount = Convert.ToInt32(installmentDebtsRaw.InstallmentContractsCount);
+
+            const string overdueInstallmentsSql = """
+                SELECT 
+                    ISNULL(SUM(Amount - PaidAmount), 0) AS OverdueInstallmentsAmount,
+                    COUNT(1) AS OverdueInstallmentsCount
+                FROM [Sales].[InstallmentSchedules]
+                WHERE IsPaid = 0 AND DueDate <= GETUTCDATE()
+                """;
+            var overdueRaw = await connection.QuerySingleAsync(overdueInstallmentsSql);
+            decimal overdueInstallmentsAmount = Convert.ToDecimal(overdueRaw.OverdueInstallmentsAmount);
+            int overdueInstallmentsCount = Convert.ToInt32(overdueRaw.OverdueInstallmentsCount);
+
+            // Grand Total of Outside Money (إجمالي الفلوس اللي ليا بره = الآجل + التقسيط)
+            decimal totalCustomerDebts = totalCustomerCreditDebts + totalInstallmentDebts;
+            int customerDebtsCount = customerCreditDebtsCount + installmentContractsCount;
 
             var nowLocal = DateTime.Now;
             var todayStart = DateTime.SpecifyKind(nowLocal.Date, DateTimeKind.Local).ToUniversalTime();
@@ -291,7 +323,13 @@ namespace Dashboard.Application.Dashboard.Queries.GetDashboard
                 cashSalesAmount,
                 creditSalesAmount,
                 debtCollectionsAmount,
-                realizedRevenue);
+                realizedRevenue,
+                totalCustomerCreditDebts,
+                customerCreditDebtsCount,
+                totalInstallmentDebts,
+                installmentContractsCount,
+                overdueInstallmentsAmount,
+                overdueInstallmentsCount);
 
             await _cacheService.SetAsync(
                 cacheKey,

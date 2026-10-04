@@ -195,6 +195,7 @@ class SaleSummaryModel {
     this.isDelivery = false,
     this.isInstallment = false,
     this.isReserved = false,
+    this.reservationStatus = 0,
     required this.syncStatus,
     this.syncedAt,
     this.syncError,
@@ -220,6 +221,7 @@ class SaleSummaryModel {
       isDelivery: json['isDelivery'] ?? false,
       isInstallment: json['isInstallment'] ?? false,
       isReserved: json['isReserved'] ?? false,
+      reservationStatus: (json['reservationStatus'] as num?)?.toInt() ?? 0,
       syncStatus: json['syncStatus']?.toString() ?? 'PendingSync',
       syncedAt: json['syncedAt'] != null
           ? DateTime.tryParse(json['syncedAt'].toString())
@@ -284,6 +286,7 @@ class SaleDetailModel {
     this.isInstallment = false,
     this.numberOfMonths = 12,
     this.isReserved = false,
+    this.reservationStatus = 0,
     required this.syncStatus,
     this.syncedAt,
     this.syncError,
@@ -317,6 +320,7 @@ class SaleDetailModel {
       isInstallment: json['isInstallment'] ?? false,
       numberOfMonths: (json['numberOfMonths'] as num?)?.toInt() ?? 12,
       isReserved: json['isReserved'] ?? false,
+      reservationStatus: (json['reservationStatus'] as num?)?.toInt() ?? 0,
       syncStatus: json['syncStatus']?.toString() ?? 'PendingSync',
       syncedAt: json['syncedAt'] != null
           ? DateTime.tryParse(json['syncedAt'].toString())

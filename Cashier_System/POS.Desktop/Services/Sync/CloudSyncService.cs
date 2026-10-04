@@ -245,8 +245,9 @@ namespace POS.Desktop.Services.Sync
                     return result;
                 }
 
-                // 1.5 PRIORITY #0: Pull Pending Categories from Cloud (So products find them)
+                // 1.5 PRIORITY #0: Pull Pending Categories & Brands from Cloud (So products find them)
                 await PullPendingCategoriesFromCloudAsync();
+                await PullPendingBrandsFromCloudAsync();
 
                 // 2. PRIORITY #1: Pull Pending Suppliers from Cloud (So purchases find them)
                 await PullPendingSuppliersFromCloudAsync();
@@ -279,8 +280,9 @@ namespace POS.Desktop.Services.Sync
                 // 9. Push Store Settings & Shop Name to Cloud (Every sync)
                 await PushStoreSettingsToCloudAsync();
 
-                // 10. Push Suppliers & Debts to Cloud
+                // 10. Push Suppliers, Brands & Debts to Cloud
                 await PushSuppliersToCloudAsync();
+                await PushBrandsToCloudAsync();
 
                 // 11. Push Sales & Purchase Returns to Cloud
                 await PushReturnsToCloudAsync();
@@ -504,29 +506,116 @@ namespace POS.Desktop.Services.Sync
                 var pendingProducts = await _cloudHttp.GetFromJsonAsync<List<PendingCloudProductDto>>("api/sync/products/pending");
                 if (pendingProducts == null || !pendingProducts.Any()) return;
 
-                var categories = await _posApi.GetCategoriesAsync();
-                var units = await _posApi.GetUnitsAsync();
-                var defaultCatId = categories?.FirstOrDefault()?.Id ?? Guid.Empty;
+                var categories = await _posApi.GetCategoriesAsync() ?? new();
+                var units = await _posApi.GetUnitsAsync() ?? new();
+                var brands = await _posApi.GetBrandsAsync() ?? new();
+
+                // 1. Ensure Default Category exists locally
+                var defaultCatId = categories.FirstOrDefault()?.Id ?? Guid.Empty;
                 if (defaultCatId == Guid.Empty)
                 {
                     defaultCatId = await _posApi.CreateCategoryAsync(new CreateCategoryRequest("أجهزة كهربائية عامة")) ?? Guid.Empty;
+                    categories = await _posApi.GetCategoriesAsync() ?? new();
                 }
-                var defaultUnitId = units?.FirstOrDefault()?.Id ?? Guid.Empty;
 
-                var localProducts = await _posApi.GetProductsAsync();
-                var localById = localProducts?.ToDictionary(p => p.Id) ?? new();
-                var localByBarcode = localProducts?
+                // 2. Ensure Default Unit exists locally (Never Guid.Empty!)
+                if (!units.Any())
+                {
+                    await _posApi.CreateUnitAsync(new CreateUnitRequest("قطعة", "Piece", "قطعة"));
+                    units = await _posApi.GetUnitsAsync() ?? new();
+                }
+                var defaultUnitId = units.FirstOrDefault()?.Id ?? Guid.Empty;
+
+                var localProducts = await _posApi.GetProductsAsync() ?? new();
+                var localById = localProducts.ToDictionary(p => p.Id);
+                var localByBarcode = localProducts
                     .Where(p => !string.IsNullOrWhiteSpace(p.Barcode))
                     .GroupBy(p => p.Barcode.Trim().ToLower())
-                    .ToDictionary(g => g.Key, g => g.First()) ?? new();
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                int importedProductsCount = 0;
 
                 foreach (var prod in pendingProducts)
                 {
-                    var barcodeClean = prod.Barcode.Trim().ToLower();
-                    if (localById.ContainsKey(prod.Id) || localByBarcode.ContainsKey(barcodeClean))
+                    var barcodeClean = prod.Barcode?.Trim().ToLower() ?? string.Empty;
+
+                    // If already exists locally by Id or Barcode, acknowledge immediately and skip
+                    if (localById.ContainsKey(prod.Id) || (!string.IsNullOrEmpty(barcodeClean) && localByBarcode.ContainsKey(barcodeClean)))
                     {
                         await _cloudHttp.PostAsync($"api/sync/products/{prod.Id}/acknowledge", null);
                         continue;
+                    }
+
+                    // A. Resolve Unit ID
+                    Guid resolvedUnitId = defaultUnitId;
+                    if (!string.IsNullOrWhiteSpace(prod.BaseUnit))
+                    {
+                        var matchingUnit = units.FirstOrDefault(u =>
+                            u.NameAr.Equals(prod.BaseUnit.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                            u.Symbol.Equals(prod.BaseUnit.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                            u.NameEn.Equals(prod.BaseUnit.Trim(), StringComparison.OrdinalIgnoreCase));
+                        if (matchingUnit != null)
+                        {
+                            resolvedUnitId = matchingUnit.Id;
+                        }
+                    }
+
+                    // B. Resolve Category ID
+                    Guid resolvedCatId = defaultCatId;
+                    if (prod.CategoryId.HasValue && categories.Any(c => c.Id == prod.CategoryId.Value))
+                    {
+                        resolvedCatId = prod.CategoryId.Value;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(prod.CategoryName))
+                    {
+                        var matchingCat = categories.FirstOrDefault(c =>
+                            c.NameAr.Trim().Equals(prod.CategoryName.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                            (!string.IsNullOrWhiteSpace(c.NameEn) && c.NameEn.Trim().Equals(prod.CategoryName.Trim(), StringComparison.OrdinalIgnoreCase)));
+                        if (matchingCat != null)
+                        {
+                            resolvedCatId = matchingCat.Id;
+                        }
+                        else
+                        {
+                            // Try creating the category locally
+                            var newCatId = await _posApi.CreateCategoryAsync(new CreateCategoryRequest(prod.CategoryName.Trim(), prod.CategoryName.Trim()));
+                            if (newCatId.HasValue && newCatId.Value != Guid.Empty)
+                            {
+                                resolvedCatId = newCatId.Value;
+                                categories = await _posApi.GetCategoriesAsync() ?? categories;
+                            }
+                        }
+                    }
+
+                    // C. Resolve Brand ID
+                    Guid? resolvedBrandId = null;
+                    if (prod.BrandId.HasValue && brands.Any(b => b.Id == prod.BrandId.Value))
+                    {
+                        resolvedBrandId = prod.BrandId.Value;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(prod.BrandName))
+                    {
+                        var matchingBrand = brands.FirstOrDefault(b =>
+                            b.Name.Trim().Equals(prod.BrandName.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                            (!string.IsNullOrWhiteSpace(b.NameAr) && b.NameAr.Trim().Equals(prod.BrandName.Trim(), StringComparison.OrdinalIgnoreCase)));
+                        if (matchingBrand != null)
+                        {
+                            resolvedBrandId = matchingBrand.Id;
+                        }
+                        else
+                        {
+                            // Try creating the brand locally
+                            var (newBrandId, _) = await _posApi.CreateBrandAsync(new CreateBrandRequest(
+                                NameAr: prod.BrandName.Trim(),
+                                NameEn: prod.BrandName.Trim(),
+                                Description: "مستورد من تطبيق الموبايل",
+                                Name: prod.BrandName.Trim()));
+                            if (newBrandId.HasValue && newBrandId.Value != Guid.Empty)
+                            {
+                                resolvedBrandId = newBrandId.Value;
+                                brands = await _posApi.GetBrandsAsync() ?? brands;
+                            }
+                        }
                     }
 
                     var formModel = new CreateProductFormModel
@@ -535,21 +624,21 @@ namespace POS.Desktop.Services.Sync
                         Barcode = prod.Barcode,
                         NameAr = prod.NameAr,
                         NameEn = prod.NameEn ?? string.Empty,
-                        BaseUnit = prod.BaseUnit,
-                        ParentUnit = prod.ParentUnit,
-                        ConversionFactor = prod.ConversionFactor,
+                        BaseUnit = prod.BaseUnit ?? "قطعة",
+                        ParentUnit = prod.ParentUnit ?? "قطعة",
+                        ConversionFactor = prod.ConversionFactor > 0 ? prod.ConversionFactor : 1,
                         PurchasePrice = prod.PurchasePrice,
                         SellingPrice = prod.SellingPrice,
                         WholesalePrice = prod.WholesalePrice,
                         ShelfLifeDays = prod.ShelfLifeDays,
-                        ExpiryAlertDays = prod.ExpiryAlertDays,
+                        ExpiryAlertDays = prod.ExpiryAlertDays > 0 ? prod.ExpiryAlertDays : 3,
                         ReorderLevel = prod.ReorderLevel,
                         IsWeighable = prod.IsWeighable,
                         TrackExpiry = prod.TrackExpiry,
-                        CategoryId = (prod.CategoryId.HasValue && prod.CategoryId.Value != Guid.Empty) ? prod.CategoryId.Value : defaultCatId,
-                        UnitId = defaultUnitId,
+                        CategoryId = resolvedCatId,
+                        UnitId = resolvedUnitId,
                         InitialStock = prod.StockQuantity,
-                        BrandId = prod.BrandId,
+                        BrandId = resolvedBrandId,
                         ModelNumber = prod.ModelNumber,
                         Color = prod.Color,
                         WarrantyPeriodMonths = prod.WarrantyPeriodMonths > 0 ? prod.WarrantyPeriodMonths : 12,
@@ -557,14 +646,30 @@ namespace POS.Desktop.Services.Sync
                         HasSerialNumber = prod.HasSerialNumber
                     };
 
+                    Console.WriteLine($"[CloudSync] Pulling mobile product '{prod.NameAr}' ({prod.Barcode}) -> CatId: {resolvedCatId}, UnitId: {resolvedUnitId}, BrandId: {resolvedBrandId}, InitialStock: {prod.StockQuantity}");
                     var (productId, error) = await _posApi.CreateProductAsync(formModel);
-                    if (productId.HasValue || (error != null && error.Contains("الباركود مسجل مسبقاً")))
+                    if (productId.HasValue || (error != null && (error.Contains("الباركود مسجل مسبقاً") || error.Contains("Duplicate") || error.Contains("AlreadyExists"))))
                     {
                         await _cloudHttp.PostAsync($"api/sync/products/{prod.Id}/acknowledge", null);
+                        Console.WriteLine($"[CloudSync] Product '{prod.NameAr}' ({prod.Barcode}) synced successfully and acknowledged with Cloud.");
+                        importedProductsCount++;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[CloudSync] Failed to create mobile product '{prod.NameAr}' locally: {error}");
                     }
                 }
+
+                if (importedProductsCount > 0)
+                {
+                    RecordLocalChange();
+                    NotifyStateChanged();
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CloudSync] Exception in PullPendingProductsFromCloudAsync: {ex.Message}");
+            }
         }
 
         private async Task<int> PullPendingDebtPaymentsFromCloudAsync()
@@ -582,6 +687,44 @@ namespace POS.Desktop.Services.Sync
                     if (string.Equals(payment.DebtType, "Customer", StringComparison.OrdinalIgnoreCase))
                     {
                         var (res, errorMsg) = await _posApi.PayCustomerDebtAsync(payment.ReferenceId, payment.Amount);
+                        if (!res)
+                        {
+                            try
+                            {
+                                var contracts = await _posApi.GetInstallmentContractsAsync();
+                                var contract = contracts?.FirstOrDefault(c => c.Id == payment.ReferenceId || c.SaleId == payment.ReferenceId);
+                                if (contract != null)
+                                {
+                                    var fullContract = await _posApi.GetInstallmentContractByIdAsync(contract.Id);
+                                    var pendingSchedule = fullContract?.Schedules?
+                                        .Where(s => s.RemainingAmount > 0)
+                                        .OrderBy(s => s.DueDate)
+                                        .FirstOrDefault();
+
+                                    if (pendingSchedule != null)
+                                    {
+                                        var payReq = new PayInstallmentRequest(
+                                            ContractId: contract.Id,
+                                            ScheduleId: pendingSchedule.Id,
+                                            Amount: Math.Min(payment.Amount, pendingSchedule.RemainingAmount),
+                                            PaymentMethod: "Cash",
+                                            Notes: $"[سداد من الموبايل] {payment.Notes}".Trim()
+                                        );
+                                        var (instRes, instErr) = await _posApi.PayInstallmentScheduleAsync(payReq);
+                                        if (instRes)
+                                        {
+                                            res = true;
+                                            errorMsg = null;
+                                        }
+                                        else
+                                        {
+                                            errorMsg = instErr;
+                                        }
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
                         success = res;
                         err = errorMsg;
                     }
@@ -699,7 +842,11 @@ namespace POS.Desktop.Services.Sync
                         MonthlySalesJson: calendar != null ? JsonSerializer.Serialize(calendar.Days) : null,
                         TodayWasteLoss: dashData.WasteLosses?.TodayLoss ?? 0,
                         MonthWasteLoss: dashData.WasteLosses?.MonthLoss ?? 0,
-                        TotalWasteLoss: dashData.WasteLosses?.TotalLoss ?? 0
+                        TotalWasteLoss: dashData.WasteLosses?.TotalLoss ?? 0,
+                        CustomerCreditDebtsTotal: dashData.TotalCustomerCreditDebts,
+                        InstallmentDebtsTotal: dashData.TotalInstallmentDebts,
+                        CustomerCreditDebtsCount: dashData.CustomerCreditDebtsCount,
+                        InstallmentContractsCount: dashData.InstallmentContractsCount
                     );
 
                     await _cloudHttp.PostAsJsonAsync("api/sync/dashboard/push", req);
@@ -822,6 +969,89 @@ namespace POS.Desktop.Services.Sync
             catch { }
         }
 
+        private async Task<int> PullPendingBrandsFromCloudAsync()
+        {
+            int importedCount = 0;
+            try
+            {
+                var pendingBrands = await _cloudHttp.GetFromJsonAsync<List<PendingCloudBrandDto>>("api/sync/brands/pending");
+                if (pendingBrands == null || !pendingBrands.Any())
+                    return 0;
+
+                var localBrands = await _posApi.GetBrandsAsync();
+                var localByName = localBrands?.ToDictionary(b => b.NameAr.Trim().ToLower(), b => b) ?? new();
+                var localById = localBrands?.ToDictionary(b => b.Id, b => b) ?? new();
+
+                foreach (var brand in pendingBrands)
+                {
+                    if (localById.ContainsKey(brand.Id) || localByName.ContainsKey(brand.NameAr.Trim().ToLower()))
+                    {
+                        await AcknowledgeBrandAsync(brand.Id);
+                        continue;
+                    }
+
+                    var req = new CreateBrandRequest(
+                        NameAr: brand.NameAr.Trim(),
+                        NameEn: !string.IsNullOrWhiteSpace(brand.NameEn) ? brand.NameEn.Trim() : brand.NameAr.Trim(),
+                        Description: brand.Description,
+                        Name: brand.NameAr.Trim()
+                    );
+
+                    var (brandId, error) = await _posApi.CreateBrandAsync(req);
+                    if (brandId.HasValue && brandId.Value != Guid.Empty || (error != null && error.Contains("مسبقاً")))
+                    {
+                        await AcknowledgeBrandAsync(brand.Id);
+                        importedCount++;
+                    }
+                    else
+                    {
+                        var refreshedBrands = await _posApi.GetBrandsAsync();
+                        if (refreshedBrands != null && refreshedBrands.Any(b => b.NameAr.Trim().Equals(brand.NameAr.Trim(), StringComparison.OrdinalIgnoreCase)))
+                        {
+                            await AcknowledgeBrandAsync(brand.Id);
+                        }
+                    }
+                }
+
+                if (importedCount > 0)
+                {
+                    NotifyStateChanged();
+                }
+            }
+            catch { }
+            return importedCount;
+        }
+
+        private async Task AcknowledgeBrandAsync(Guid brandId)
+        {
+            try
+            {
+                await _cloudHttp.PostAsync($"api/sync/brands/{brandId}/acknowledge", null);
+            }
+            catch { }
+        }
+
+        private async Task PushBrandsToCloudAsync()
+        {
+            try
+            {
+                var localBrands = await _posApi.GetBrandsAsync();
+                if (localBrands == null || !localBrands.Any()) return;
+
+                var brandsToPush = localBrands.Select(b => new PushBrandDto(
+                    Id: b.Id,
+                    NameAr: b.NameAr,
+                    NameEn: b.NameEn,
+                    Description: b.Description,
+                    LogoUrl: null,
+                    IsActive: b.IsActive
+                )).ToList();
+
+                await _cloudHttp.PostAsJsonAsync("api/sync/brands/push", new PushBrandsRequest(brandsToPush));
+            }
+            catch { }
+        }
+
         private async Task PushStoreSettingsToCloudAsync()
         {
             try
@@ -853,7 +1083,10 @@ namespace POS.Desktop.Services.Sync
                 var localSuppliers = await _posApi.GetSuppliersAsync();
                 var localProducts = await _posApi.GetProductsAsync();
                 var localCategories = await _posApi.GetCategoriesAsync();
+                var localBrands = await _posApi.GetBrandsAsync();
                 var supplierDebts = await _posApi.GetSupplierDebtsAsync();
+
+                var brandMap = localBrands?.ToDictionary(b => b.Id, b => b.Name) ?? new();
 
                 var debtMap = supplierDebts?
                     .GroupBy(d => d.SupplierId)
@@ -893,7 +1126,14 @@ namespace POS.Desktop.Services.Sync
                     p.ShelfLifeDays,
                     p.ExpiryAlertDays,
                     p.ReorderLevel,
-                    p.TrackExpiry
+                    p.TrackExpiry,
+                    p.BrandId,
+                    p.BrandId.HasValue && brandMap.TryGetValue(p.BrandId.Value, out var bn) ? bn : null,
+                    p.ModelNumber,
+                    p.Color,
+                    p.WarrantyPeriodMonths > 0 ? p.WarrantyPeriodMonths : 12,
+                    p.MaintenanceAgent,
+                    p.HasSerialNumber
                 )).ToList() ?? new();
 
                 if (supList.Any() || prodList.Any() || catList.Any())
@@ -954,8 +1194,58 @@ namespace POS.Desktop.Services.Sync
                 {
                     if (!string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber) && _knownSaleInvoiceNumbers.Contains(cloudSale.InvoiceNumber.Trim()))
                     {
+                        if (cloudSale.ReservationStatus > 0)
+                        {
+                            try
+                            {
+                                var existingSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddDays(-60), DateTime.UtcNow.AddDays(1));
+                                var matchedSale = existingSales?.FirstOrDefault(s => s.InvoiceNumber.Trim().Equals(cloudSale.InvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase));
+                                if (matchedSale != null && matchedSale.ReservationStatus != cloudSale.ReservationStatus)
+                                {
+                                    await _posApi.UpdateReservationStatusAsync(matchedSale.Id, cloudSale.ReservationStatus);
+                                }
+                            }
+                            catch { }
+                        }
                         await AcknowledgeSaleAsync(cloudSale.Id, "Already Exists Locally");
                         continue;
+                    }
+
+                    // Auto-resolve or create Customer locally if name/phone provided
+                    Guid? resolvedCustomerId = cloudSale.CustomerId;
+                    var targetCustName = !string.IsNullOrWhiteSpace(cloudSale.CustomerName)
+                        ? cloudSale.CustomerName.Trim()
+                        : cloudSale.RecipientName?.Trim();
+                    var targetCustPhone = !string.IsNullOrWhiteSpace(cloudSale.CustomerPhone)
+                        ? cloudSale.CustomerPhone.Trim()
+                        : cloudSale.RecipientPhone?.Trim();
+
+                    if (!string.IsNullOrWhiteSpace(targetCustName))
+                    {
+                        try
+                        {
+                            var existingCustomers = await _posApi.GetCustomersAsync();
+                            var matchedCust = existingCustomers?.FirstOrDefault(c =>
+                                (!string.IsNullOrWhiteSpace(targetCustPhone) && !string.IsNullOrWhiteSpace(c.Phone) && c.Phone.Trim() == targetCustPhone) ||
+                                c.Name.Trim().Equals(targetCustName, StringComparison.OrdinalIgnoreCase));
+
+                            if (matchedCust != null)
+                            {
+                                resolvedCustomerId = matchedCust.Id;
+                            }
+                            else
+                            {
+                                var (newCustId, _) = await _posApi.CreateCustomerAsync(
+                                    name: targetCustName,
+                                    phone: !string.IsNullOrWhiteSpace(targetCustPhone) ? targetCustPhone : "01000000000",
+                                    address: cloudSale.DeliveryAddress);
+                                if (newCustId.HasValue && newCustId.Value != Guid.Empty)
+                                {
+                                    resolvedCustomerId = newCustId.Value;
+                                }
+                            }
+                        }
+                        catch { }
                     }
 
                     var localItems = cloudSale.Items.Select(i =>
@@ -983,7 +1273,7 @@ namespace POS.Desktop.Services.Sync
                         CashierId: adminUserId,
                         ShiftId: Guid.Empty, // Auto-resolved by backend to active shift or system shift!
                         Items: localItems,
-                        CustomerId: cloudSale.CustomerId,
+                        CustomerId: resolvedCustomerId,
                         DiscountAmount: cloudSale.DiscountAmount,
                         TaxAmount: cloudSale.TaxAmount,
                         PaidAmount: cloudSale.PaidAmount,
@@ -1010,6 +1300,15 @@ namespace POS.Desktop.Services.Sync
 
                     if (result != null && result.SaleId != Guid.Empty)
                     {
+                        if (cloudSale.ReservationStatus > 0)
+                        {
+                            try
+                            {
+                                await _posApi.UpdateReservationStatusAsync(result.SaleId, cloudSale.ReservationStatus);
+                            }
+                            catch { }
+                        }
+
                         await AcknowledgeSaleAsync(cloudSale.Id, result.SaleId.ToString());
                         if (!string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber))
                         {
@@ -1253,19 +1552,44 @@ namespace POS.Desktop.Services.Sync
                 if (localSales == null || !localSales.Any()) return;
 
                 var customerDebts = await _posApi.GetCustomerDebtsAsync();
-                var remainingMap = customerDebts?.ToDictionary(d => d.SaleId, d => d.RemainingAmount) ?? new();
+                var remainingMap = customerDebts?
+                    .Where(d => d.SaleId != Guid.Empty)
+                    .GroupBy(d => d.SaleId)
+                    .ToDictionary(g => g.Key, g => g.First().RemainingAmount) ?? new();
 
                 var installmentContracts = await _posApi.GetInstallmentContractsAsync();
-                var contractMap = installmentContracts?.ToDictionary(c => c.SaleId, c => c) ?? new();
+                var contractBySaleIdMap = installmentContracts?
+                    .Where(c => c.SaleId != Guid.Empty)
+                    .GroupBy(c => c.SaleId)
+                    .ToDictionary(g => g.Key, g => g.First()) ?? new();
+
+                var contractByIdMap = installmentContracts?
+                    .Where(c => c.Id != Guid.Empty)
+                    .GroupBy(c => c.Id)
+                    .ToDictionary(g => g.Key, g => g.First()) ?? new();
 
                 var salesToPush = localSales.Select(s =>
                 {
-                    decimal remaining = remainingMap.TryGetValue(s.Id, out var rem) ? rem : Math.Max(0, s.TotalAmount - s.PaidAmount);
-                    bool isInst = s.IsInstallment || s.PaymentMethod == "Installment" || s.PaymentMethod == "تقسيط" || contractMap.ContainsKey(s.Id);
+                    bool isInst = s.IsInstallment || s.PaymentMethod == "Installment" || s.PaymentMethod == "تقسيط" || contractBySaleIdMap.ContainsKey(s.Id);
 
                     InstallmentContractDto? contract = null;
-                    if (s.InstallmentContractId.HasValue) contractMap.TryGetValue(s.InstallmentContractId.Value, out contract);
-                    if (contract == null) contractMap.TryGetValue(s.Id, out contract);
+                    if (s.InstallmentContractId.HasValue && contractByIdMap.TryGetValue(s.InstallmentContractId.Value, out var c1)) contract = c1;
+                    if (contract == null && contractBySaleIdMap.TryGetValue(s.Id, out var c2)) contract = c2;
+
+                    decimal total = s.TotalAmount;
+                    decimal remaining = remainingMap.TryGetValue(s.Id, out var rem) ? rem : Math.Max(0, s.TotalAmount - s.PaidAmount);
+
+                    if (isInst && contract != null)
+                    {
+                        total = contract.TotalWithInterest > 0 ? contract.TotalWithInterest : s.TotalAmount;
+                        remaining = contract.RemainingAmount;
+                    }
+
+                    int resStatus = s.ReservationStatus;
+                    if (s.IsReserved && resStatus == 0)
+                    {
+                        resStatus = 1; // Default to Reserved (1)
+                    }
 
                     return new CloudSaleSyncDto(
                         Id: s.Id,
@@ -1277,7 +1601,7 @@ namespace POS.Desktop.Services.Sync
                         SubTotal: s.SubTotal,
                         DiscountAmount: s.DiscountAmount,
                         TaxAmount: s.TaxAmount,
-                        TotalAmount: s.TotalAmount,
+                        TotalAmount: total,
                         PaidAmount: s.PaidAmount,
                         RemainingAmount: remaining,
                         PaymentMethod: s.PaymentMethod ?? "Cash",
@@ -1309,7 +1633,8 @@ namespace POS.Desktop.Services.Sync
                             Discount: i.Discount,
                             Tax: i.Tax,
                             Total: i.Total
-                        )).ToList()
+                        )).ToList(),
+                        ReservationStatus: resStatus
                     );
                 }).ToList();
 

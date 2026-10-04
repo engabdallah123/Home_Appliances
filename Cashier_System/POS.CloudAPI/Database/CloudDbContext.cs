@@ -92,6 +92,15 @@ namespace POS.CloudAPI.Database
                  .OnDelete(DeleteBehavior.Cascade);
             });
 
+            modelBuilder.Entity<CloudOffer>(b =>
+            {
+                b.HasIndex(o => o.TenantId);
+                b.HasMany(o => o.Items)
+                 .WithOne()
+                 .HasForeignKey(i => i.OfferId)
+                 .OnDelete(DeleteBehavior.Cascade);
+            });
+
             modelBuilder.Entity<CloudDebtItem>(b =>
             {
                 b.HasIndex(d => new { d.TenantId, d.Type, d.ReferenceId });
@@ -613,6 +622,21 @@ BEGIN
         [Quantity] DECIMAL(18,2) NOT NULL CONSTRAINT DF_OfferItems_Quantity DEFAULT 1,
         [OriginalUnitPrice] DECIMAL(18,2) NOT NULL CONSTRAINT DF_OfferItems_OriginalUnitPrice DEFAULT 0
     );
+END
+
+-- Ensure ReservationStatus column in Sales
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Sales') AND name = 'ReservationStatus')
+BEGIN
+    ALTER TABLE [Sales] ADD [ReservationStatus] INT NOT NULL CONSTRAINT DF_Sales_ReservationStatus DEFAULT 0;
+END
+
+-- Ensure columns in DashboardSnapshots for separated debts
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('DashboardSnapshots') AND name = 'CustomerCreditDebtsTotal')
+BEGIN
+    ALTER TABLE [DashboardSnapshots] ADD [CustomerCreditDebtsTotal] DECIMAL(18,2) NOT NULL CONSTRAINT DF_DashboardSnapshots_CustomerCreditDebtsTotal DEFAULT 0;
+    ALTER TABLE [DashboardSnapshots] ADD [InstallmentDebtsTotal] DECIMAL(18,2) NOT NULL CONSTRAINT DF_DashboardSnapshots_InstallmentDebtsTotal DEFAULT 0;
+    ALTER TABLE [DashboardSnapshots] ADD [CustomerCreditDebtsCount] INT NOT NULL CONSTRAINT DF_DashboardSnapshots_CustomerCreditDebtsCount DEFAULT 0;
+    ALTER TABLE [DashboardSnapshots] ADD [InstallmentContractsCount] INT NOT NULL CONSTRAINT DF_DashboardSnapshots_InstallmentContractsCount DEFAULT 0;
 END
 ";
                 await Database.ExecuteSqlRawAsync(sql);

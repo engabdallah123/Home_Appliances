@@ -351,8 +351,31 @@ namespace POS.WebAPI.Services
                 var pendingProducts = await _cloudHttp.GetFromJsonAsync<List<PendingProductSyncDto>>("api/sync/products/pending", ct);
                 if (pendingProducts == null || !pendingProducts.Any()) return;
 
-                var defaultCatId = await inventoryDb.Categories.Select(c => c.Id).FirstOrDefaultAsync(ct);
-                var defaultUnitId = await inventoryDb.Units.Select(u => u.Id).FirstOrDefaultAsync(ct);
+                var defaultCat = await inventoryDb.Categories.FirstOrDefaultAsync(ct);
+                if (defaultCat == null)
+                {
+                    var catRes = Inventory.Domain.Catalog.Categories.Category.Create("عام", "General");
+                    if (catRes.IsSuccess)
+                    {
+                        defaultCat = catRes.Value;
+                        await inventoryDb.Categories.AddAsync(defaultCat, ct);
+                        await inventoryDb.SaveChangesAsync(ct);
+                    }
+                }
+                var defaultCatId = defaultCat?.Id ?? Guid.Empty;
+
+                var defaultUnit = await inventoryDb.Units.FirstOrDefaultAsync(ct);
+                if (defaultUnit == null)
+                {
+                    var unitRes = Inventory.Domain.Catalog.Units.Unit.Create("قطعة", "Piece", "قطعة");
+                    if (unitRes.IsSuccess)
+                    {
+                        defaultUnit = unitRes.Value;
+                        await inventoryDb.Units.AddAsync(defaultUnit, ct);
+                        await inventoryDb.SaveChangesAsync(ct);
+                    }
+                }
+                var defaultUnitId = defaultUnit?.Id ?? Guid.Empty;
 
                 var localProducts = await inventoryDb.Products.AsNoTracking().ToListAsync(ct);
                 var localById = localProducts.ToDictionary(p => p.Id);
@@ -361,29 +384,78 @@ namespace POS.WebAPI.Services
                     .GroupBy(p => p.Barcode.Trim().ToLower())
                     .ToDictionary(g => g.Key, g => g.First());
 
+                var allCategories = await inventoryDb.Categories.ToListAsync(ct);
+                var allBrands = await inventoryDb.Brands.ToListAsync(ct);
+
                 foreach (var prod in pendingProducts)
                 {
-                    var barcodeClean = prod.Barcode.Trim().ToLower();
-                    if (localById.ContainsKey(prod.Id) || localByBarcode.ContainsKey(barcodeClean))
+                    var barcodeClean = prod.Barcode?.Trim().ToLower() ?? string.Empty;
+                    if (localById.ContainsKey(prod.Id) || (!string.IsNullOrWhiteSpace(barcodeClean) && localByBarcode.ContainsKey(barcodeClean)))
                     {
                         await _cloudHttp.PostAsync($"api/sync/products/{prod.Id}/acknowledge", null, ct);
                         continue;
                     }
 
+                    // Resolve category safely
+                    Guid targetCatId = defaultCatId;
+                    if (prod.CategoryId.HasValue && allCategories.Any(c => c.Id == prod.CategoryId.Value))
+                    {
+                        targetCatId = prod.CategoryId.Value;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(prod.CategoryName))
+                    {
+                        var matchCat = allCategories.FirstOrDefault(c => 
+                            c.NameAr.Equals(prod.CategoryName.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                            (c.NameEn != null && c.NameEn.Equals(prod.CategoryName.Trim(), StringComparison.OrdinalIgnoreCase)));
+                        if (matchCat != null)
+                        {
+                            targetCatId = matchCat.Id;
+                        }
+                        else
+                        {
+                            var newCatRes = Inventory.Domain.Catalog.Categories.Category.Create(prod.CategoryName.Trim(), prod.CategoryName.Trim());
+                            if (newCatRes.IsSuccess)
+                            {
+                                var newCat = newCatRes.Value;
+                                await inventoryDb.Categories.AddAsync(newCat, ct);
+                                await inventoryDb.SaveChangesAsync(ct);
+                                allCategories.Add(newCat);
+                                targetCatId = newCat.Id;
+                            }
+                        }
+                    }
+
+                    // Resolve brand safely
+                    Guid? targetBrandId = null;
+                    if (prod.BrandId.HasValue && allBrands.Any(b => b.Id == prod.BrandId.Value))
+                    {
+                        targetBrandId = prod.BrandId.Value;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(prod.BrandName))
+                    {
+                        var matchBrand = allBrands.FirstOrDefault(b => 
+                            b.NameAr.Equals(prod.BrandName.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                            (b.NameEn != null && b.NameEn.Equals(prod.BrandName.Trim(), StringComparison.OrdinalIgnoreCase)));
+                        if (matchBrand != null)
+                        {
+                            targetBrandId = matchBrand.Id;
+                        }
+                    }
+
                     var cmd = new CreateProductCommand(
-                        prod.Barcode,
+                        prod.Barcode ?? string.Empty,
                         prod.NameAr,
                         prod.NameEn ?? string.Empty,
-                        prod.CategoryId ?? defaultCatId,
+                        targetCatId,
                         defaultUnitId,
                         prod.PurchasePrice,
                         prod.SellingPrice,
                         prod.WholesalePrice,
                         null,
                         null,
-                        prod.BaseUnit,
-                        prod.ParentUnit,
-                        prod.ConversionFactor,
+                        prod.BaseUnit ?? "قطعة",
+                        prod.ParentUnit ?? "كرتونة",
+                        prod.ConversionFactor > 0 ? prod.ConversionFactor : 1,
                         prod.ShelfLifeDays,
                         prod.ExpiryAlertDays,
                         prod.ReorderLevel,
@@ -394,18 +466,32 @@ namespace POS.WebAPI.Services
                         0,
                         null,
                         prod.Id,
-                        prod.StockQuantity
+                        prod.StockQuantity,
+                        null,
+                        targetBrandId,
+                        prod.ModelNumber,
+                        prod.Color,
+                        prod.WarrantyPeriodMonths > 0 ? prod.WarrantyPeriodMonths : 12,
+                        prod.MaintenanceAgent,
+                        prod.HasSerialNumber
                     );
 
                     var res = await mediator.Send(cmd, ct);
-                    if (res.IsSuccess || (res.Error != null && (res.Error.Name.Contains("الباركود مسجل مسبقاً") || res.Error.Code.Contains("Duplicate"))))
+                    if (res.IsSuccess || (res.Error != null && (res.Error.Name.Contains("الباركود مسجل مسبقاً") || res.Error.Code.Contains("Duplicate") || res.Error.Code.Contains("AlreadyExists"))))
                     {
                         await _cloudHttp.PostAsync($"api/sync/products/{prod.Id}/acknowledge", null, ct);
                         _logger.LogInformation("[CloudSync] Acknowledged product: {NameAr}", prod.NameAr);
                     }
+                    else
+                    {
+                        _logger.LogWarning("[CloudSync] Failed to create product {NameAr} from Cloud: {Error}", prod.NameAr, res.Error?.Name ?? res.Error?.Code);
+                    }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[CloudSync] Error in PullPendingProductsFromCloudAsync");
+            }
         }
 
         private async Task PushStoreSettingsToCloudAsync(IMediator mediator, CancellationToken ct)
@@ -1065,7 +1151,7 @@ namespace POS.WebAPI.Services
     public record PendingSupplierSyncDto(Guid Id, string Name, string? Phone, string? Email, string? Address, string? ContactPerson, decimal Balance = 0);
     public record PendingPurchaseItemSyncDto(Guid Id, Guid ProductId, string ProductName, string Barcode, decimal Quantity, decimal UnitCost, decimal Discount, decimal Tax, decimal Total, DateTime? ExpiryDate, string? BatchNumber, string? Unit);
     public record PendingPurchaseSyncDto(Guid Id, string InvoiceNumber, string? InternalNumber, Guid SupplierId, string SupplierName, DateTime PurchaseDate, decimal SubTotal, decimal DiscountAmount, decimal TaxAmount, decimal TotalAmount, decimal PaidAmount, decimal RemainingAmount, int PaymentMethod, string? Notes, DateTime CreatedAt, List<PendingPurchaseItemSyncDto> Items);
-    public record PendingProductSyncDto(Guid Id, string Barcode, string NameAr, string? NameEn, string BaseUnit, string? ParentUnit, int ConversionFactor, decimal PurchasePrice, decimal SellingPrice, decimal WholesalePrice, int ShelfLifeDays, int ExpiryAlertDays, decimal ReorderLevel, bool IsWeighable, bool TrackExpiry, Guid? CategoryId, decimal StockQuantity = 0);
+    public record PendingProductSyncDto(Guid Id, string Barcode, string NameAr, string? NameEn, string BaseUnit, string? ParentUnit, int ConversionFactor, decimal PurchasePrice, decimal SellingPrice, decimal WholesalePrice, int ShelfLifeDays, int ExpiryAlertDays, decimal ReorderLevel, bool IsWeighable, bool TrackExpiry, Guid? CategoryId, decimal StockQuantity = 0, string? CategoryName = null, Guid? BrandId = null, string? BrandName = null, string? ModelNumber = null, string? Color = null, int WarrantyPeriodMonths = 12, string? MaintenanceAgent = null, bool HasSerialNumber = false);
     public record StockUpdateSyncItem(Guid ProductId, decimal NewStockQuantity);
     public record SupplierBalanceSyncItem(Guid SupplierId, decimal NewBalance);
     public record PendingExpenseSyncDto(Guid Id, string Title, decimal Amount, string? Category, DateTime Date, string? Notes);

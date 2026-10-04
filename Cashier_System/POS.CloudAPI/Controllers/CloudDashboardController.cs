@@ -126,7 +126,11 @@ namespace POS.CloudAPI.Controllers
                 RecentPurchases: recentPurchases,
                 TodayWasteLossAmount: snapshot?.TodayWasteLoss ?? 0,
                 MonthWasteLossAmount: snapshot?.MonthWasteLoss ?? 0,
-                TotalWasteLossAmount: snapshot?.TotalWasteLoss ?? 0
+                TotalWasteLossAmount: snapshot?.TotalWasteLoss ?? 0,
+                CustomerCreditDebtsTotal: snapshot?.CustomerCreditDebtsTotal ?? 0,
+                InstallmentDebtsTotal: snapshot?.InstallmentDebtsTotal ?? 0,
+                CustomerCreditDebtsCount: snapshot?.CustomerCreditDebtsCount ?? 0,
+                InstallmentContractsCount: snapshot?.InstallmentContractsCount ?? 0
             );
 
             return Ok(response);

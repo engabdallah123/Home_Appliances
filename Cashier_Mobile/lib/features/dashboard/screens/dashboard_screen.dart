@@ -61,10 +61,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Text(
               auth.shopName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.getTextPrimary(isDark)),
             ),
             Text(
               "مرحباً، ${auth.userName}",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12, color: AppColors.primaryLight),
             ),
           ],
@@ -568,92 +572,279 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           const SizedBox(height: 20),
 
 
-                          // Debts Summary Card (Clickable -> DebtsScreen)
-                          _buildSectionHeader(isDark, "مركز المديونية والديون", Icons.account_balance_rounded),
+                          // Debts Summary Card (Separate Credit vs Installments)
+                          _buildSectionHeader(isDark, "مركز المديونية والأموال بالخارج", Icons.account_balance_wallet_rounded),
                           const SizedBox(height: 10),
-                          InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen()));
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AppColors.getSurface(isDark),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: AppColors.getBorder(isDark)),
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Row(
+                          Builder(
+                            builder: (context) {
+                              final totalOutsideMoney = (stats?.customerCreditDebtsTotal ?? 0) > 0 || (stats?.installmentDebtsTotal ?? 0) > 0
+                                  ? ((stats?.customerCreditDebtsTotal ?? 0) + (stats?.installmentDebtsTotal ?? 0))
+                                  : (stats?.customerDebtsTotal ?? 0);
+                              final creditDebts = (stats?.customerCreditDebtsTotal ?? 0) > 0
+                                  ? stats!.customerCreditDebtsTotal
+                                  : ((stats?.installmentDebtsTotal ?? 0) == 0 ? (stats?.customerDebtsTotal ?? 0) : 0.0);
+                              final installmentDebts = stats?.installmentDebtsTotal ?? 0.0;
+                              final creditInvoicesCount = stats?.customerCreditDebtsCount ?? 0;
+                              final installmentContractsCount = stats?.installmentContractsCount ?? 0;
+
+                              return Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.getSurface(isDark),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.getBorder(isDark)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    // 1. Total Outside Money Banner (الفلوس اللي ليا بره)
+                                    Container(
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            AppColors.success.withOpacity(0.15),
+                                            AppColors.primary.withOpacity(0.08),
+                                          ],
+                                          begin: Alignment.topRight,
+                                          end: Alignment.bottomLeft,
+                                        ),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(color: AppColors.success.withOpacity(0.3)),
+                                      ),
+                                      child: Row(
                                         children: [
                                           Container(
-                                            padding: const EdgeInsets.all(8),
+                                            padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
-                                              color: AppColors.warning.withOpacity(0.15),
+                                              color: AppColors.success.withOpacity(0.2),
                                               shape: BoxShape.circle,
                                             ),
-                                            child: const Icon(Icons.handshake_rounded, color: AppColors.warning, size: 20),
+                                            child: const Icon(Icons.account_balance_wallet_rounded, color: AppColors.success, size: 24),
                                           ),
-                                          const SizedBox(width: 10),
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text("إدارة الديون والفواتير", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.getTextPrimary(isDark))),
-                                              Text("انقر للاستعراض والتحصيل والسداد", style: TextStyle(fontSize: 11, color: AppColors.getTextMuted(isDark))),
-                                            ],
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  "إجمالي الفلوس اللي ليا بره (لنا)",
+                                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.success),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  alignment: Alignment.centerRight,
+                                                  child: Text(
+                                                    "${currencyFormatter.format(totalOutsideMoney)} ج.م",
+                                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.success),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  "مجموع ديون البيع الآجل + أقساط الأجهزة",
+                                                  style: TextStyle(fontSize: 10, color: AppColors.getTextMuted(isDark)),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ],
                                       ),
-                                      const Icon(Icons.chevron_left_rounded, color: AppColors.primaryLight),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 14),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Container(
-                                          padding: const EdgeInsets.all(10),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.success.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(10),
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              const Text("ديون العملاء (لنا)", style: TextStyle(fontSize: 11, color: AppColors.success, fontWeight: FontWeight.w600)),
-                                              const SizedBox(height: 4),
-                                              Text("${currencyFormatter.format(stats?.customerDebtsTotal ?? 0)} ج.م", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.success)),
-                                            ],
+                                    ),
+
+                                    const SizedBox(height: 12),
+
+                                    // 2. Distinct Sub-Cards: Pure Credit (آجل) vs Installments (تقسيط)
+                                    Row(
+                                      children: [
+                                        // Pure Credit Sub-Card
+                                        Expanded(
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(12),
+                                            onTap: () {
+                                              Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen()));
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF59E0B).withOpacity(0.08),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                    children: [
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFFF59E0B).withOpacity(0.2),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                        ),
+                                                        child: const Text(
+                                                          "آجل فقط",
+                                                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFFD97706)),
+                                                        ),
+                                                      ),
+                                                      const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFFD97706)),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  const Text(
+                                                    "ديون المبيعات الآجلة",
+                                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    alignment: Alignment.centerRight,
+                                                    child: Text(
+                                                      "${currencyFormatter.format(creditDebts)} ج.م",
+                                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFFD97706)),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    creditInvoicesCount > 0 ? "$creditInvoicesCount فاتورة مستحقة" : "فواتير آجلة غير مقسطة",
+                                                    style: TextStyle(fontSize: 9.5, color: AppColors.getTextMuted(isDark)),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Container(
-                                          padding: const EdgeInsets.all(10),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.danger.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(10),
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              const Text("مستحقات الموردين (علينا)", style: TextStyle(fontSize: 11, color: AppColors.danger, fontWeight: FontWeight.w600)),
-                                              const SizedBox(height: 4),
-                                              Text("${currencyFormatter.format(stats?.supplierDebtsTotal ?? 0)} ج.م", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.danger)),
-                                            ],
+                                        const SizedBox(width: 10),
+                                        // Installments Sub-Card
+                                        Expanded(
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(12),
+                                            onTap: () {
+                                              Navigator.push(context, MaterialPageRoute(builder: (_) => const InstallmentsScreen()));
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF6366F1).withOpacity(0.08),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.3)),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                    children: [
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFF6366F1).withOpacity(0.2),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                        ),
+                                                        child: const Text(
+                                                          "تقسيط",
+                                                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFF4F46E5)),
+                                                        ),
+                                                      ),
+                                                      const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF4F46E5)),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  const Text(
+                                                    "أقساط الأجهزة",
+                                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    alignment: Alignment.centerRight,
+                                                    child: Text(
+                                                      "${currencyFormatter.format(installmentDebts)} ج.م",
+                                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF4F46E5)),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    installmentContractsCount > 0 ? "$installmentContractsCount عقد تقسيط" : "عقود وجداول أقساط",
+                                                    style: TextStyle(fontSize: 9.5, color: AppColors.getTextMuted(isDark)),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
                                           ),
                                         ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(height: 10),
+
+                                    // 3. Supplier Debts Row (علينا للموردين)
+                                    InkWell(
+                                      borderRadius: BorderRadius.circular(10),
+                                      onTap: () {
+                                        Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen()));
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.danger.withOpacity(0.08),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: AppColors.danger.withOpacity(0.2)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(6),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.danger.withOpacity(0.15),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(Icons.local_shipping_rounded, color: AppColors.danger, size: 16),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    "مستحقات الموردين والشركات (علينا)",
+                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.danger),
+                                                  ),
+                                                  Text(
+                                                    "فواتير بضاعة مؤجلة السداد للموردين",
+                                                    style: TextStyle(fontSize: 9.5, color: AppColors.getTextMuted(isDark)),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Flexible(
+                                              child: FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(
+                                                  "${currencyFormatter.format(stats?.supplierDebtsTotal ?? 0)} ج.م",
+                                                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.danger),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            const Icon(Icons.chevron_left_rounded, size: 18, color: AppColors.danger),
+                                          ],
+                                        ),
                                       ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
 
                           const SizedBox(height: 12),

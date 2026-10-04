@@ -237,13 +237,18 @@
             <div class="kpi-card kpi-card-debts" style="cursor: pointer;" @onclick='() => Nav.NavigateTo("debts")' title="انقر لفتح شاشة فواتير الديون والتحصيل">
                 <div class="kpi-card-header">
                     <div class="kpi-icon-wrapper text-red-bg"><i class="fa-solid fa-file-invoice-dollar"></i></div>
-                    <span class="kpi-label">ديون العملاء (ليا بره)</span>
+                    <span class="kpi-label">إجمالي المستحقات (ليا بره)</span>
                 </div>
                 <div class="kpi-value text-red">@data.TotalCustomerDebts.ToString("N2") <span class="kpi-currency">ج.م</span></div>
-                <div class="kpi-tags">
-                    <span class="kpi-tag kpi-tag-debt"><i class="fa-solid fa-triangle-exclamation"></i> غير مسددة</span>
+                <div class="kpi-tags" style="gap: 0.35rem;">
+                    <span class="kpi-tag" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); font-weight: 700;">
+                        <i class="fa-solid fa-clock"></i> آجل: @data.TotalCustomerCreditDebts.ToString("N0")
+                    </span>
+                    <span class="kpi-tag" style="background: rgba(99, 102, 241, 0.15); color: var(--accent-indigo); font-weight: 700;">
+                        <i class="fa-solid fa-file-contract"></i> تقسيط: @data.TotalInstallmentDebts.ToString("N0")
+                    </span>
                 </div>
-                <div class="kpi-footer"><i class="fa-solid fa-arrow-up-right-from-square"></i> @data.CustomerDebtsCount فاتورة (انقر للتحصيل)</div>
+                <div class="kpi-footer"><i class="fa-solid fa-arrow-up-right-from-square"></i> @data.CustomerCreditDebtsCount فاتورة آجل + @data.InstallmentContractsCount عقد تقسيط</div>
             </div>
 
             <!-- 5. إجمالي المشتريات -->
@@ -440,15 +445,15 @@
                         </div>
                         <div>
                             <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">
-                                ملخص الديون والمستحقات الخارجية (الديون اللي ليا بره)
+                                ملخص ديون المبيعات الآجلة (حسابات الآجل غير المقسطة)
                             </h3>
-                            <span class="card-sub-info">متابعة الفواتير الآجلة والعملاء الأكثر مديونية مع إمكانية التحصيل السريع</span>
+                            <span class="card-sub-info">متابعة الفواتير الآجلة والعملاء الأكثر مديونية مع إمكانية التحصيل السريع (منفصلة تماماً عن عقود وأقساط الأجهزة)</span>
                         </div>
                     </div>
 
                     <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
                         <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--accent-red); font-size: 0.85rem; padding: 0.4rem 0.85rem;">
-                            إجمالي الديون: @data.TotalCustomerDebts.ToString("N2") ج.م (@data.CustomerDebtsCount فاتورة)
+                            إجمالي الديون الآجلة: @data.TotalCustomerCreditDebts.ToString("N2") ج.م (@data.CustomerCreditDebtsCount فاتورة آجل)
                         </span>
                         <NavLink href="debts" class="btn btn-primary-custom" style="padding: 0.45rem 1rem; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;">
                             <i class="fa-solid fa-arrow-up-right-from-square"></i>

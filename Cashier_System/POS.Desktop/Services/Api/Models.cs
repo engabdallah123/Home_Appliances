@@ -144,6 +144,7 @@ namespace POS.Desktop.Services.Api
         public bool HasSerialNumber { get; set; } = false;
     }
     public record UnitDto(Guid Id, string NameAr, string NameEn, string Symbol);
+    public record CreateUnitRequest(string NameAr, string NameEn, string Symbol);
     public record SupplierDto(Guid Id, string Name, string Phone, string? Email, string? Address, string? ContactPerson);
     public record CustomerDto(Guid Id, string Name, string Phone, string? Email, string? Address, int LoyaltyPoints, decimal Balance);
     public record CreateCustomerRequest(string Name, string Phone, string? Email = null, string? Address = null);
@@ -307,7 +308,13 @@ namespace POS.Desktop.Services.Api
         decimal CashSalesAmount = 0,
         decimal CreditSalesAmount = 0,
         decimal DebtCollectionsAmount = 0,
-        decimal RealizedRevenue = 0)
+        decimal RealizedRevenue = 0,
+        decimal TotalCustomerCreditDebts = 0,
+        int CustomerCreditDebtsCount = 0,
+        decimal TotalInstallmentDebts = 0,
+        int InstallmentContractsCount = 0,
+        decimal OverdueInstallmentsAmount = 0,
+        int OverdueInstallmentsCount = 0)
     {
         public int LowStockCount => LowStockProductsCount;
     }

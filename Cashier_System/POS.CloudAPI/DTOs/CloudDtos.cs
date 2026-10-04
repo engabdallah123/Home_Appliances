@@ -40,7 +40,11 @@ namespace POS.CloudAPI.DTOs
         List<CloudPurchaseSummaryDto> RecentPurchases,
         decimal TodayWasteLossAmount = 0,
         decimal MonthWasteLossAmount = 0,
-        decimal TotalWasteLossAmount = 0);
+        decimal TotalWasteLossAmount = 0,
+        decimal CustomerCreditDebtsTotal = 0,
+        decimal InstallmentDebtsTotal = 0,
+        int CustomerCreditDebtsCount = 0,
+        int InstallmentContractsCount = 0);
 
     // Purchases
     public record CreateCloudPurchaseItemRequest(
@@ -359,7 +363,14 @@ namespace POS.CloudAPI.DTOs
         int ShelfLifeDays,
         int ExpiryAlertDays,
         decimal ReorderLevel,
-        bool TrackExpiry);
+        bool TrackExpiry,
+        Guid? BrandId = null,
+        string? BrandName = null,
+        string? ModelNumber = null,
+        string? Color = null,
+        int WarrantyPeriodMonths = 12,
+        string? MaintenanceAgent = null,
+        bool HasSerialNumber = false);
 
     public record PushCatalogRequest(
         List<CatalogSupplierItem>? Suppliers,
@@ -433,7 +444,11 @@ namespace POS.CloudAPI.DTOs
         string? MonthlySalesJson,
         decimal TodayWasteLoss = 0,
         decimal MonthWasteLoss = 0,
-        decimal TotalWasteLoss = 0);
+        decimal TotalWasteLoss = 0,
+        decimal CustomerCreditDebtsTotal = 0,
+        decimal InstallmentDebtsTotal = 0,
+        int CustomerCreditDebtsCount = 0,
+        int InstallmentContractsCount = 0);
 
     public record SyncResultDto(
         bool Success,
@@ -624,10 +639,15 @@ namespace POS.CloudAPI.DTOs
         int NumberOfMonths = 12,
         // Reservation
         bool IsReserved = false,
-        DateTime? TargetDeliveryDate = null);
+        DateTime? TargetDeliveryDate = null,
+        int ReservationStatus = 0);
 
     public record PayCloudInstallmentRequest(
         decimal Amount,
+        string? Notes = null);
+
+    public record UpdateReservationStatusRequest(
+        int Status,
         string? Notes = null);
 
     public record CloudSaleItemDto(
@@ -674,7 +694,8 @@ namespace POS.CloudAPI.DTOs
         string? SyncError,
         int ItemsCount,
         DateTime CreatedAt,
-        List<CloudSaleItemDto> Items);
+        List<CloudSaleItemDto> Items,
+        int ReservationStatus = 0);
 
     public record CloudSaleSyncDto(
         Guid Id,
@@ -704,7 +725,8 @@ namespace POS.CloudAPI.DTOs
         int NumberOfMonths,
         bool IsReserved,
         DateTime? TargetDeliveryDate,
-        List<CloudSaleItemDto> Items);
+        List<CloudSaleItemDto> Items,
+        int ReservationStatus = 0);
 
     public record CloudSyncStatusDto(
         bool HasPending,
@@ -715,7 +737,8 @@ namespace POS.CloudAPI.DTOs
         bool HasPendingCategories,
         DateTime ServerTime,
         bool HasPendingSales = false,
-        bool HasPendingProducts = false);
+        bool HasPendingProducts = false,
+        bool HasPendingBrands = false);
 
     // Sales Push DTOs
     public record PushSaleItemDto(
@@ -761,9 +784,34 @@ namespace POS.CloudAPI.DTOs
         int NumberOfMonths,
         bool IsReserved,
         DateTime? TargetDeliveryDate,
-        List<PushSaleItemDto> Items);
+        List<PushSaleItemDto> Items,
+        int ReservationStatus = 0);
 
     public record PushSalesRequest(List<PushSaleDto> Sales);
+
+    // Brands Push DTOs
+    public record PushBrandDto(
+        Guid Id,
+        string Name,
+        string? NameAr,
+        string? NameEn,
+        string? Description,
+        string? OriginCountry,
+        string? AgentContactNumber,
+        bool IsActive);
+
+    public record PushBrandsRequest(List<PushBrandDto> Brands);
+
+    public record PendingCloudBrandDto(
+        Guid Id,
+        string Name,
+        string? NameAr,
+        string? NameEn,
+        string? Description,
+        string? OriginCountry,
+        string? AgentContactNumber,
+        bool IsActive,
+        DateTime CreatedAt);
 
     // Offers Push DTOs
     public record PushOfferItemDto(

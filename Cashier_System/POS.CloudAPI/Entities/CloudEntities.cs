@@ -339,6 +339,15 @@ namespace POS.CloudAPI.Entities
         public decimal CustomerDebtsTotal { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
+        public decimal CustomerCreditDebtsTotal { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal InstallmentDebtsTotal { get; set; }
+
+        public int CustomerCreditDebtsCount { get; set; }
+        public int InstallmentContractsCount { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
         public decimal SupplierDebtsTotal { get; set; }
 
         public int LowStockCount { get; set; }
@@ -746,6 +755,7 @@ namespace POS.CloudAPI.Entities
 
         public bool IsReserved { get; set; }
         public DateTime? TargetDeliveryDate { get; set; }
+        public int ReservationStatus { get; set; } = 0;
 
         // Sync Metadata
         public SyncStatus SyncStatus { get; set; } = SyncStatus.PendingSync;
