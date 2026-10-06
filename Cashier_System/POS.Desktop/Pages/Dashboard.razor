@@ -732,6 +732,17 @@
             </div>
         </div>
     }
+    else
+    {
+        <div class="empty-state-card" style="text-align: center; padding: 3.5rem 1.5rem; background: var(--bg-card); border-radius: 14px; border: 1px solid var(--border-color); margin: 1.5rem 0;">
+            <i class="fa-solid fa-triangle-exclamation fa-3x" style="color: var(--accent-amber); margin-bottom: 1rem;"></i>
+            <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">تعذر تحميل بيانات لوحة التحكم</h3>
+            <p style="color: var(--text-secondary); max-width: 500px; margin: 0 auto 1.5rem; line-height: 1.6;">تأكد من تشغيل الخادم المحلي للبرنامج (WebAPI) وقاعدة البيانات، ثم اضغط على زر تحديث البيانات.</p>
+            <button class="btn btn-primary" style="padding: 0.6rem 1.75rem; font-weight: 700;" @onclick="RefreshDataAsync">
+                <i class="fa-solid fa-arrows-rotate me-2"></i> تحديث البيانات
+            </button>
+        </div>
+    }
 </div>
 
 <!-- All Top Selling Products Modal -->
@@ -831,10 +842,6 @@
         </div>
     </div>
 }
-
-}
-
-
 
 <style>
     .dashboard-container {
@@ -1476,11 +1483,32 @@
             var contractsTask = ApiClient.GetInstallmentContractsAsync();
             var upcomingTask = ApiClient.GetUpcomingInstallmentsAsync(daysAhead: 7);
 
-            await Task.WhenAll(dashTask, contractsTask, upcomingTask);
+            try
+            {
+                data = await dashTask;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching dashboard core metrics: {ex.Message}");
+            }
 
-            data = dashTask.Result;
-            installmentContracts = contractsTask.Result ?? new();
-            upcomingInstallments = upcomingTask.Result ?? new();
+            try
+            {
+                installmentContracts = (await contractsTask) ?? new();
+            }
+            catch
+            {
+                installmentContracts = new();
+            }
+
+            try
+            {
+                upcomingInstallments = (await upcomingTask) ?? new();
+            }
+            catch
+            {
+                upcomingInstallments = new();
+            }
         }
         catch (Exception ex)
         {

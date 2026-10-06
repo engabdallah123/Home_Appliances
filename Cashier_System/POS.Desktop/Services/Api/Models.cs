@@ -187,7 +187,9 @@ namespace POS.Desktop.Services.Api
         string? GuarantorNotes = null,
         decimal InterestPercentage = 0,
         int NumberOfMonths = 12,
-        DateTime? InstallmentStartDate = null);
+        DateTime? InstallmentStartDate = null,
+        string? CustomInvoiceNumber = null,
+        bool BypassStockCheck = false);
 
     public record DepletedBatchDto(
         Guid BatchId,
@@ -1031,6 +1033,7 @@ namespace POS.Desktop.Services.Api
         Guid? TargetCategoryId = null,
         Guid? TargetBrandId = null,
         List<CreateOfferItemRequest>? Items = null,
-        string? TitleAr = null);
+        string? TitleAr = null,
+        Guid? TargetProductId = null);
 }
 

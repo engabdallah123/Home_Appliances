@@ -89,6 +89,24 @@ class ApiClient {
     }
   }
 
+  Future<dynamic> patch(String endpoint, {dynamic body, bool requiresAuth = true}) async {
+    final baseUrl = await AppStorage.getBaseUrl();
+    final uri = _buildUri(baseUrl, endpoint);
+
+    try {
+      final headers = await _getHeaders(requiresAuth: requiresAuth);
+      final response = await http.patch(
+        uri,
+        headers: headers,
+        body: body != null ? jsonEncode(body) : null,
+      ).timeout(const Duration(seconds: 20));
+
+      return _handleResponse(response);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+
   Future<dynamic> delete(String endpoint, {bool requiresAuth = true}) async {
     final baseUrl = await AppStorage.getBaseUrl();
     final uri = _buildUri(baseUrl, endpoint);

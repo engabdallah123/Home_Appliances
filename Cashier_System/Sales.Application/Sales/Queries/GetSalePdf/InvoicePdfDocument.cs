@@ -121,10 +121,29 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                         }
 
                         // If installment summary exists
-                        if (_receipt.IsInstallment && !string.IsNullOrWhiteSpace(_receipt.InstallmentSummary))
+                        if (_receipt.IsInstallment)
                         {
-                            infoCol.Item().PaddingTop(3).Background(Colors.Grey.Lighten4).Padding(3).AlignCenter()
-                                .Text(FormatRtl(_receipt.InstallmentSummary)).FontSize(9.5f).Bold().FontColor(Colors.Blue.Darken3);
+                            infoCol.Item().PaddingTop(3).Border(1f).BorderColor(Colors.Indigo.Lighten2).Background(Colors.Indigo.Lighten5).Padding(5).Column(instBox =>
+                            {
+                                instBox.Item().AlignCenter().Text(FormatRtl("تفاصيل وثيقة البيع بالتقسيط")).FontSize(10f).ExtraBold().FontColor(Colors.Indigo.Darken3);
+                                instBox.Item().PaddingTop(2).Row(r =>
+                                {
+                                    r.RelativeItem().AlignRight().Text(FormatRtl($"أصل السعر النقدي: {_receipt.InstallmentTotalCashAmount ?? _receipt.SubTotal:N2} {_receipt.Currency}")).FontSize(9f).Bold();
+                                    r.RelativeItem().AlignCenter().Text(FormatRtl($"المقدم المدفوع: {_receipt.InstallmentDownPayment ?? _receipt.PaidAmount:N2} {_receipt.Currency}")).FontSize(9f).Bold().FontColor(Colors.Green.Darken2);
+                                    r.RelativeItem().AlignLeft().Text(FormatRtl($"نسبة الفائدة: {_receipt.InstallmentInterestPercentage ?? 0:G29}% (+{_receipt.InstallmentInterestAmount ?? 0:N2} {_receipt.Currency})")).FontSize(9f).Bold().FontColor(Colors.Amber.Darken3);
+                                });
+                                instBox.Item().PaddingTop(2).Row(r =>
+                                {
+                                    r.RelativeItem().AlignRight().Text(FormatRtl($"إجمالي الفاتورة بالتقسيط: {_receipt.TotalAmount:N2} {_receipt.Currency}")).FontSize(9.5f).ExtraBold().FontColor(Colors.Indigo.Darken4);
+                                    r.RelativeItem().AlignCenter().Text(FormatRtl($"المتبقي للأقساط: {_receipt.InstallmentRemainingAmount ?? (_receipt.TotalAmount - _receipt.PaidAmount):N2} {_receipt.Currency}")).FontSize(9f).Bold();
+                                    r.RelativeItem().AlignLeft().Text(FormatRtl($"القسط الشهري: {_receipt.MonthlyInstallmentAmount ?? 0:N2} {_receipt.Currency} ({_receipt.InstallmentMonths ?? 12} شهر)")).FontSize(9.5f).ExtraBold().FontColor(Colors.Indigo.Darken2);
+                                });
+                                if (!string.IsNullOrWhiteSpace(_receipt.GuarantorName))
+                                {
+                                    var gPhone = string.IsNullOrWhiteSpace(_receipt.GuarantorPhone) ? "-" : _receipt.GuarantorPhone;
+                                    instBox.Item().PaddingTop(2).AlignRight().Text(FormatRtl($"الضامن المعتمد: {_receipt.GuarantorName} - هاتف: {gPhone}")).FontSize(8.5f).SemiBold();
+                                }
+                            });
                         }
                     });
 

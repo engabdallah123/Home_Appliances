@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using POS.CloudAPI.Database;
+using POS.CloudAPI.Entities;
 using System.Security.Claims;
 
 namespace POS.CloudAPI.Controllers
@@ -44,9 +45,28 @@ namespace POS.CloudAPI.Controllers
 
             if (dbOffers.Any())
             {
+                var targetProductIds = dbOffers
+                    .Where(o => o.TargetProductId.HasValue)
+                    .Select(o => o.TargetProductId!.Value)
+                    .Distinct()
+                    .ToList();
+
+                var targetProducts = targetProductIds.Any()
+                    ? await _db.Products.AsNoTracking().Where(p => targetProductIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id)
+                    : new Dictionary<Guid, CloudProduct>();
+
                 var result = dbOffers.Select(o =>
                 {
-                    decimal origPrice = o.Items.Sum(i => i.Quantity * i.OriginalUnitPrice);
+                    decimal origPrice = 0;
+                    if (o.Items != null && o.Items.Any())
+                    {
+                        origPrice = o.Items.Sum(i => i.Quantity * i.OriginalUnitPrice);
+                    }
+                    else if (o.TargetProductId.HasValue && targetProducts.TryGetValue(o.TargetProductId.Value, out var tp))
+                    {
+                        origPrice = tp.SellingPrice;
+                    }
+
                     decimal discPrice = origPrice;
 
                     if (o.BundlePrice.HasValue && o.BundlePrice.Value > 0)
@@ -65,27 +85,31 @@ namespace POS.CloudAPI.Controllers
                     return new
                     {
                         Id = o.Id,
+                        Title = o.Title,
                         TitleAr = o.Title,
                         TitleEn = (string?)null,
                         Description = o.Description,
                         OfferType = o.OfferType,
                         Type = o.Type,
                         DiscountPercentage = (double)(o.DiscountPercentage ?? 0),
+                        DiscountPercent = (double)(o.DiscountPercentage ?? 0),
                         FixedDiscountAmount = (double)(o.FixedDiscountAmount ?? 0),
+                        DiscountAmount = (double)(o.FixedDiscountAmount ?? 0),
+                        BundlePrice = (double)(o.BundlePrice ?? 0),
+                        PackagePrice = (double)(o.BundlePrice ?? 0),
                         OriginalPrice = (double)origPrice,
                         DiscountedPrice = (double)discPrice,
-                        BundlePrice = (double)(o.BundlePrice ?? 0),
                         StartDate = o.StartDate,
                         EndDate = o.EndDate,
                         IsActive = o.IsActive,
                         IsCurrentlyValid = o.IsActive && o.StartDate <= DateTime.UtcNow && o.EndDate >= DateTime.UtcNow,
                         TargetProductId = o.TargetProductId,
-                        TargetProductName = o.TargetProductName,
+                        TargetProductName = o.TargetProductName ?? (o.TargetProductId.HasValue && targetProducts.TryGetValue(o.TargetProductId.Value, out var prod) ? prod.NameAr : null),
                         TargetCategoryId = o.TargetCategoryId,
                         TargetCategoryName = o.TargetCategoryName,
                         TargetBrandId = o.TargetBrandId,
                         TargetBrandName = o.TargetBrandName,
-                        Items = o.Items.Select(i => new
+                        Items = (o.Items ?? new List<CloudOfferItem>()).Select(i => new
                         {
                             Id = i.Id,
                             ProductId = i.ProductId,

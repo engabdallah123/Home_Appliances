@@ -86,10 +86,28 @@ namespace POS.CloudAPI.Controllers
                 }
             }
 
-            var totalAmount = subTotal - req.DiscountAmount + req.TaxAmount;
-            var paidAmount = req.PaidAmount;
-            if (paidAmount > totalAmount) paidAmount = totalAmount;
-            var remainingAmount = totalAmount - paidAmount;
+            var cashTotal = subTotal - req.DiscountAmount + req.TaxAmount;
+            bool isInst = req.IsInstallment || req.PaymentMethod == "Installment";
+
+            decimal totalAmount;
+            decimal paidAmount;
+            decimal remainingAmount;
+
+            if (isInst)
+            {
+                paidAmount = req.PaidAmount; // Down payment
+                var baseFinanced = Math.Max(0, cashTotal - paidAmount);
+                var interestAmount = Math.Round(baseFinanced * (req.InterestPercentage / 100m), 2);
+                totalAmount = cashTotal + interestAmount;
+                remainingAmount = baseFinanced + interestAmount;
+            }
+            else
+            {
+                totalAmount = cashTotal;
+                paidAmount = req.PaidAmount;
+                if (paidAmount > totalAmount) paidAmount = totalAmount;
+                remainingAmount = totalAmount - paidAmount;
+            }
 
             var sale = new CloudSale
             {
@@ -116,7 +134,7 @@ namespace POS.CloudAPI.Controllers
                 DeliveryAddress = req.DeliveryAddress,
                 DeliveryFloor = req.DeliveryFloor,
                 DeliveryFee = req.DeliveryFee,
-                IsInstallment = req.IsInstallment,
+                IsInstallment = isInst,
                 GuarantorName = req.GuarantorName,
                 GuarantorPhone = req.GuarantorPhone,
                 InterestPercentage = req.InterestPercentage,
@@ -130,8 +148,8 @@ namespace POS.CloudAPI.Controllers
 
             _db.Sales.Add(sale);
 
-            // Record customer debt if remaining balance exists
-            if (remainingAmount > 0 && req.CustomerId.HasValue && req.CustomerId != Guid.Empty)
+            // Record customer debt ONLY for credit (آجل) sales - NEVER for installments!
+            if (!isInst && req.PaymentMethod != "Installment" && remainingAmount > 0 && req.CustomerId.HasValue && req.CustomerId != Guid.Empty)
             {
                 _db.DebtItems.Add(new CloudDebtItem
                 {
@@ -194,7 +212,10 @@ namespace POS.CloudAPI.Controllers
                     i.Discount,
                     i.Tax,
                     i.Total)).ToList(),
-                sale.ReservationStatus);
+                sale.ReservationStatus,
+                sale.InterestPercentage,
+                sale.GuarantorName,
+                sale.GuarantorPhone);
 
             return CreatedAtAction(nameof(GetById), new { id = sale.Id }, dto);
         }
@@ -221,7 +242,10 @@ namespace POS.CloudAPI.Controllers
 
             if (isReserved.HasValue)
             {
-                query = query.Where(s => s.IsReserved == isReserved.Value);
+                if (isReserved.Value)
+                    query = query.Where(s => s.IsReserved || s.ReservationStatus > 0);
+                else
+                    query = query.Where(s => !s.IsReserved && s.ReservationStatus == 0);
             }
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -268,7 +292,10 @@ namespace POS.CloudAPI.Controllers
                     s.Items.Count,
                     s.CreatedAt,
                     new List<CloudSaleItemDto>(),
-                    s.ReservationStatus))
+                    s.ReservationStatus,
+                    s.InterestPercentage,
+                    s.GuarantorName,
+                    s.GuarantorPhone))
                 .ToListAsync();
 
             return Ok(sales);
@@ -330,7 +357,10 @@ namespace POS.CloudAPI.Controllers
                     i.Discount,
                     i.Tax,
                     i.Total)).ToList(),
-                sale.ReservationStatus);
+                sale.ReservationStatus,
+                sale.InterestPercentage,
+                sale.GuarantorName,
+                sale.GuarantorPhone);
 
             return Ok(dto);
         }
@@ -354,7 +384,7 @@ namespace POS.CloudAPI.Controllers
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
-                DebtType = "Customer",
+                DebtType = "Installment",
                 ReferenceId = sale.Id,
                 Amount = payAmt,
                 Notes = req.Notes ?? $"سداد قسط مبيعات رقم {sale.InvoiceNumber}",
@@ -375,6 +405,7 @@ namespace POS.CloudAPI.Controllers
         }
 
         [HttpPost("{id:guid}/reservation-status")]
+        [HttpPatch("{id:guid}/reservation-status")]
         public async Task<IActionResult> UpdateReservationStatus(Guid id, [FromBody] UpdateReservationStatusRequest req)
         {
             var tenantId = GetTenantId();
@@ -384,6 +415,10 @@ namespace POS.CloudAPI.Controllers
             if (sale == null) return NotFound(new { message = "فاتورة الحجز غير موجودة." });
 
             sale.ReservationStatus = req.Status;
+            if (req.Status == 0 || req.Status == 3)
+            {
+                sale.IsReserved = false;
+            }
             sale.SyncStatus = SyncStatus.PendingSync;
 
             if (!string.IsNullOrWhiteSpace(req.Notes))

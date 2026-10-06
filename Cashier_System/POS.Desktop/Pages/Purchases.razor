@@ -1798,7 +1798,7 @@
     protected override async Task OnInitializedAsync()
     {
         DraftState.OnDraftChanged += OnDraftChangedHandler;
-        CloudSync.OnSyncStateChanged += OnSyncStateChangedHandler;
+        CloudSync.OnDataImported += OnDataImportedHandler;
         await LoadData();
     }
 
@@ -1807,7 +1807,7 @@
         InvokeAsync(StateHasChanged);
     }
 
-    private async void OnSyncStateChangedHandler()
+    private async void OnDataImportedHandler()
     {
         await InvokeAsync(async () =>
         {
@@ -1819,7 +1819,7 @@
     public void Dispose()
     {
         DraftState.OnDraftChanged -= OnDraftChangedHandler;
-        CloudSync.OnSyncStateChanged -= OnSyncStateChangedHandler;
+        CloudSync.OnDataImported -= OnDataImportedHandler;
     }
 
     private async Task TriggerCloudSync()

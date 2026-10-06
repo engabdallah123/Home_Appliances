@@ -102,6 +102,10 @@ class _OffersScreenState extends State<OffersScreen> {
                   _buildFilterChip(isDark, "🎁 البكجات المجمعة", "BundlePackage"),
                   const SizedBox(width: 8),
                   _buildFilterChip(isDark, "🏷️ خصومات الماركات", "BrandDiscount"),
+                  const SizedBox(width: 8),
+                  _buildFilterChip(isDark, "📂 خصومات التصنيفات", "CategoryDiscount"),
+                  const SizedBox(width: 8),
+                  _buildFilterChip(isDark, "📦 عروض المنتجات", "ProductDiscount"),
                 ],
               ),
             ),
@@ -184,10 +188,26 @@ class _OffersScreenState extends State<OffersScreen> {
     final desc = o['description'] ?? '';
     final offerType = o['offerType'] ?? '';
     final isBundle = offerType == 'BundlePackage';
+    final isBrand = offerType == 'BrandDiscount';
+    final isCategory = offerType == 'CategoryDiscount';
+    final isProduct = offerType == 'ProductDiscount';
     final discount = (o['discountPercentage'] as num?)?.toDouble() ?? 0;
     final origPrice = (o['originalPrice'] as num?)?.toDouble() ?? 0;
     final discPrice = (o['discountedPrice'] as num?)?.toDouble() ?? 0;
     final items = (o['items'] as List?) ?? [];
+
+    String bannerLabel;
+    if (isBundle) {
+      bannerLabel = "بكج أجهزة مجمّع 🎁";
+    } else if (isBrand) {
+      bannerLabel = "خصم الماركة 🏷️ ${o['targetBrandName'] ?? ''}".trim();
+    } else if (isCategory) {
+      bannerLabel = "خصم التصنيف 📂 ${o['targetCategoryName'] ?? ''}".trim();
+    } else if (isProduct) {
+      bannerLabel = "خصم المنتج 📦 ${o['targetProductName'] ?? ''}".trim();
+    } else {
+      bannerLabel = "عرض ترويجي 🏷️";
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -218,7 +238,7 @@ class _OffersScreenState extends State<OffersScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    isBundle ? "بكج أجهزة مجمّع 🎁" : "خصم الماركة 🏷️",
+                    bannerLabel,
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                     overflow: TextOverflow.ellipsis,
                   ),

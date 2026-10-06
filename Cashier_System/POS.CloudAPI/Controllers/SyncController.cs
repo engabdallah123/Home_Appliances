@@ -195,6 +195,91 @@ namespace POS.CloudAPI.Controllers
             return Ok(new { success = true, syncStatus = "SyncFailed" });
         }
 
+        [HttpPost("items/{entityType}/{id:guid}/dismiss")]
+        public async Task<IActionResult> DismissPendingItem(string entityType, Guid id)
+        {
+            var tenant = await AuthenticateSyncClientAsync();
+            if (tenant == null) return Unauthorized();
+
+            bool found = false;
+            string details = "";
+
+            switch (entityType?.Trim().ToLower())
+            {
+                case "purchase":
+                    var p = await _db.Purchases.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenant.Id);
+                    if (p != null)
+                    {
+                        p.SyncStatus = SyncStatus.SyncFailed;
+                        p.SyncAttempts = 99;
+                        p.SyncError = "تم إلغاء واستبعاد الفاتورة بواسطة كاشير الديسكتوب";
+                        details = $"إلغاء فاتورة مشتريات {p.InvoiceNumber}";
+                        found = true;
+                    }
+                    break;
+
+                case "sale":
+                    var s = await _db.Sales.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenant.Id);
+                    if (s != null)
+                    {
+                        s.SyncStatus = SyncStatus.SyncFailed;
+                        s.SyncAttempts = 99;
+                        s.SyncError = "تم إلغاء واستبعاد الفاتورة بواسطة كاشير الديسكتوب";
+                        details = $"إلغاء فاتورة مبيعات {s.InvoiceNumber}";
+                        found = true;
+                    }
+                    break;
+
+                case "debt":
+                case "debtpayment":
+                    var d = await _db.DebtPayments.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenant.Id);
+                    if (d != null)
+                    {
+                        d.SyncStatus = SyncStatus.SyncFailed;
+                        details = $"إلغاء سند سداد دين بقيمة {d.Amount}";
+                        found = true;
+                    }
+                    break;
+
+                case "expense":
+                    var exp = await _db.Expenses.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenant.Id);
+                    if (exp != null)
+                    {
+                        _db.Expenses.Remove(exp);
+                        details = $"حذف مصروف بقيمة {exp.Amount}";
+                        found = true;
+                    }
+                    break;
+
+                case "product":
+                    var prod = await _db.Products.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenant.Id);
+                    if (prod != null)
+                    {
+                        prod.SyncStatus = SyncStatus.Synced;
+                        details = $"استبعاد منتج {prod.NameAr}";
+                        found = true;
+                    }
+                    break;
+            }
+
+            if (!found) return NotFound(new { message = "العنصر غير موجود أو تمت معالجته بالفعل." });
+
+            _db.SyncRecords.Add(new SyncRecord
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenant.Id,
+                EntityType = entityType ?? "Unknown",
+                EntityId = id,
+                Direction = "CloudToLocal",
+                Status = "Dismissed",
+                Timestamp = DateTime.UtcNow,
+                Details = details
+            });
+
+            await _db.SaveChangesAsync();
+            return Ok(new { success = true, message = "تم إلغاء واستبعاد العنصر من المزامنة بنجاح." });
+        }
+
         // ==================== 1b. SALES SYNC (MOBILE POS -> LOCAL DESKTOP) ====================
 
         [HttpGet("sales/pending")]
@@ -207,7 +292,7 @@ namespace POS.CloudAPI.Controllers
             var pendingSales = await _db.Sales
                 .AsNoTracking()
                 .Include(s => s.Items)
-                .Where(s => s.TenantId == tenant.Id && s.SyncStatus == SyncStatus.PendingSync)
+                .Where(s => s.TenantId == tenant.Id && (s.SyncStatus == SyncStatus.PendingSync || (s.SyncStatus == SyncStatus.SyncFailed && s.SyncAttempts < 10)))
                 .OrderBy(s => s.CreatedAt)
                 .Take(50)
                 .ToListAsync();
@@ -424,12 +509,22 @@ namespace POS.CloudAPI.Controllers
             if (req.Offers == null)
                 return Ok(new { success = true, count = 0 });
 
+            var pushedIds = req.Offers.Select(x => x.Id).Where(id => id != Guid.Empty).ToHashSet();
+            var existingTenantOffers = await _db.Offers
+                .Include(x => x.Items)
+                .Where(x => x.TenantId == tenant.Id)
+                .ToListAsync();
+
+            var toRemove = existingTenantOffers.Where(x => !pushedIds.Contains(x.Id)).ToList();
+            if (toRemove.Any())
+            {
+                _db.Offers.RemoveRange(toRemove);
+            }
+
             int syncedCount = 0;
             foreach (var o in req.Offers)
             {
-                var existing = await _db.Offers
-                    .Include(x => x.Items)
-                    .FirstOrDefaultAsync(x => x.TenantId == tenant.Id && (x.Id == o.Id || x.Title == o.Title));
+                var existing = existingTenantOffers.FirstOrDefault(x => x.Id == o.Id || (x.Title == o.Title && !toRemove.Contains(x)));
 
                 if (existing != null)
                 {
@@ -644,12 +739,23 @@ namespace POS.CloudAPI.Controllers
             var existingDebts = await _db.DebtItems.Where(d => d.TenantId == tenant.Id).ToListAsync();
             _db.DebtItems.RemoveRange(existingDebts);
 
+            var installmentSaleIds = (await _db.Sales
+                .Where(s => s.TenantId == tenant.Id && (s.IsInstallment || s.PaymentMethod == "Installment"))
+                .Select(s => s.Id)
+                .ToListAsync())
+                .ToHashSet();
+
             if (req.Debts != null && req.Debts.Any())
             {
                 var newDebts = new List<CloudDebtItem>();
 
                 foreach (var d in req.Debts)
                 {
+                    if (d.Type == "Customer" && installmentSaleIds.Contains(d.ReferenceId))
+                    {
+                        continue;
+                    }
+
                     decimal pendingReduction = 0;
                     var key = (Type: (d.Type ?? "").ToLower(), d.ReferenceId);
                     if (pendingByRef.TryGetValue(key, out var pendingAmt))
@@ -933,24 +1039,32 @@ namespace POS.CloudAPI.Controllers
 
             foreach (var b in req.Brands)
             {
+                var effectiveName = !string.IsNullOrWhiteSpace(b.Name)
+                    ? b.Name.Trim()
+                    : (!string.IsNullOrWhiteSpace(b.NameAr) && !string.IsNullOrWhiteSpace(b.NameEn))
+                        ? $"{b.NameAr.Trim()} ({b.NameEn.Trim()})"
+                        : !string.IsNullOrWhiteSpace(b.NameAr)
+                            ? b.NameAr.Trim()
+                            : b.NameEn?.Trim() ?? "ماركة بدون اسم";
+
                 CloudBrand? existing = null;
                 if (byId.TryGetValue(b.Id, out var matchId))
                 {
                     existing = matchId;
                 }
-                else if (!string.IsNullOrWhiteSpace(b.Name) && byName.TryGetValue(b.Name.Trim().ToLower(), out var matchName))
+                else if (byName.TryGetValue(effectiveName.ToLower(), out var matchName))
                 {
                     existing = matchName;
                 }
 
                 if (existing != null)
                 {
-                    existing.Name = b.Name;
-                    existing.NameAr = b.NameAr;
-                    existing.NameEn = b.NameEn;
-                    existing.Description = b.Description;
-                    existing.OriginCountry = b.OriginCountry;
-                    existing.AgentContactNumber = b.AgentContactNumber;
+                    existing.Name = effectiveName;
+                    existing.NameAr = b.NameAr ?? existing.NameAr;
+                    existing.NameEn = b.NameEn ?? existing.NameEn;
+                    existing.Description = b.Description ?? existing.Description;
+                    existing.OriginCountry = b.OriginCountry ?? existing.OriginCountry;
+                    existing.AgentContactNumber = b.AgentContactNumber ?? existing.AgentContactNumber;
                     existing.IsActive = b.IsActive;
                     existing.SyncStatus = SyncStatus.Synced;
                     existing.UpdatedAt = DateTime.UtcNow;
@@ -961,7 +1075,7 @@ namespace POS.CloudAPI.Controllers
                     {
                         Id = b.Id != Guid.Empty ? b.Id : Guid.NewGuid(),
                         TenantId = tenant.Id,
-                        Name = b.Name,
+                        Name = effectiveName,
                         NameAr = b.NameAr,
                         NameEn = b.NameEn,
                         Description = b.Description,

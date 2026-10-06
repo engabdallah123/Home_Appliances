@@ -44,6 +44,24 @@
                 string syncTooltip = isOffline ? "الكمبيوتر غير متصل بالإنترنت" : (isSyncing ? "جاري مزامنة البيانات مع السحابة والموبايل..." : (CloudSync.LastSyncStatus ?? "السحابة متزامنة مع السيرفر"));
             }
 
+            <!-- Direct Header Sync Pill Button -->
+            <button type="button" 
+                    class="header-sync-pill-btn @(isSyncing ? "syncing" : "") @(isFailed ? "failed" : "") @(isOffline ? "offline" : "")"
+                    @onclick="HandleSyncClick"
+                    title="@(isSyncing ? "جاري المزامنة الآن - اضغط لعرض مراحل المزامنة والمعلقات وإمكانية الإلغاء" : (isOffline ? "غير متصل بالسحابة" : "السحابة متزامنة - اضغط للمزامنة الفورية"))">
+                <span class="sync-dot-pulse" style="background-color: @syncColor;"></span>
+                <i class="@syncIcon sync-pill-icon" style="color: @syncColor;"></i>
+                <span class="sync-pill-text" style="color: @(isSyncing ? "var(--accent-amber)" : (isFailed ? "var(--accent-red)" : (isOffline ? "#94a3b8" : "var(--accent-emerald)")));">
+                    @(isSyncing ? $"مزامنة ({CloudSync.CurrentProgressPercent}%)" : (isFailed ? "خطأ مزامنة" : (isOffline ? "أوفلاين" : "متزامن")))
+                </span>
+                @if (CloudSync.PendingQueue.Count > 0)
+                {
+                    <span class="sync-pending-chip" title="@($"{CloudSync.PendingQueue.Count} عمليات معلقة في الانتظار")">
+                        @CloudSync.PendingQueue.Count
+                    </span>
+                }
+            </button>
+
             <!-- User Profile Dropdown Trigger (Click opens card with Sync, Theme & Logout) -->
             <div class="dropdown-wrapper">
                 <button type="button" class="user-profile-btn @(openMenu == "user" ? "active" : "")" @onclick='() => ToggleMenu("user")' title="خيارات المستخدم، المزامنة، الثيم وتسجيل الخروج">
@@ -76,14 +94,25 @@
                         <div class="user-card-divider"></div>
 
                         <!-- 1. Cloud Sync Status & Action Inside User Options -->
-                        <button type="button" class="user-sync-menu-btn" @onclick="TriggerHeaderSync" disabled="@(CloudSync.IsSyncing || CloudSync.IsOffline)" title="@syncTooltip">
+                        <button type="button" class="user-sync-menu-btn" @onclick="HandleSyncClick" title="@syncTooltip">
                             <div class="user-sync-icon" style="color: @syncColor; background: @syncBg; border: 1px solid @syncBorder;">
                                 <i class="@syncIcon"></i>
                             </div>
                             <div class="user-sync-details">
-                                <span class="user-sync-title" style="color: @syncColor;">@syncLabel</span>
-                                <span class="user-sync-sub">@(isOffline ? "غير متصل بالإنترنت" : (isSyncing ? "جاري التحديث الآن..." : "اضغط للمزامنة الفورية مع السيرفر"))</span>
+                                <span class="user-sync-title" style="color: @syncColor;">
+                                    @(isSyncing ? $"جاري المزامنة ({CloudSync.CurrentProgressPercent}%)" : syncLabel)
+                                </span>
+                                <span class="user-sync-sub">@(isOffline ? "غير متصل بالإنترنت" : (isSyncing ? "اضغط لعرض العمليات الحية والمعلقات والإلغاء" : "اضغط للمزامنة الفورية مع السيرفر"))</span>
                             </div>
+                            @if (CloudSync.PendingQueue.Count > 0)
+                            {
+                                <span class="user-sync-badge-pill">@CloudSync.PendingQueue.Count معلق</span>
+                            }
+                        </button>
+
+                        <button type="button" class="dropdown-item-btn" @onclick="OpenSyncMonitor">
+                            <i class="fa-solid fa-list-check" style="color: var(--accent-cyan);"></i>
+                            <span>مركز المراقبة والمعلقات السحابية</span>
                         </button>
 
                         <div class="user-card-divider"></div>
@@ -387,9 +416,13 @@
 <!-- 3A Tech Customer Care & Direct Support Modal -->
 <SupportModal IsVisible="@showSupportModal" OnClose="() => showSupportModal = false" />
 
+<!-- Cloud Sync Monitor & Control Modal -->
+<SyncMonitorModal IsVisible="@showSyncMonitorModal" OnClose="() => showSyncMonitorModal = false" />
+
 @code {
     private bool isDarkMode = true;
     private bool showSupportModal = false;
+    private bool showSyncMonitorModal = false;
     private string? openMenu;
 
     private bool IsAdminOrManager =>
@@ -473,6 +506,13 @@
     [JSInvokable]
     public void OnGlobalEscPressed()
     {
+        if (showSyncMonitorModal)
+        {
+            showSyncMonitorModal = false;
+            StateHasChanged();
+            return;
+        }
+
         if (openMenu != null)
         {
             CloseAllMenus();
@@ -504,10 +544,30 @@
         InvokeAsync(StateHasChanged);
     }
 
+    private async Task HandleSyncClick()
+    {
+        if (CloudSync.IsSyncing)
+        {
+            CloseAllMenus();
+            showSyncMonitorModal = true;
+        }
+        else
+        {
+            CloseAllMenus();
+            _ = CloudSync.SyncNowAsync();
+        }
+        StateHasChanged();
+    }
+
+    private void OpenSyncMonitor()
+    {
+        CloseAllMenus();
+        showSyncMonitorModal = true;
+    }
+
     private async Task TriggerHeaderSync()
     {
-        await CloudSync.SyncNowAsync();
-        StateHasChanged();
+        await HandleSyncClick();
     }
 
     private async void OnAuthStateChanged(Task<AuthenticationState> task)

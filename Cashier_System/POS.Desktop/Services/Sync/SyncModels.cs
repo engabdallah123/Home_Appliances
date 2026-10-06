@@ -402,19 +402,61 @@ namespace POS.Desktop.Services.Sync
     // Brands Sync DTOs
     public record PushBrandDto(
         Guid Id,
-        string NameAr,
+        string Name,
+        string? NameAr,
         string? NameEn,
         string? Description,
-        string? LogoUrl,
+        string? OriginCountry,
+        string? AgentContactNumber,
         bool IsActive);
 
     public record PushBrandsRequest(List<PushBrandDto> Brands);
 
     public record PendingCloudBrandDto(
         Guid Id,
-        string NameAr,
+        string? Name,
+        string? NameAr,
         string? NameEn,
         string? Description,
-        string? LogoUrl,
-        bool IsActive);
+        string? OriginCountry = null,
+        string? AgentContactNumber = null,
+        bool IsActive = true,
+        DateTime? CreatedAt = null);
+
+    // ==========================================
+    // Monitoring, Stages & Control Models
+    // ==========================================
+    public enum SyncStageStatus
+    {
+        Pending,
+        InProgress,
+        Completed,
+        Skipped,
+        Failed
+    }
+
+    public class SyncStageItem
+    {
+        public string Id { get; set; } = string.Empty;
+        public string NameAr { get; set; } = string.Empty;
+        public string DescriptionAr { get; set; } = string.Empty;
+        public string Icon { get; set; } = "fa-solid fa-cloud";
+        public SyncStageStatus Status { get; set; } = SyncStageStatus.Pending;
+        public string? Details { get; set; }
+        public DateTime? StartedAt { get; set; }
+        public DateTime? FinishedAt { get; set; }
+    }
+
+    public class PendingSyncItemView
+    {
+        public Guid Id { get; set; }
+        public string EntityType { get; set; } = string.Empty; // "Purchase", "Sale", "Product", "DebtPayment", "Expense", "Brand"
+        public string Title { get; set; } = string.Empty;
+        public string Subtitle { get; set; } = string.Empty;
+        public string Details { get; set; } = string.Empty;
+        public decimal? Amount { get; set; }
+        public DateTime Date { get; set; } = DateTime.Now;
+        public string Source { get; set; } = "Mobile"; // "Mobile" or "Local"
+        public string Status { get; set; } = "Pending";
+    }
 }

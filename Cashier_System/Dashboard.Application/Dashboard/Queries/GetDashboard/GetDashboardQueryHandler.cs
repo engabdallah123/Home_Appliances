@@ -215,32 +215,58 @@ namespace Dashboard.Application.Dashboard.Queries.GetDashboard
             var topCustomerDebts = (await connection.QueryAsync<CustomerDebtSummaryResponse>(topDebtsSql)).ToList();
 
             // 2. Installment Debts (مستحقات عقود التقسيط والأقساط المطلوبة فقط)
-            const string installmentDebtsSql = """
-                SELECT 
-                    ISNULL(SUM(CASE WHEN (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) > 0 THEN (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) ELSE 0 END), 0) AS TotalInstallmentDebts,
-                    COUNT(1) AS InstallmentContractsCount
-                FROM [Sales].[InstallmentContracts] c
-                OUTER APPLY (
-                    SELECT SUM(PaidAmount) AS TotalPaid
-                    FROM [Sales].[InstallmentSchedules]
-                    WHERE ContractId = c.Id
-                ) sched
-                WHERE c.Status = 1 AND (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) > 0.001
-                """;
-            var installmentDebtsRaw = await connection.QuerySingleAsync(installmentDebtsSql);
-            decimal totalInstallmentDebts = Convert.ToDecimal(installmentDebtsRaw.TotalInstallmentDebts);
-            int installmentContractsCount = Convert.ToInt32(installmentDebtsRaw.InstallmentContractsCount);
+            decimal totalInstallmentDebts = 0;
+            int installmentContractsCount = 0;
+            try
+            {
+                const string installmentDebtsSql = """
+                    IF EXISTS (SELECT 1 FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE t.name = 'InstallmentContracts' AND s.name = 'Sales')
+                    BEGIN
+                        SELECT 
+                            ISNULL(SUM(CASE WHEN (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) > 0 THEN (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) ELSE 0 END), 0) AS TotalInstallmentDebts,
+                            COUNT(1) AS InstallmentContractsCount
+                        FROM [Sales].[InstallmentContracts] c
+                        OUTER APPLY (
+                            SELECT SUM(PaidAmount) AS TotalPaid
+                            FROM [Sales].[InstallmentSchedules]
+                            WHERE ContractId = c.Id
+                        ) sched
+                        WHERE c.Status = 1 AND (c.TotalInstallmentAmount - ISNULL(sched.TotalPaid, 0)) > 0.001
+                    END
+                    ELSE
+                    BEGIN
+                        SELECT CAST(0 AS decimal(18,2)) AS TotalInstallmentDebts, 0 AS InstallmentContractsCount
+                    END
+                    """;
+                var installmentDebtsRaw = await connection.QuerySingleAsync(installmentDebtsSql);
+                totalInstallmentDebts = Convert.ToDecimal(installmentDebtsRaw.TotalInstallmentDebts);
+                installmentContractsCount = Convert.ToInt32(installmentDebtsRaw.InstallmentContractsCount);
+            }
+            catch { }
 
-            const string overdueInstallmentsSql = """
-                SELECT 
-                    ISNULL(SUM(Amount - PaidAmount), 0) AS OverdueInstallmentsAmount,
-                    COUNT(1) AS OverdueInstallmentsCount
-                FROM [Sales].[InstallmentSchedules]
-                WHERE IsPaid = 0 AND DueDate <= GETUTCDATE()
-                """;
-            var overdueRaw = await connection.QuerySingleAsync(overdueInstallmentsSql);
-            decimal overdueInstallmentsAmount = Convert.ToDecimal(overdueRaw.OverdueInstallmentsAmount);
-            int overdueInstallmentsCount = Convert.ToInt32(overdueRaw.OverdueInstallmentsCount);
+            decimal overdueInstallmentsAmount = 0;
+            int overdueInstallmentsCount = 0;
+            try
+            {
+                const string overdueInstallmentsSql = """
+                    IF EXISTS (SELECT 1 FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE t.name = 'InstallmentSchedules' AND s.name = 'Sales')
+                    BEGIN
+                        SELECT 
+                            ISNULL(SUM(Amount - PaidAmount), 0) AS OverdueInstallmentsAmount,
+                            COUNT(1) AS OverdueInstallmentsCount
+                        FROM [Sales].[InstallmentSchedules]
+                        WHERE IsPaid = 0 AND DueDate <= GETUTCDATE()
+                    END
+                    ELSE
+                    BEGIN
+                        SELECT CAST(0 AS decimal(18,2)) AS OverdueInstallmentsAmount, 0 AS OverdueInstallmentsCount
+                    END
+                    """;
+                var overdueRaw = await connection.QuerySingleAsync(overdueInstallmentsSql);
+                overdueInstallmentsAmount = Convert.ToDecimal(overdueRaw.OverdueInstallmentsAmount);
+                overdueInstallmentsCount = Convert.ToInt32(overdueRaw.OverdueInstallmentsCount);
+            }
+            catch { }
 
             // Grand Total of Outside Money (إجمالي الفلوس اللي ليا بره = الآجل + التقسيط)
             decimal totalCustomerDebts = totalCustomerCreditDebts + totalInstallmentDebts;
@@ -268,34 +294,41 @@ namespace Dashboard.Application.Dashboard.Queries.GetDashboard
             decimal profitMarginPct = realizedRevenue > 0 ? (netProfit / realizedRevenue) * 100 : 0;
 
             // إحصائيات الخسائر والهالك بسعر التكلفة (شراء)
-            var weekStart = todayStart.AddDays(-7);
-            const string wasteSql = """
-                SELECT 
-                    ISNULL(SUM(CASE WHEN CreatedAt >= @TodayStart THEN TotalCost ELSE 0 END), 0) AS TodayLoss,
-                    ISNULL(SUM(CASE WHEN CreatedAt >= @WeekStart THEN TotalCost ELSE 0 END), 0) AS WeekLoss,
-                    ISNULL(SUM(CASE WHEN CreatedAt >= @MonthStart THEN TotalCost ELSE 0 END), 0) AS MonthLoss,
-                    ISNULL(SUM(TotalCost), 0) AS TotalLoss
-                FROM [Inventory].[InventoryWastes]
-                """;
+            WasteLossesResponse wasteLosses = new WasteLossesResponse(0, 0, 0, 0);
+            try
+            {
+                var weekStart = todayStart.AddDays(-7);
+                const string wasteSql = """
+                    IF EXISTS (SELECT 1 FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE t.name = 'InventoryWastes' AND s.name = 'Inventory')
+                    BEGIN
+                        SELECT 
+                            ISNULL(SUM(CASE WHEN CreatedAt >= @TodayStart THEN TotalCost ELSE 0 END), 0) AS TodayLoss,
+                            ISNULL(SUM(CASE WHEN CreatedAt >= @WeekStart THEN TotalCost ELSE 0 END), 0) AS WeekLoss,
+                            ISNULL(SUM(CASE WHEN CreatedAt >= @MonthStart THEN TotalCost ELSE 0 END), 0) AS MonthLoss,
+                            ISNULL(SUM(TotalCost), 0) AS TotalLoss
+                        FROM [Inventory].[InventoryWastes]
+                    END
+                    ELSE
+                    BEGIN
+                        SELECT CAST(0 AS decimal(18,2)) AS TodayLoss, CAST(0 AS decimal(18,2)) AS WeekLoss, CAST(0 AS decimal(18,2)) AS MonthLoss, CAST(0 AS decimal(18,2)) AS TotalLoss
+                    END
+                    """;
 
-            var wasteStats = await connection.QuerySingleAsync(wasteSql, new {
-                TodayStart = todayStart,
-                WeekStart = weekStart,
-                MonthStart = monthStart
-            });
+                var wasteStats = await connection.QuerySingleAsync(wasteSql, new {
+                    TodayStart = todayStart,
+                    WeekStart = weekStart,
+                    MonthStart = monthStart
+                });
 
-            var wasteLosses = new WasteLossesResponse(
-                Convert.ToDecimal(wasteStats.TodayLoss),
-                Convert.ToDecimal(wasteStats.WeekLoss),
-                Convert.ToDecimal(wasteStats.MonthLoss),
-                Convert.ToDecimal(wasteStats.TotalLoss));
+                wasteLosses = new WasteLossesResponse(
+                    Convert.ToDecimal(wasteStats.TodayLoss),
+                    Convert.ToDecimal(wasteStats.WeekLoss),
+                    Convert.ToDecimal(wasteStats.MonthLoss),
+                    Convert.ToDecimal(wasteStats.TotalLoss));
+            }
+            catch { }
 
-            const string notifsCountSql = """
-                SELECT COUNT(1)
-                FROM [Inventory].[ExpiryNotifications]
-                WHERE Status = 'Active' OR (Status = 'Snoozed' AND SnoozedUntil <= GETUTCDATE())
-                """;
-            int activeNotifsCount = await connection.QuerySingleAsync<int>(notifsCountSql);
+            int activeNotifsCount = 0; // Removed grocery expiry notifications for Home Appliances
 
             var dashboard = new DashboardResponse(
                 totalSales,

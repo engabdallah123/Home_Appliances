@@ -40,8 +40,8 @@ class LocalNotificationService {
 
     final androidDetails = AndroidNotificationDetails(
       isUrgent ? 'cashier_urgent_channel' : 'cashier_alerts_channel',
-      isUrgent ? 'تنبيهات عاجلة (صلاحية ونواقص)' : 'إشعارات الكاشير العامة',
-      channelDescription: 'قناة إشعارات تنبيهات الصلاحية، نواقص المخزن، وإغلاق الورديات',
+      isUrgent ? 'تنبيهات عاجلة (نواقص المخزن والورديات)' : 'إشعارات الكاشير العامة',
+      channelDescription: 'قناة إشعارات تنبيهات نواقص المخزن، وإغلاق الورديات',
       importance: isUrgent ? Importance.max : Importance.high,
       priority: isUrgent ? Priority.max : Priority.high,
       showWhen: true,

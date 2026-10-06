@@ -1,0 +1,831 @@
+@using global::POS.Desktop.Services.Sync
+@inject ICloudSyncService CloudSync
+@inject IJSRuntime JS
+@implements IDisposable
+
+@if (IsVisible)
+{
+    <div class="sync-modal-backdrop" @onclick="CloseModal">
+        <div class="sync-modal-window" @onclick:stopPropagation="true">
+            <!-- Modal Header -->
+            <div class="sync-modal-header">
+                <div class="header-title-wrap">
+                    <div class="header-icon-box @(CloudSync.IsSyncing ? "pulse-amber" : (CloudSync.IsOffline ? "box-gray" : "box-emerald"))">
+                        <i class="@(CloudSync.IsOffline ? "fa-solid fa-cloud-slash" : (CloudSync.IsSyncing ? "fa-solid fa-cloud-arrow-up fa-bounce" : "fa-solid fa-cloud"))"></i>
+                    </div>
+                    <div>
+                        <h3 class="modal-title">مركز المراقبة والتحكم في المزامنة السحابية</h3>
+                        <p class="modal-subtitle">
+                            @(CloudSync.IsOffline ? "غير متصل بالسيرفر السحابي" : (CloudSync.IsSyncing ? "جاري تنفيذ دورة المزامنة الحية الآن..." : "السيرفر متصل وكافة البيانات متزامنة"))
+                        </p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close-modal" @onclick="CloseModal" title="إغلاق [Esc]">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Active Sync Pulse / Action Banner -->
+            <div class="sync-status-banner @(CloudSync.IsSyncing ? "banner-syncing" : (CloudSync.IsOffline ? "banner-offline" : "banner-synced"))">
+                <div class="banner-content">
+                    <div class="banner-info">
+                        <div class="stage-headline">
+                            <span class="stage-label">الحالة الراهنة:</span>
+                            <strong class="stage-text">@(CloudSync.IsSyncing ? CloudSync.CurrentSyncStage : (CloudSync.LastSyncStatus ?? "السحابة متزامنة"))</strong>
+                        </div>
+                        @if (CloudSync.IsSyncing)
+                        {
+                            <div class="progress-wrap">
+                                <div class="progress-bar-bg">
+                                    <div class="progress-bar-fill" style="width: @(CloudSync.CurrentProgressPercent)%;"></div>
+                                </div>
+                                <span class="progress-percent">@(CloudSync.CurrentProgressPercent)%</span>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="banner-actions">
+                        @if (CloudSync.IsSyncing)
+                        {
+                            <button type="button" class="btn btn-skip-step" @onclick="SkipCurrentStep" title="تخطي هذه الخطوة والانتقال للتالية">
+                                <i class="fa-solid fa-forward-step me-1"></i>
+                                <span>تخطي الخطوة</span>
+                            </button>
+                            <button type="button" class="btn btn-cancel-sync" @onclick="CancelSync" title="إيقاف المزامنة الجارية فوراً">
+                                <i class="fa-solid fa-ban me-1"></i>
+                                <span>إيقاف المزامنة</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-start-sync" @onclick="TriggerManualSync" disabled="@(CloudSync.IsOffline)">
+                                <i class="fa-solid fa-rotate me-1"></i>
+                                <span>بدء المزامنة الآن</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <div class="sync-modal-tabs">
+                <button type="button" class="tab-btn @(activeTab == "stages" ? "active" : "")" @onclick='() => SetTab("stages")'>
+                    <i class="fa-solid fa-list-check me-1"></i>
+                    <span>مراحل المزامنة (@CloudSync.Stages.Count)</span>
+                </button>
+                <button type="button" class="tab-btn @(activeTab == "pending" ? "active" : "")" @onclick='() => SetTab("pending")'>
+                    <i class="fa-solid fa-clock-rotate-left me-1"></i>
+                    <span>المعلقات وقائمة الانتظار</span>
+                    @if (pendingCount > 0)
+                    {
+                        <span class="tab-badge">@pendingCount</span>
+                    }
+                </button>
+                <button type="button" class="tab-btn @(activeTab == "info" ? "active" : "")" @onclick='() => SetTab("info")'>
+                    <i class="fa-solid fa-network-wired me-1"></i>
+                    <span>حالة الخادم والتشخيص</span>
+                </button>
+            </div>
+
+            <!-- Tab 1: Stages List -->
+            @if (activeTab == "stages")
+            {
+                <div class="tab-panel stages-panel">
+                    <div class="stages-list">
+                        @if (CloudSync.Stages.Any())
+                        {
+                            @foreach (var stage in CloudSync.Stages)
+                            {
+                                <div class="stage-item @GetStageClass(stage.Status)">
+                                    <div class="stage-icon-col">
+                                        <div class="stage-icon-circle">
+                                            @if (stage.Status == SyncStageStatus.Completed)
+                                            {
+                                                <i class="fa-solid fa-check text-emerald"></i>
+                                            }
+                                            else if (stage.Status == SyncStageStatus.InProgress)
+                                            {
+                                                <i class="fa-solid fa-circle-notch fa-spin text-amber"></i>
+                                            }
+                                            else if (stage.Status == SyncStageStatus.Skipped)
+                                            {
+                                                <i class="fa-solid fa-forward-step text-muted"></i>
+                                            }
+                                            else if (stage.Status == SyncStageStatus.Failed)
+                                            {
+                                                <i class="fa-solid fa-xmark text-danger"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="@stage.Icon text-muted"></i>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="stage-info-col">
+                                        <div class="stage-name-row">
+                                            <span class="stage-title">@stage.NameAr</span>
+                                            <span class="stage-status-badge @GetStatusBadgeClass(stage.Status)">
+                                                @GetStatusText(stage.Status)
+                                            </span>
+                                        </div>
+                                        <p class="stage-desc">@stage.DescriptionAr</p>
+                                        @if (!string.IsNullOrWhiteSpace(stage.Details))
+                                        {
+                                            <div class="stage-details-box">
+                                                <i class="fa-solid fa-circle-info me-1"></i>
+                                                <span>@stage.Details</span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-cloud-arrow-up fa-2x text-muted"></i>
+                                <p>المراحل جاهزة. اضغط "بدء المزامنة" لتتبع الخطوات في الوقت الفعلي.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Tab 2: Pending Queue -->
+            @if (activeTab == "pending")
+            {
+                <div class="tab-panel pending-panel">
+                    <div class="pending-header-row">
+                        <span>قائمة البيانات المعلقة بالسحابة بانتظار السحب للديسكتوب أو المزامنة</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="RefreshPendingQueue" disabled="@isLoadingPending">
+                            <i class="fa-solid fa-arrows-rotate @(isLoadingPending ? "fa-spin" : "") me-1"></i>
+                            <span>تحديث القائمة</span>
+                        </button>
+                    </div>
+
+                    @if (isLoadingPending)
+                    {
+                        <div class="pending-loading">
+                            <i class="fa-solid fa-circle-notch fa-spin fa-2x text-blue"></i>
+                            <p>جاري استعلام المعلقات من السحابة...</p>
+                        </div>
+                    }
+                    else if (!CloudSync.PendingQueue.Any())
+                    {
+                        <div class="empty-state">
+                            <div class="check-circle-big">
+                                <i class="fa-solid fa-circle-check text-emerald"></i>
+                            </div>
+                            <h4>لا توجد أي عمليات معلقة!</h4>
+                            <p>كافة الفواتير والمشتريات والمبيعات متزامنة ومطابقة تماماً بين الديسكتوب وتطبيق الموبايل.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="pending-items-list">
+                            @foreach (var item in CloudSync.PendingQueue)
+                            {
+                                <div class="pending-card">
+                                    <div class="pending-card-header">
+                                        <div class="pending-type-tag @GetEntityTagClass(item.EntityType)">
+                                            @GetEntityTypeName(item.EntityType)
+                                        </div>
+                                        <span class="pending-source"><i class="fa-solid fa-mobile-screen-button me-1"></i>@item.Source</span>
+                                    </div>
+                                    <div class="pending-card-body">
+                                        <h5 class="pending-card-title">@item.Title</h5>
+                                        <p class="pending-card-sub">@item.Subtitle</p>
+                                        <div class="pending-card-details">@item.Details</div>
+                                    </div>
+                                    <div class="pending-card-actions">
+                                        <button type="button" class="btn btn-sm btn-dismiss" @onclick="() => DismissItem(item)" title="إلغاء واستبعاد هذا العنصر من المزامنة">
+                                            <i class="fa-solid fa-trash-can me-1 text-danger"></i>
+                                            <span>إلغاء واستبعاد</span>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-sync-one" @onclick="() => SyncOneItem(item)" title="مزامنة فورية لهذا العنصر">
+                                            <i class="fa-solid fa-bolt me-1 text-emerald"></i>
+                                            <span>مزامنة الآن</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- Tab 3: Diagnostics & Info -->
+            @if (activeTab == "info")
+            {
+                <div class="tab-panel info-panel">
+                    <div class="info-grid">
+                        <div class="info-card">
+                            <span class="info-card-label">رابط السيرفر السحابي</span>
+                            <div class="info-card-val text-blue">@CloudSyncService.ResolveCloudBaseUrl()</div>
+                            <span class="info-card-sub"><i class="fa-solid fa-link me-1"></i>سيرفر المزامنة النشط</span>
+                        </div>
+                        <div class="info-card">
+                            <span class="info-card-label">حالة الاتصال</span>
+                            <div class="info-card-val @(CloudSync.IsCloudReachable ? "text-emerald" : "text-danger")">
+                                @(CloudSync.IsCloudReachable ? "متصل ومتاح" : "غير متاح")
+                            </div>
+                            <span class="info-card-sub">فحص الاتصال والشبكة</span>
+                        </div>
+                        <div class="info-card">
+                            <span class="info-card-label">آخر مزامنة ناجحة</span>
+                            <div class="info-card-val text-amber">
+                                @(CloudSync.LastSyncTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "لم تتم بعد")
+                            </div>
+                            <span class="info-card-sub">توقيت الكاشير المحلي</span>
+                        </div>
+                        <div class="info-card">
+                            <span class="info-card-label">المزامنة التلقائية</span>
+                            <div class="info-card-val text-emerald">نشطة (كل 20 ثانية)</div>
+                            <span class="info-card-sub">تحديث دوري في الخلفية</span>
+                        </div>
+                    </div>
+
+                    <div class="advanced-actions-row">
+                        <button type="button" class="btn btn-secondary" @onclick="ForceFullCatalogSync" disabled="@(CloudSync.IsSyncing || CloudSync.IsOffline)">
+                            <i class="fa-solid fa-boxes-stacked me-1 text-cyan"></i>
+                            <span>مزامنة شاملة للكتالوج والأسعار (Force Push)</span>
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- Modal Footer -->
+            <div class="sync-modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseModal">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> إغلاق النافذة
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .sync-modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.72);
+        backdrop-filter: blur(6px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+        direction: rtl;
+        animation: fadeIn 0.2s ease-out;
+    }
+    @@keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    .sync-modal-window {
+        background: var(--bg-card, #1e293b);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: 16px;
+        width: 92%;
+        max-width: 820px;
+        max-height: 88vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+    }
+    .sync-modal-header {
+        padding: 1.1rem 1.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--border-color, #334155);
+        background: var(--bg-secondary, #0f172a);
+    }
+    .header-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+    }
+    .header-icon-box {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+    }
+    .box-emerald { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .pulse-amber { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); animation: pulseAnim 1.6s infinite; }
+    .box-gray { background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); }
+    @@keyframes pulseAnim {
+        0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+        50% { transform: scale(1.05); box-shadow: 0 0 12px rgba(245, 158, 11, 0.5); }
+    }
+    .modal-title {
+        font-size: 1.15rem;
+        font-weight: 800;
+        margin: 0;
+        color: var(--text-primary, #f8fafc);
+    }
+    .modal-subtitle {
+        font-size: 0.8rem;
+        color: var(--text-muted, #94a3b8);
+        margin: 0.2rem 0 0 0;
+    }
+    .btn-close-modal {
+        background: transparent;
+        border: none;
+        color: var(--text-muted, #94a3b8);
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 0.4rem;
+        border-radius: 8px;
+        transition: all 0.15s;
+    }
+    .btn-close-modal:hover {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    .sync-status-banner {
+        padding: 0.85rem 1.4rem;
+        border-bottom: 1px solid var(--border-color, #334155);
+    }
+    .banner-synced { background: rgba(16, 185, 129, 0.08); border-bottom-color: rgba(16, 185, 129, 0.25); }
+    .banner-syncing { background: rgba(245, 158, 11, 0.08); border-bottom-color: rgba(245, 158, 11, 0.25); }
+    .banner-offline { background: rgba(148, 163, 184, 0.08); border-bottom-color: rgba(148, 163, 184, 0.25); }
+    .banner-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .stage-headline {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+    }
+    .stage-label { color: var(--text-muted, #94a3b8); font-weight: 600; }
+    .stage-text { color: var(--text-primary, #f8fafc); font-weight: 800; }
+    .progress-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        margin-top: 0.35rem;
+    }
+    .progress-bar-bg {
+        width: 220px;
+        height: 7px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .progress-bar-fill {
+        height: 100%;
+        background: #f59e0b;
+        transition: width 0.3s ease;
+    }
+    .progress-percent {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #f59e0b;
+    }
+    .banner-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .btn-skip-step {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: 8px;
+        padding: 0.4rem 0.8rem;
+        font-weight: 700;
+        font-size: 0.82rem;
+        cursor: pointer;
+    }
+    .btn-cancel-sync {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 8px;
+        padding: 0.4rem 0.8rem;
+        font-weight: 700;
+        font-size: 0.82rem;
+        cursor: pointer;
+    }
+    .btn-start-sync {
+        background: var(--accent-emerald, #10b981);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.45rem 1rem;
+        font-weight: 700;
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+
+    .sync-modal-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--border-color, #334155);
+        background: var(--bg-secondary, #0f172a);
+        padding: 0 1rem;
+    }
+    .tab-btn {
+        padding: 0.75rem 1.1rem;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: var(--text-secondary, #cbd5e1);
+        font-weight: 700;
+        font-size: 0.85rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: all 0.15s;
+    }
+    .tab-btn.active {
+        color: var(--accent-blue, #38bdf8);
+        border-bottom-color: var(--accent-blue, #38bdf8);
+    }
+    .tab-badge {
+        background: #ef4444;
+        color: white;
+        font-size: 0.7rem;
+        padding: 0.1rem 0.45rem;
+        border-radius: 10px;
+        font-weight: 800;
+    }
+
+    .tab-panel {
+        padding: 1.25rem 1.4rem;
+        overflow-y: auto;
+        flex: 1;
+        max-height: calc(88vh - 230px);
+    }
+    .stages-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+    }
+    .stage-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.85rem;
+        background: var(--bg-secondary, #0f172a);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: 10px;
+        padding: 0.75rem 0.9rem;
+        transition: all 0.2s;
+    }
+    .stage-item.in-progress {
+        border-color: #f59e0b;
+        background: rgba(245, 158, 11, 0.05);
+    }
+    .stage-item.completed {
+        border-color: rgba(16, 185, 129, 0.3);
+    }
+    .stage-item.failed {
+        border-color: rgba(239, 68, 68, 0.4);
+    }
+    .stage-icon-circle {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.95rem;
+    }
+    .stage-info-col {
+        flex: 1;
+    }
+    .stage-name-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .stage-title {
+        font-weight: 750;
+        font-size: 0.88rem;
+        color: var(--text-primary, #f8fafc);
+    }
+    .stage-desc {
+        font-size: 0.76rem;
+        color: var(--text-muted, #94a3b8);
+        margin: 0.2rem 0 0 0;
+    }
+    .stage-details-box {
+        margin-top: 0.4rem;
+        font-size: 0.76rem;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.08);
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+    }
+    .stage-status-badge {
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 0.15rem 0.5rem;
+        border-radius: 6px;
+    }
+    .badge-completed { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+    .badge-progress { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .badge-pending { background: rgba(148, 163, 184, 0.1); color: #94a3b8; }
+    .badge-skipped { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+    .badge-failed { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+    /* Pending Panel */
+    .pending-header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.9rem;
+        font-size: 0.85rem;
+        color: var(--text-secondary, #cbd5e1);
+        font-weight: 600;
+    }
+    .pending-items-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    .pending-card {
+        background: var(--bg-secondary, #0f172a);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: 12px;
+        padding: 0.85rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .pending-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .pending-type-tag {
+        font-size: 0.72rem;
+        font-weight: 800;
+        padding: 0.2rem 0.5rem;
+        border-radius: 6px;
+    }
+    .tag-purchase { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+    .tag-sale { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+    .tag-debt { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .tag-expense { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .tag-product { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+    .pending-source {
+        font-size: 0.75rem;
+        color: var(--text-muted, #94a3b8);
+    }
+    .pending-card-title {
+        font-size: 0.92rem;
+        font-weight: 800;
+        color: var(--text-primary, #f8fafc);
+        margin: 0;
+    }
+    .pending-card-sub {
+        font-size: 0.78rem;
+        color: var(--text-secondary, #cbd5e1);
+        margin: 0.15rem 0 0 0;
+    }
+    .pending-card-details {
+        font-size: 0.76rem;
+        color: var(--text-muted, #94a3b8);
+        background: rgba(255, 255, 255, 0.04);
+        padding: 0.35rem 0.6rem;
+        border-radius: 6px;
+    }
+    .pending-card-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.6rem;
+        margin-top: 0.3rem;
+    }
+    .btn-dismiss {
+        background: rgba(239, 68, 68, 0.12);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 6px;
+        padding: 0.3rem 0.7rem;
+        font-weight: 700;
+        font-size: 0.78rem;
+        cursor: pointer;
+    }
+    .btn-sync-one {
+        background: rgba(16, 185, 129, 0.12);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 6px;
+        padding: 0.3rem 0.7rem;
+        font-weight: 700;
+        font-size: 0.78rem;
+        cursor: pointer;
+    }
+
+    /* Diagnostics info */
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.85rem;
+        margin-bottom: 1.25rem;
+    }
+    .info-card {
+        background: var(--bg-secondary, #0f172a);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: 12px;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    .info-card-label { font-size: 0.78rem; color: var(--text-muted, #94a3b8); font-weight: 600; }
+    .info-card-val { font-size: 1.1rem; font-weight: 800; }
+    .info-card-sub { font-size: 0.72rem; color: var(--text-muted, #94a3b8); }
+    .advanced-actions-row {
+        display: flex;
+        gap: 0.8rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1.5rem;
+        color: var(--text-muted, #94a3b8);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.8rem;
+    }
+    .check-circle-big { font-size: 3rem; }
+    .empty-state h4 { margin: 0; color: var(--text-primary, #f8fafc); font-size: 1.1rem; font-weight: 800; }
+    .empty-state p { margin: 0; max-width: 440px; font-size: 0.85rem; line-height: 1.4; }
+
+    .sync-modal-footer {
+        padding: 0.85rem 1.4rem;
+        border-top: 1px solid var(--border-color, #334155);
+        background: var(--bg-secondary, #0f172a);
+        display: flex;
+        justify-content: flex-end;
+    }
+</style>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string activeTab = "stages";
+    private bool isLoadingPending = false;
+    private int pendingCount => CloudSync.PendingQueue.Count;
+
+    protected override void OnInitialized()
+    {
+        CloudSync.OnSyncStateChanged += HandleSyncStateChanged;
+    }
+
+    private void HandleSyncStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible)
+        {
+            await RefreshPendingQueue();
+        }
+    }
+
+    private void SetTab(string tab)
+    {
+        activeTab = tab;
+        if (tab == "pending")
+        {
+            _ = RefreshPendingQueue();
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task TriggerManualSync()
+    {
+        _ = CloudSync.SyncNowAsync();
+        await Task.Yield();
+    }
+
+    private void CancelSync()
+    {
+        CloudSync.CancelSync();
+    }
+
+    private void SkipCurrentStep()
+    {
+        CloudSync.SkipCurrentStage();
+    }
+
+    private async Task RefreshPendingQueue()
+    {
+        isLoadingPending = true;
+        StateHasChanged();
+        try
+        {
+            await CloudSync.FetchPendingQueueAsync();
+        }
+        catch { }
+        finally
+        {
+            isLoadingPending = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DismissItem(PendingSyncItemView item)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"هل تريد بالتأكيد إلغاء واستبعاد {item.Title} من المزامنة نهائياً؟");
+        if (confirmed)
+        {
+            await CloudSync.DismissPendingItemAsync(item.EntityType, item.Id);
+            await RefreshPendingQueue();
+        }
+    }
+
+    private async Task SyncOneItem(PendingSyncItemView item)
+    {
+        await CloudSync.SyncSinglePendingItemAsync(item.EntityType, item.Id);
+        await RefreshPendingQueue();
+    }
+
+    private async Task ForceFullCatalogSync()
+    {
+        _ = CloudSync.SyncNowAsync(forceCatalogPush: true);
+        await Task.Yield();
+    }
+
+    private string GetStageClass(SyncStageStatus status) => status switch
+    {
+        SyncStageStatus.InProgress => "in-progress",
+        SyncStageStatus.Completed => "completed",
+        SyncStageStatus.Failed => "failed",
+        _ => ""
+    };
+
+    private string GetStatusBadgeClass(SyncStageStatus status) => status switch
+    {
+        SyncStageStatus.Completed => "badge-completed",
+        SyncStageStatus.InProgress => "badge-progress",
+        SyncStageStatus.Skipped => "badge-skipped",
+        SyncStageStatus.Failed => "badge-failed",
+        _ => "badge-pending"
+    };
+
+    private string GetStatusText(SyncStageStatus status) => status switch
+    {
+        SyncStageStatus.Completed => "مكتمل",
+        SyncStageStatus.InProgress => "جاري التنفيذ...",
+        SyncStageStatus.Skipped => "تم التخطي",
+        SyncStageStatus.Failed => "تعذر",
+        _ => "في الانتظار"
+    };
+
+    private string GetEntityTagClass(string type) => type?.ToLower() switch
+    {
+        "purchase" => "tag-purchase",
+        "sale" => "tag-sale",
+        "debtpayment" => "tag-debt",
+        "debt" => "tag-debt",
+        "expense" => "tag-expense",
+        "product" => "tag-product",
+        _ => "tag-purchase"
+    };
+
+    private string GetEntityTypeName(string type) => type?.ToLower() switch
+    {
+        "purchase" => "مشتريات موبايل",
+        "sale" => "مبيعات صالة (POS)",
+        "debtpayment" => "سداد دين عميل",
+        "debt" => "سداد دين",
+        "expense" => "مصروف تشغيل",
+        "product" => "منتج جديد",
+        _ => "عنصر معلق"
+    };
+
+    public void Dispose()
+    {
+        CloudSync.OnSyncStateChanged -= HandleSyncStateChanged;
+    }
+}

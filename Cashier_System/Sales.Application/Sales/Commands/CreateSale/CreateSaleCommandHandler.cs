@@ -66,7 +66,7 @@ namespace Sales.Application.Sales.Commands.CreateSale
 
             // 2. فحص إعدادات التنسيق وحظر المخزون السالب
             var settings = (await _settingsUnitOfWork.StoreSettingRepository.GetAllAsync()).FirstOrDefault();
-            var allowNegativeStock = settings?.AllowNegativeStock ?? false;
+            var allowNegativeStock = (settings?.AllowNegativeStock ?? false) || request.BypassStockCheck;
 
             // 3. التحقق من توفر رصيد المخزون لكل عنصر
             foreach (var itemReq in request.Items)
@@ -81,7 +81,9 @@ namespace Sales.Application.Sales.Commands.CreateSale
 
             // 4. إنشاء الفاتورة
             int orderNumber = shift.TotalInvoices + 1;
-            var invoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMddHHmmss}-{orderNumber:D3}";
+            var invoiceNumber = !string.IsNullOrWhiteSpace(request.CustomInvoiceNumber)
+                ? request.CustomInvoiceNumber.Trim()
+                : $"INV-{DateTime.UtcNow:yyyyMMddHHmmss}-{orderNumber:D3}";
 
             var saleResult = Sale.Create(
                 invoiceNumber, shift.CashierId, shift.Id,
@@ -108,29 +110,63 @@ namespace Sales.Application.Sales.Commands.CreateSale
             if (completeResult.IsFailure)
                 return Result<CreateSaleResult>.Failure(completeResult.Error);
 
-            if ((request.IsInstallment || request.PaymentMethod == "Installment") && request.CustomerId.HasValue)
+            if (request.IsInstallment || request.PaymentMethod == "Installment")
             {
-                var contractNumber = $"INST-{DateTime.UtcNow:yyyyMMdd}-{orderNumber:D3}";
-                var contractResult = global::Sales.Domain.Installments.Entities.InstallmentContract.Create(
-                    contractNumber,
-                    sale.Id,
-                    request.CustomerId.Value,
-                    string.IsNullOrWhiteSpace(request.GuarantorName) ? "بدون ضامن" : request.GuarantorName,
-                    string.IsNullOrWhiteSpace(request.GuarantorPhone) ? "-" : request.GuarantorPhone,
-                    sale.TotalAmount,
-                    request.PaidAmount,
-                    request.InterestPercentage,
-                    request.NumberOfMonths > 0 ? request.NumberOfMonths : 12,
-                    request.InstallmentStartDate ?? DateTime.UtcNow.AddMonths(1),
-                    request.GuarantorNationalId,
-                    request.GuarantorAddress,
-                    request.GuarantorNotes,
-                    request.Notes);
-
-                if (contractResult.IsSuccess)
+                Guid customerId = request.CustomerId ?? Guid.Empty;
+                if (customerId == Guid.Empty)
                 {
-                    await _salesUnitOfWork.InstallmentContractRepository.AddAsync(contractResult.Value!);
-                    sale.AttachInstallmentContract(contractResult.Value!.Id);
+                    var custName = !string.IsNullOrWhiteSpace(request.RecipientName)
+                        ? request.RecipientName.Trim()
+                        : "عميل تقسيط";
+                    var custPhone = !string.IsNullOrWhiteSpace(request.RecipientPhone)
+                        ? request.RecipientPhone.Trim()
+                        : "-";
+
+                    var existingCustomers = await _salesUnitOfWork.CustomerRepository.GetAllAsync();
+                    var matchedCust = existingCustomers.FirstOrDefault(c =>
+                        (!string.IsNullOrWhiteSpace(c.Phone) && custPhone != "-" && c.Phone.Trim() == custPhone) ||
+                        c.Name.Trim().Equals(custName, StringComparison.OrdinalIgnoreCase));
+
+                    if (matchedCust != null)
+                    {
+                        customerId = matchedCust.Id;
+                    }
+                    else
+                    {
+                        var newCustRes = global::Sales.Domain.Customers.Entities.Customer.Create(custName, custPhone, request.DeliveryAddress);
+                        if (newCustRes.IsSuccess)
+                        {
+                            await _salesUnitOfWork.CustomerRepository.AddAsync(newCustRes.Value!);
+                            await _salesUnitOfWork.SaveChangesAsync(cancellationToken);
+                            customerId = newCustRes.Value!.Id;
+                        }
+                    }
+                }
+
+                if (customerId != Guid.Empty)
+                {
+                    var contractNumber = $"INST-{DateTime.UtcNow:yyyyMMdd}-{orderNumber:D3}";
+                    var contractResult = global::Sales.Domain.Installments.Entities.InstallmentContract.Create(
+                        contractNumber,
+                        sale.Id,
+                        customerId,
+                        string.IsNullOrWhiteSpace(request.GuarantorName) ? "بدون ضامن" : request.GuarantorName,
+                        string.IsNullOrWhiteSpace(request.GuarantorPhone) ? "-" : request.GuarantorPhone,
+                        sale.TotalAmount,
+                        request.PaidAmount,
+                        request.InterestPercentage,
+                        request.NumberOfMonths > 0 ? request.NumberOfMonths : 12,
+                        request.InstallmentStartDate ?? DateTime.UtcNow.AddMonths(1),
+                        request.GuarantorNationalId,
+                        request.GuarantorAddress,
+                        request.GuarantorNotes,
+                        request.Notes);
+
+                    if (contractResult.IsSuccess)
+                    {
+                        await _salesUnitOfWork.InstallmentContractRepository.AddAsync(contractResult.Value!);
+                        sale.AttachInstallmentContract(contractResult.Value!.Id, contractResult.Value!.InterestAmount);
+                    }
                 }
             }
 

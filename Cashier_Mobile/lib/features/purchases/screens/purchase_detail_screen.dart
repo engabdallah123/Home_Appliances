@@ -178,13 +178,6 @@ class _PurchaseDetailScreenState extends State<PurchaseDetailScreen> {
                                               "${item.quantity} ${item.unit ?? 'قطعة'} × ${currencyFormatter.format(item.unitCost)} ج.م",
                                               style: TextStyle(color: textSecondary, fontSize: 12),
                                             ),
-                                            if (item.expiryDate != null) ...[
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                "صلاحية: ${DateFormat('dd/MM/yyyy').format(item.expiryDate!)}",
-                                                style: const TextStyle(color: AppColors.pendingSync, fontSize: 11),
-                                              ),
-                                            ],
                                           ],
                                         ),
                                       ),

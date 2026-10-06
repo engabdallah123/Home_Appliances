@@ -40,5 +40,7 @@ namespace Sales.Application.Sales.Commands.CreateSale
         string? GuarantorNotes = null,
         decimal InterestPercentage = 0,
         int NumberOfMonths = 12,
-        DateTime? InstallmentStartDate = null) : ICommand<CreateSaleResult>;
+        DateTime? InstallmentStartDate = null,
+        string? CustomInvoiceNumber = null,
+        bool BypassStockCheck = false) : ICommand<CreateSaleResult>;
 }

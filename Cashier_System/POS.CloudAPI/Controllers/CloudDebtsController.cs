@@ -43,6 +43,12 @@ namespace POS.CloudAPI.Controllers
                 .AsNoTracking()
                 .Where(d => d.TenantId == tenantId && d.RemainingAmount > 0);
 
+            // Strictly filter out any installment sales from Debts
+            var installmentSaleIds = _db.Sales
+                .Where(s => s.TenantId == tenantId && (s.IsInstallment || s.PaymentMethod == "Installment"))
+                .Select(s => s.Id);
+            query = query.Where(d => !installmentSaleIds.Contains(d.ReferenceId));
+
             if (!string.IsNullOrWhiteSpace(type))
             {
                 query = query.Where(d => d.Type == type);
@@ -78,7 +84,7 @@ namespace POS.CloudAPI.Controllers
                 .ToListAsync();
 
             var customerTotal = await _db.DebtItems
-                .Where(d => d.TenantId == tenantId && d.Type == "Customer" && d.RemainingAmount > 0)
+                .Where(d => d.TenantId == tenantId && d.Type == "Customer" && d.RemainingAmount > 0 && !installmentSaleIds.Contains(d.ReferenceId))
                 .SumAsync(d => d.RemainingAmount);
 
             var supplierTotal = await _db.DebtItems

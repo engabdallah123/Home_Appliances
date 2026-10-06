@@ -247,6 +247,15 @@
                                             @item.UnitPrice.ToString("N2") ج.م / قطعة
                                         </span>
                                     </div>
+                                    @if (item.Discount > 0)
+                                    {
+                                        <div style="margin-top: 0.25rem;">
+                                            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 4px; font-weight: 700; display: inline-flex; align-items: center; gap: 0.3rem;">
+                                                <i class="fa-solid fa-tag"></i>
+                                                <span>خصم العرض: -@item.Discount.ToString("N2") ج.م @(!string.IsNullOrEmpty(item.AppliedOfferTitle) ? $"({item.AppliedOfferTitle})" : "")</span>
+                                            </span>
+                                        </div>
+                                    }
                                 </td>
                                 <td style="text-align: center;">
                                     <button type="button" 
@@ -759,7 +768,7 @@
                                             @offer.TitleAr
                                         </h4>
                                         <span class="badge" style="background: @(offer.OfferType == "BundlePackage" ? "rgba(236, 72, 153, 0.2)" : "rgba(99, 102, 241, 0.2)"); color: @(offer.OfferType == "BundlePackage" ? "#ec4899" : "var(--accent-indigo)"); font-weight: 700; font-size: 0.75rem;">
-                                            @(offer.OfferType == "BundlePackage" ? "🎁 بكج عروسة" : offer.OfferType == "PercentageDiscount" ? "خصم مئوي" : "خصم مالي")
+                                            @(offer.OfferType == "BundlePackage" ? "🎁 بكج عروسة" : offer.OfferType == "BrandDiscount" ? $"🏷️ خصم ماركة {offer.TargetBrandName}" : offer.OfferType == "CategoryDiscount" ? $"📂 خصم تصنيف {offer.TargetCategoryName}" : offer.OfferType == "ProductDiscount" ? $"📦 خصم منتج {offer.TargetProductName}" : "خصم ترويجي")
                                         </span>
                                     </div>
 
@@ -783,7 +792,7 @@
                                                         <span style="color: var(--text-secondary);"> (الكمية: @itm.Quantity)</span>
                                                         @if (itm.SpecialPrice > 0)
                                                         {
-                                                            <span style="color: var(--accent-emerald); font-weight: 700;"> بسعر خاص: @itm.SpecialPrice.ToString("N2") ج.م</span>
+                                                             <span style="color: var(--accent-emerald); font-weight: 700;"> بسعر خاص: @itm.SpecialPrice.ToString("N2") ج.م</span>
                                                         }
                                                     </li>
                                                 }
@@ -824,11 +833,32 @@
                                             <span>إضافة الباكدج للسلة وتطبيق السعر</span>
                                         </button>
                                     }
+                                    else if (offer.OfferType == "BrandDiscount")
+                                    {
+                                        <button class="btn btn-primary" style="background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; font-weight: 700; font-size: 0.85rem; padding: 0.45rem 0.9rem;" @onclick="() => ApplyOfferToCart(offer)">
+                                            <i class="fa-solid fa-tag me-1"></i>
+                                            <span>تطبيق خصم الماركة</span>
+                                        </button>
+                                    }
+                                    else if (offer.OfferType == "CategoryDiscount")
+                                    {
+                                        <button class="btn btn-primary" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); border: none; font-weight: 700; font-size: 0.85rem; padding: 0.45rem 0.9rem;" @onclick="() => ApplyOfferToCart(offer)">
+                                            <i class="fa-solid fa-folder-open me-1"></i>
+                                            <span>تطبيق خصم التصنيف</span>
+                                        </button>
+                                    }
+                                    else if (offer.OfferType == "ProductDiscount")
+                                    {
+                                        <button class="btn btn-primary" style="background: linear-gradient(135deg, #10b981, #059669); border: none; font-weight: 700; font-size: 0.85rem; padding: 0.45rem 0.9rem;" @onclick="() => ApplyOfferToCart(offer)">
+                                            <i class="fa-solid fa-box me-1"></i>
+                                            <span>تطبيق خصم المنتج</span>
+                                        </button>
+                                    }
                                     else
                                     {
                                         <button class="btn btn-primary" style="background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; font-weight: 700; font-size: 0.85rem; padding: 0.45rem 0.9rem;" @onclick="() => ApplyOfferToCart(offer)">
                                             <i class="fa-solid fa-tags me-1"></i>
-                                            <span>تطبيق الخصم على السلة</span>
+                                            <span>تطبيق الخصم</span>
                                         </button>
                                     }
                                 </div>
@@ -1444,7 +1474,11 @@
             prod.ModelNumber,
             prod.BrandName,
             prod.WarrantyPeriodMonths,
-            prod.HasSerialNumber);
+            prod.HasSerialNumber,
+            null,
+            prod.BrandId,
+            prod.CategoryId,
+            prod.CategoryName);
 
         _ = FocusBarcodeAsync();
     }
@@ -1634,67 +1668,230 @@
 
     private void ApplyOfferToCart(OfferDto offer)
     {
-        if (offer.Items != null && offer.Items.Any())
-        {
-            foreach (var itm in offer.Items)
-            {
-                var prod = products.FirstOrDefault(p => p.Id == itm.ProductId);
-                if (prod != null)
-                {
-                    var pkg = PackagingUnitHelper.Parse(prod.Description);
-                    int conversionFactor = prod.ConversionFactor > 1 
-                        ? prod.ConversionFactor 
-                        : (pkg.TotalPiecesPerCarton > 1 ? pkg.TotalPiecesPerCarton : 1);
-                    
-                    // For bundle packages we use normal selling price (discount applied at subtotal level)
-                    decimal priceToUse = prod.SellingPrice;
+        bool isBundle = offer.OfferType == "BundlePackage" || offer.Type == 3 || (offer.Items != null && offer.Items.Any());
+        bool isBrand = offer.OfferType == "BrandDiscount" || offer.Type == 2 || offer.TargetBrandId.HasValue;
+        bool isCategory = offer.OfferType == "CategoryDiscount" || offer.Type == 1 || offer.TargetCategoryId.HasValue;
+        bool isProduct = offer.OfferType == "ProductDiscount" || offer.Type == 0 || offer.TargetProductId.HasValue;
 
-                    for (int q = 0; q < itm.Quantity; q++)
+        // 1. Bundle Package
+        if (isBundle)
+        {
+            if (offer.Items != null && offer.Items.Any())
+            {
+                foreach (var itm in offer.Items)
+                {
+                    var prod = products.FirstOrDefault(p => p.Id == itm.ProductId);
+                    if (prod != null)
                     {
-                        Cart.AddOrIncrementProduct(
-                            prod.Id,
-                            prod.Barcode,
-                            prod.NameAr,
-                            priceToUse,
-                            prod.WholesalePrice,
-                            prod.TaxRate,
-                            pkg.PiecesPerBox,
-                            conversionFactor,
-                            conversionFactor,
-                            prod.BaseUnit,
-                            prod.ParentUnit ?? "قطعة",
-                            "Piece",
-                            false,
-                            false,
-                            prod.ModelNumber,
-                            prod.BrandName,
-                            prod.WarrantyPeriodMonths,
-                            prod.HasSerialNumber);
+                        var pkg = PackagingUnitHelper.Parse(prod.Description);
+                        int conversionFactor = prod.ConversionFactor > 1 
+                            ? prod.ConversionFactor 
+                            : (pkg.TotalPiecesPerCarton > 1 ? pkg.TotalPiecesPerCarton : 1);
+                        
+                        decimal priceToUse = prod.SellingPrice;
+
+                        for (int q = 0; q < itm.Quantity; q++)
+                        {
+                            Cart.AddOrIncrementProduct(
+                                prod.Id,
+                                prod.Barcode,
+                                prod.NameAr,
+                                priceToUse,
+                                prod.WholesalePrice,
+                                prod.TaxRate,
+                                pkg.PiecesPerBox,
+                                conversionFactor,
+                                conversionFactor,
+                                prod.BaseUnit,
+                                prod.ParentUnit ?? "قطعة",
+                                "Piece",
+                                false,
+                                false,
+                                prod.ModelNumber,
+                                prod.BrandName,
+                                prod.WarrantyPeriodMonths,
+                                prod.HasSerialNumber,
+                                null,
+                                prod.BrandId,
+                                prod.CategoryId,
+                                prod.CategoryName);
+                        }
                     }
                 }
             }
+
+            if (offer.PackagePrice > 0)
+            {
+                var subTotalAfterAdd = Cart.SubTotal;
+                if (subTotalAfterAdd > offer.PackagePrice)
+                {
+                    Cart.OverallDiscount = Math.Round(subTotalAfterAdd - offer.PackagePrice, 2);
+                    discountPercentage = Cart.SubTotal > 0
+                        ? Math.Round((Cart.OverallDiscount / Cart.SubTotal) * 100m, 1)
+                        : 0;
+                }
+                else
+                {
+                    Cart.OverallDiscount = 0;
+                    discountPercentage = 0;
+                }
+            }
+            paidAmount = Cart.GrandTotal;
+            CloseBundlesModal();
+            TriggerAlert(
+                title: "🎁 تم تطبيق البكج بنجاح",
+                message: $"تمت إضافة أصناف بكج <strong>{offer.TitleAr}</strong> إلى السلة بنجاح." +
+                         (offer.PackagePrice > 0 ? $" سعر الباقة: <strong>{offer.PackagePrice:N2} ج.م</strong>" : ""),
+                alertType: "warning",
+                icon: "fa-gift",
+                dedupKey: $"offer_{offer.Id}");
+            return;
         }
 
-        // Apply pricing/discount after all items are added
-        if (offer.PackagePrice > 0)
+        // 2. Brand Discount: Apply ONLY to cart items matching target brand
+        if (isBrand)
         {
-            // Bundle package: discount = (SubTotal of items) - packagePrice
-            var subTotalAfterAdd = Cart.SubTotal;
-            if (subTotalAfterAdd > offer.PackagePrice)
+            var matchingItems = Cart.Items.Where(i => 
+                (offer.TargetBrandId.HasValue && i.BrandId == offer.TargetBrandId.Value) ||
+                (!string.IsNullOrWhiteSpace(offer.TargetBrandName) && !string.IsNullOrWhiteSpace(i.BrandName) &&
+                 string.Equals(i.BrandName.Trim(), offer.TargetBrandName.Trim(), StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+
+            if (!matchingItems.Any())
             {
-                Cart.OverallDiscount = Math.Round(subTotalAfterAdd - offer.PackagePrice, 2);
-                discountPercentage = Cart.SubTotal > 0
-                    ? Math.Round((Cart.OverallDiscount / Cart.SubTotal) * 100m, 1)
-                    : 0;
+                CloseBundlesModal();
+                TriggerAlert(
+                    title: "⚠️ لم يتم تطبيق الخصم",
+                    message: $"لا توجد منتجات في السلة تنتمي لماركة <strong>{offer.TargetBrandName ?? "المحددة"}</strong>.<br/>يرجى إضافة منتجات تابعة لهذه الماركة أولاً لتطبيق الخصم عليها.",
+                    alertType: "danger",
+                    icon: "fa-triangle-exclamation",
+                    dedupKey: $"offer_warn_{offer.Id}");
+                return;
+            }
+
+            decimal totalAppliedDiscount = 0;
+            foreach (var item in matchingItems)
+            {
+                if (offer.DiscountPercent > 0)
+                {
+                    item.Discount = Math.Round(item.LineSubtotal * (offer.DiscountPercent / 100m), 2);
+                }
+                else if (offer.DiscountAmount > 0)
+                {
+                    item.Discount = Math.Round(Math.Min(item.LineSubtotal, offer.DiscountAmount), 2);
+                }
+                item.AppliedOfferTitle = offer.TitleAr;
+                totalAppliedDiscount += item.Discount;
+            }
+
+            paidAmount = Cart.GrandTotal;
+            CloseBundlesModal();
+            TriggerAlert(
+                title: "🏷️ تم تطبيق خصم الماركة",
+                message: $"تم تطبيق خصم <strong>{offer.TitleAr}</strong> على ({matchingItems.Count}) منتج ينتمي لماركة <strong>{offer.TargetBrandName}</strong> بإجمالي خصم: <strong>{totalAppliedDiscount:N2} ج.م</strong>.",
+                alertType: "warning",
+                icon: "fa-tag",
+                dedupKey: $"offer_{offer.Id}");
+            return;
+        }
+
+        // 3. Category Discount: Apply ONLY to cart items matching target category
+        if (isCategory)
+        {
+            var matchingItems = Cart.Items.Where(i => 
+                (offer.TargetCategoryId.HasValue && i.CategoryId == offer.TargetCategoryId.Value) ||
+                (!string.IsNullOrWhiteSpace(offer.TargetCategoryName) && !string.IsNullOrWhiteSpace(i.CategoryName) &&
+                 string.Equals(i.CategoryName.Trim(), offer.TargetCategoryName.Trim(), StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+
+            if (!matchingItems.Any())
+            {
+                CloseBundlesModal();
+                TriggerAlert(
+                    title: "⚠️ لم يتم تطبيق الخصم",
+                    message: $"لا توجد منتجات في السلة تنتمي لتصنيف <strong>{offer.TargetCategoryName ?? "المحدد"}</strong>.<br/>يرجى إضافة منتجات من هذا التصنيف إلى السلة أولاً لتطبيق الخصم عليها.",
+                    alertType: "danger",
+                    icon: "fa-triangle-exclamation",
+                    dedupKey: $"offer_warn_{offer.Id}");
+                return;
+            }
+
+            decimal totalAppliedDiscount = 0;
+            foreach (var item in matchingItems)
+            {
+                if (offer.DiscountPercent > 0)
+                {
+                    item.Discount = Math.Round(item.LineSubtotal * (offer.DiscountPercent / 100m), 2);
+                }
+                else if (offer.DiscountAmount > 0)
+                {
+                    item.Discount = Math.Round(Math.Min(item.LineSubtotal, offer.DiscountAmount), 2);
+                }
+                item.AppliedOfferTitle = offer.TitleAr;
+                totalAppliedDiscount += item.Discount;
+            }
+
+            paidAmount = Cart.GrandTotal;
+            CloseBundlesModal();
+            TriggerAlert(
+                title: "📂 تم تطبيق خصم التصنيف",
+                message: $"تم تطبيق خصم <strong>{offer.TitleAr}</strong> على ({matchingItems.Count}) منتج ينتمي لتصنيف <strong>{offer.TargetCategoryName}</strong> بإجمالي خصم: <strong>{totalAppliedDiscount:N2} ج.م</strong>.",
+                alertType: "warning",
+                icon: "fa-folder-open",
+                dedupKey: $"offer_{offer.Id}");
+            return;
+        }
+
+        // 4. Product Discount: Apply ONLY to target product (auto-add if missing)
+        if (isProduct)
+        {
+            var matchedItem = Cart.Items.FirstOrDefault(i => i.ProductId == offer.TargetProductId);
+            if (matchedItem == null && offer.TargetProductId.HasValue)
+            {
+                var prod = products.FirstOrDefault(p => p.Id == offer.TargetProductId.Value);
+                if (prod != null)
+                {
+                    AddToCart(prod);
+                    matchedItem = Cart.Items.FirstOrDefault(i => i.ProductId == offer.TargetProductId.Value);
+                }
+            }
+
+            if (matchedItem != null)
+            {
+                if (offer.DiscountPercent > 0)
+                {
+                    matchedItem.Discount = Math.Round(matchedItem.LineSubtotal * (offer.DiscountPercent / 100m), 2);
+                }
+                else if (offer.DiscountAmount > 0)
+                {
+                    matchedItem.Discount = Math.Round(Math.Min(matchedItem.LineSubtotal, offer.DiscountAmount), 2);
+                }
+                matchedItem.AppliedOfferTitle = offer.TitleAr;
+                paidAmount = Cart.GrandTotal;
+                CloseBundlesModal();
+                TriggerAlert(
+                    title: "📦 تم تطبيق خصم المنتج",
+                    message: $"تم تطبيق خصم <strong>{offer.TitleAr}</strong> على <strong>{matchedItem.ProductName}</strong> بمقدار: <strong>{matchedItem.Discount:N2} ج.م</strong>.",
+                    alertType: "warning",
+                    icon: "fa-box",
+                    dedupKey: $"offer_{offer.Id}");
+                return;
             }
             else
             {
-                // Package price >= sum of items, no discount needed
-                Cart.OverallDiscount = 0;
-                discountPercentage = 0;
+                CloseBundlesModal();
+                TriggerAlert(
+                    title: "⚠️ لم يتم العثور على المنتج",
+                    message: "المنتج المستهدف بالعرض غير متوفر في الكتالوج الحالي.",
+                    alertType: "danger",
+                    icon: "fa-circle-xmark",
+                    dedupKey: $"offer_warn_{offer.Id}");
+                return;
             }
         }
-        else if (offer.DiscountPercent > 0)
+
+        // Fallback: General Cart Discount
+        if (offer.DiscountPercent > 0)
         {
             discountPercentage = offer.DiscountPercent;
             ApplyDiscountPercent(offer.DiscountPercent);
@@ -1711,8 +1908,7 @@
         CloseBundlesModal();
         TriggerAlert(
             title: "🎁 تم تطبيق العرض بنجاح",
-            message: $"تمت إضافة أصناف بكج <strong>{offer.TitleAr}</strong> إلى السلة بنجاح." +
-                     (offer.PackagePrice > 0 ? $" سعر الباقة: <strong>{offer.PackagePrice:N2} ج.م</strong>" : ""),
+            message: $"تم تطبيق عرض <strong>{offer.TitleAr}</strong> بنجاح.",
             alertType: "warning",
             icon: "fa-gift",
             dedupKey: $"offer_{offer.Id}");

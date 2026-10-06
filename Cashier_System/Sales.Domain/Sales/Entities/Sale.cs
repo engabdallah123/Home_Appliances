@@ -210,10 +210,14 @@ namespace Sales.Domain.Sales.Entities
             return Result<SalePayment>.Success(payment);
         }
 
-        public void AttachInstallmentContract(Guid contractId)
+        public void AttachInstallmentContract(Guid contractId, decimal interestAmount = 0)
         {
             IsInstallment = true;
             InstallmentContractId = contractId;
+            if (interestAmount > 0)
+            {
+                TotalAmount += interestAmount;
+            }
         }
 
         public void UpdateDeliveryStatus(DeliveryStatus status, string? driverName = null)
@@ -228,6 +232,10 @@ namespace Sales.Domain.Sales.Entities
         public void UpdateReservationStatus(ReservationStatus status)
         {
             ReservationStatus = status;
+            if (status == ReservationStatus.None || status == ReservationStatus.FullyDispatched)
+            {
+                IsReserved = false;
+            }
         }
 
         public Result Cancel()

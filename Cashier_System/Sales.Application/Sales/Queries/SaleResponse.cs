@@ -100,5 +100,14 @@ namespace Sales.Application.Sales.Queries
         string? CustomerPhone = null,
         string? CustomerAddress = null,
         string? DriverName = null,
-        string? SaleType = null);
+        string? SaleType = null,
+        decimal? InstallmentInterestPercentage = null,
+        decimal? InstallmentInterestAmount = null,
+        decimal? InstallmentTotalCashAmount = null,
+        decimal? InstallmentRemainingAmount = null,
+        decimal? MonthlyInstallmentAmount = null,
+        int? InstallmentMonths = null,
+        decimal? InstallmentDownPayment = null,
+        string? GuarantorName = null,
+        string? GuarantorPhone = null);
 }

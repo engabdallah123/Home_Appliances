@@ -783,7 +783,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
     try {
       await _apiClient.post(
         "api/cloud/sales/${r.id}/reservation-status",
-        data: {'status': newStatus},
+        body: {'status': newStatus},
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

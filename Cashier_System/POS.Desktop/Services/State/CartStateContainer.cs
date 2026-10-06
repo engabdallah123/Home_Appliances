@@ -37,6 +37,10 @@ namespace POS.Desktop.Services.State
         public bool HasSerialNumber { get; set; } = false;
         public string? ModelNumber { get; set; }
         public string? BrandName { get; set; }
+        public Guid? BrandId { get; set; }
+        public Guid? CategoryId { get; set; }
+        public string? CategoryName { get; set; }
+        public string? AppliedOfferTitle { get; set; }
         public int WarrantyPeriodMonths { get; set; } = 12;
 
         public decimal LineSubtotal => Quantity * UnitPrice;
@@ -63,7 +67,11 @@ namespace POS.Desktop.Services.State
             decimal weightInKg,
             string baseUnit = "كجم",
             decimal taxRate = 0,
-            bool initialWholesale = false)
+            bool initialWholesale = false,
+            Guid? brandId = null,
+            string? brandName = null,
+            Guid? categoryId = null,
+            string? categoryName = null)
         {
             var existing = Items.FirstOrDefault(i => i.ProductId == productId);
             if (existing is not null)
@@ -92,7 +100,11 @@ namespace POS.Desktop.Services.State
                     ConversionFactor = 1,
                     BaseUnit = string.IsNullOrWhiteSpace(baseUnit) ? "كجم" : baseUnit,
                     ParentUnit = null,
-                    SelectedUnit = "Piece"
+                    SelectedUnit = "Piece",
+                    BrandId = brandId,
+                    BrandName = brandName,
+                    CategoryId = categoryId,
+                    CategoryName = categoryName
                 };
                 Items.Add(item);
             }
@@ -118,7 +130,10 @@ namespace POS.Desktop.Services.State
             string? brandName = null,
             int warrantyPeriodMonths = 12,
             bool hasSerialNumber = false,
-            string? serialNumber = null)
+            string? serialNumber = null,
+            Guid? brandId = null,
+            Guid? categoryId = null,
+            string? categoryName = null)
         {
             var existing = Items.FirstOrDefault(i => i.ProductId == productId && (string.IsNullOrEmpty(serialNumber) || i.SerialNumber == serialNumber));
             if (existing is not null && !hasSerialNumber)
@@ -151,6 +166,9 @@ namespace POS.Desktop.Services.State
                     SelectedUnit = initialUnit,
                     ModelNumber = modelNumber,
                     BrandName = brandName,
+                    BrandId = brandId,
+                    CategoryId = categoryId,
+                    CategoryName = categoryName,
                     WarrantyPeriodMonths = warrantyPeriodMonths,
                     HasSerialNumber = hasSerialNumber,
                     SerialNumber = serialNumber

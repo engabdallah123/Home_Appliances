@@ -14,6 +14,7 @@ using Expenses.Infrastructre.Database;
 using Expenses.Domain.Expenses.Entities;
 using Returns.Infrastructre.Database;
 using Sales.Infrastructre.Database;
+using Sales.Application.Sales.Commands.CreateSale;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -95,8 +96,9 @@ namespace POS.WebAPI.Services
             var inventoryDb = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
             var expensesDb = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
 
-            // 1.5 PRIORITY #0: Pull Pending Categories from Cloud
+            // 1.5 PRIORITY #0: Pull Pending Categories & Brands from Cloud
             await PullPendingCategoriesFromCloudAsync(mediator, inventoryDb, ct);
+            await PullPendingBrandsFromCloudAsync(mediator, inventoryDb, ct);
 
             // 2. PRIORITY #1: Pull Pending Suppliers from Cloud (so purchases find them)
             await PullPendingSuppliersFromCloudAsync(mediator, purchasesDb, ct);
@@ -107,29 +109,34 @@ namespace POS.WebAPI.Services
             // 4. PRIORITY #3: Pull Pending Products from Cloud
             await PullPendingProductsFromCloudAsync(mediator, inventoryDb, ct);
 
+            // 4a. PRIORITY #3b: Pull Pending Sales from Cloud (Mobile POS -> Desktop Local)
+            var salesDb = scope.ServiceProvider.GetService<SalesDbContext>();
+            int salesCount = 0;
+            if (salesDb != null)
+            {
+                salesCount = await PullPendingSalesFromCloudAsync(mediator, salesDb, inventoryDb, ct);
+            }
+
             // 4b. Pull Pending Expenses from Cloud
             await PullPendingExpensesFromCloudAsync(expensesDb, ct);
 
-            // 4c. Pull Pending Notification Actions from Cloud (OK, Waste, SupplierReplacement)
-            await PullPendingNotificationActionsFromCloudAsync(mediator, inventoryDb, ct);
-
-            // 4d. Push Local Expenses to Cloud
+            // 4c. Push Local Expenses to Cloud
             await PushLocalExpensesToCloudAsync(expensesDb, ct);
 
-            // 4e. Pull Pending Debt Payments from Mobile
+            // 4d. Pull Pending Debt Payments from Mobile
             int debtsCount = await PullPendingDebtPaymentsFromCloudAsync(mediator, scope.ServiceProvider, ct);
 
-            // 4f. Push Local Returns to Cloud
+            // 4e. Push Local Returns to Cloud
             await PushReturnsToCloudAsync(scope.ServiceProvider, ct);
 
-            // 5. Push Store Settings to Cloud
+            // 5. Push Store Settings & Brands to Cloud
             await PushStoreSettingsToCloudAsync(mediator, ct);
+            await PushBrandsToCloudAsync(inventoryDb, ct);
 
-            // 6. Push Dashboard snapshot, debts, and active notifications
-            if (purchasesCount > 0 || debtsCount > 0 || (DateTime.UtcNow - _lastDashboardPush) > TimeSpan.FromSeconds(60))
+            // 6. Push Dashboard snapshot and debts
+            if (purchasesCount > 0 || salesCount > 0 || debtsCount > 0 || (DateTime.UtcNow - _lastDashboardPush) > TimeSpan.FromSeconds(60))
             {
                 await PushDebtsAndDashboardAsync(scope.ServiceProvider, ct);
-                await PushActiveExpiryNotificationsAsync(inventoryDb, ct);
                 _lastDashboardPush = DateTime.UtcNow;
             }
 
@@ -536,7 +543,7 @@ namespace POS.WebAPI.Services
                 {
                     var customerDebts = await (
                         from s in salesDb.Sales
-                        where s.PaidAmount < s.TotalAmount
+                        where s.PaidAmount < s.TotalAmount && !s.IsInstallment
                         join c in salesDb.Customers on s.CustomerId equals (Guid?)c.Id into cGroup
                         from cust in cGroup.DefaultIfEmpty()
                         select new
@@ -618,7 +625,7 @@ namespace POS.WebAPI.Services
                         .SumAsync(s => (decimal?)s.TotalAmount, ct) ?? 0;
 
                     customerDebtsTotal = await salesDb.Sales
-                        .Where(s => s.PaidAmount < s.TotalAmount)
+                        .Where(s => s.PaidAmount < s.TotalAmount && !s.IsInstallment)
                         .SumAsync(s => (decimal?)(s.TotalAmount - s.PaidAmount), ct) ?? 0;
                 }
 
@@ -649,8 +656,22 @@ namespace POS.WebAPI.Services
                 int lowStockCount = await inventoryDb.Products
                     .CountAsync(p => p.QuantityInStock <= p.ReorderLevel && p.IsActive, ct);
 
-                int expiryAlertsCount = await inventoryDb.Notifications
-                    .CountAsync(n => n.Status == "Active", ct);
+                int expiryAlertsCount = 0;
+
+                string? monthlySalesJson = null;
+                var mediator = sp.GetService<IMediator>();
+                if (mediator != null)
+                {
+                    try
+                    {
+                        var calRes = await mediator.Send(new Dashboard.Application.Dashboard.Queries.GetMonthlySalesCalendar.GetMonthlySalesCalendarQuery(today.Year, today.Month), ct);
+                        if (calRes.IsSuccess && calRes.Value != null)
+                        {
+                            monthlySalesJson = JsonSerializer.Serialize(calRes.Value);
+                        }
+                    }
+                    catch { }
+                }
 
                 var dashReq = new
                 {
@@ -666,7 +687,7 @@ namespace POS.WebAPI.Services
                     supplierDebtsTotal = supDebtsTotal,
                     lowStockCount,
                     expiryAlertsCount,
-                    monthlySalesJson = (string?)null,
+                    monthlySalesJson,
                     todayWasteLoss,
                     monthWasteLoss,
                     totalWasteLoss
@@ -948,6 +969,91 @@ namespace POS.WebAPI.Services
             }
         }
 
+        private async Task PullPendingBrandsFromCloudAsync(IMediator mediator, InventoryDbContext inventoryDb, CancellationToken ct)
+        {
+            try
+            {
+                var pendingBrands = await _cloudHttp.GetFromJsonAsync<List<PendingBrandSyncDto>>("api/sync/brands/pending", ct);
+                if (pendingBrands == null || !pendingBrands.Any()) return;
+
+                var existingBrands = await inventoryDb.Brands.AsNoTracking().ToListAsync(ct);
+                var existingById = existingBrands.ToDictionary(b => b.Id);
+                var existingByName = existingBrands
+                    .Where(b => !string.IsNullOrWhiteSpace(b.Name))
+                    .GroupBy(b => b.Name.Trim().ToLowerInvariant())
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                foreach (var brand in pendingBrands)
+                {
+                    var brandName = !string.IsNullOrWhiteSpace(brand.NameAr)
+                        ? brand.NameAr.Trim()
+                        : !string.IsNullOrWhiteSpace(brand.Name)
+                            ? brand.Name.Trim()
+                            : brand.NameEn?.Trim() ?? "ماركة";
+
+                    if (existingById.ContainsKey(brand.Id) || existingByName.ContainsKey(brandName.ToLowerInvariant()))
+                    {
+                        await _cloudHttp.PostAsync($"api/sync/brands/{brand.Id}/acknowledge", null, ct);
+                        continue;
+                    }
+
+                    var cmd = new Inventory.Application.Catalog.Brands.Commands.CreateBrand.CreateBrandCommand(
+                        Name: brandName,
+                        NameAr: brand.NameAr?.Trim() ?? brandName,
+                        NameEn: brand.NameEn?.Trim(),
+                        Description: brand.Description?.Trim(),
+                        OriginCountry: brand.OriginCountry?.Trim(),
+                        AgentContactNumber: brand.AgentContactNumber?.Trim()
+                    );
+
+                    var res = await mediator.Send(cmd, ct);
+                    if (res.IsSuccess)
+                    {
+                        await _cloudHttp.PostAsync($"api/sync/brands/{brand.Id}/acknowledge", null, ct);
+                        _logger.LogInformation("[CloudSync] Imported brand from Cloud: {Name} ({Id})", brandName, brand.Id);
+                    }
+                    else
+                    {
+                        var refreshed = await inventoryDb.Brands.AsNoTracking().AnyAsync(b => b.Name.ToLower() == brandName.ToLower(), ct);
+                        if (refreshed)
+                        {
+                            await _cloudHttp.PostAsync($"api/sync/brands/{brand.Id}/acknowledge", null, ct);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("[CloudSync] Error pulling brands: {Message}", ex.Message);
+            }
+        }
+
+        private async Task PushBrandsToCloudAsync(InventoryDbContext inventoryDb, CancellationToken ct)
+        {
+            try
+            {
+                var localBrands = await inventoryDb.Brands.AsNoTracking().Where(b => b.IsActive).ToListAsync(ct);
+                if (!localBrands.Any()) return;
+
+                var brandsToPush = localBrands.Select(b => new PushBrandSyncDto(
+                    b.Id,
+                    b.Name,
+                    b.NameAr,
+                    b.NameEn,
+                    b.Description,
+                    b.OriginCountry,
+                    b.AgentContactNumber,
+                    b.IsActive
+                )).ToList();
+
+                await _cloudHttp.PostAsJsonAsync("api/sync/brands/push", new { brands = brandsToPush }, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("[CloudSync] Error pushing brands: {Message}", ex.Message);
+            }
+        }
+
         private async Task<int> PullPendingDebtPaymentsFromCloudAsync(IMediator mediator, IServiceProvider sp, CancellationToken ct)
         {
             int count = 0;
@@ -1143,8 +1249,152 @@ namespace POS.WebAPI.Services
                 _logger.LogWarning("[CloudSync] Error pushing returns: {Message}", ex.Message);
             }
         }
+
+        private async Task<int> PullPendingSalesFromCloudAsync(IMediator mediator, SalesDbContext salesDb, InventoryDbContext inventoryDb, CancellationToken ct)
+        {
+            int imported = 0;
+            try
+            {
+                var pendingSales = await _cloudHttp.GetFromJsonAsync<List<CloudSaleSyncDto>>("api/sync/sales/pending", ct);
+                if (pendingSales == null || !pendingSales.Any()) return 0;
+
+                var localProducts = await inventoryDb.Products.AsNoTracking().ToListAsync(ct);
+                var localById = localProducts.ToDictionary(p => p.Id);
+                var localByBarcode = localProducts
+                    .Where(p => !string.IsNullOrWhiteSpace(p.Barcode))
+                    .GroupBy(p => p.Barcode.Trim().ToLower())
+                    .ToDictionary(g => g.Key, g => g.First());
+                var localByName = localProducts
+                    .Where(p => !string.IsNullOrWhiteSpace(p.NameAr))
+                    .GroupBy(p => p.NameAr.Trim().ToLower())
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                var adminUserId = Guid.Parse("2bc4e49b-fe29-4c7b-9eed-649de1c32cef");
+
+                foreach (var cloudSale in pendingSales)
+                {
+                    // Check if already imported
+                    var existingSale = await salesDb.Sales.AsNoTracking().FirstOrDefaultAsync(s =>
+                        s.Id == cloudSale.Id ||
+                        (!string.IsNullOrWhiteSpace(s.InvoiceNumber) && !string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber) && s.InvoiceNumber == cloudSale.InvoiceNumber), ct);
+
+                    if (existingSale != null)
+                    {
+                        await _cloudHttp.PostAsJsonAsync($"api/sync/sales/{cloudSale.Id}/acknowledge", new { saleId = cloudSale.Id, reference = existingSale.Id.ToString() }, ct);
+                        continue;
+                    }
+
+                    // Auto-resolve or create customer locally
+                    Guid? resolvedCustomerId = cloudSale.CustomerId;
+                    var targetCustName = !string.IsNullOrWhiteSpace(cloudSale.CustomerName) ? cloudSale.CustomerName.Trim() : cloudSale.RecipientName?.Trim();
+                    var targetCustPhone = !string.IsNullOrWhiteSpace(cloudSale.CustomerPhone) ? cloudSale.CustomerPhone.Trim() : cloudSale.RecipientPhone?.Trim();
+
+                    if (!string.IsNullOrWhiteSpace(targetCustName))
+                    {
+                        var matchedCust = await salesDb.Customers.FirstOrDefaultAsync(c =>
+                            (!string.IsNullOrWhiteSpace(targetCustPhone) && c.Phone == targetCustPhone) ||
+                            c.Name == targetCustName, ct);
+
+                        if (matchedCust != null)
+                        {
+                            resolvedCustomerId = matchedCust.Id;
+                        }
+                        else
+                        {
+                            var newCust = global::Sales.Domain.Customers.Entities.Customer.Create(
+                                targetCustName,
+                                !string.IsNullOrWhiteSpace(targetCustPhone) ? targetCustPhone : "01000000000",
+                                cloudSale.DeliveryAddress);
+                            if (newCust.IsSuccess)
+                            {
+                                salesDb.Customers.Add(newCust.Value!);
+                                await salesDb.SaveChangesAsync(ct);
+                                resolvedCustomerId = newCust.Value!.Id;
+                            }
+                        }
+                    }
+
+                    var localItems = cloudSale.Items.Select(i =>
+                    {
+                        Guid resolvedProductId = i.ProductId;
+                        if (!localById.ContainsKey(resolvedProductId))
+                        {
+                            if (!string.IsNullOrWhiteSpace(i.Barcode) && localByBarcode.TryGetValue(i.Barcode.Trim().ToLower(), out var pMatch))
+                            {
+                                resolvedProductId = pMatch.Id;
+                            }
+                            else if (!string.IsNullOrWhiteSpace(i.ProductName) && localByName.TryGetValue(i.ProductName.Trim().ToLower(), out var pMatchName))
+                            {
+                                resolvedProductId = pMatchName.Id;
+                            }
+                        }
+
+                        return new CreateSaleItemRequest(
+                            ProductId: resolvedProductId,
+                            Quantity: i.Quantity,
+                            UnitPrice: i.UnitPrice,
+                            Discount: i.Discount,
+                            Tax: i.Tax,
+                            SerialNumber: i.SerialNumber
+                        );
+                    }).ToList();
+
+                    bool isInstSale = cloudSale.IsInstallment || cloudSale.PaymentMethod == "Installment";
+
+                    var localCmd = new CreateSaleCommand(
+                        CashierId: adminUserId,
+                        ShiftId: Guid.Empty,
+                        Items: localItems,
+                        CustomerId: resolvedCustomerId,
+                        DiscountAmount: cloudSale.DiscountAmount,
+                        TaxAmount: cloudSale.TaxAmount,
+                        PaidAmount: cloudSale.PaidAmount,
+                        PaymentMethod: string.IsNullOrWhiteSpace(cloudSale.PaymentMethod) ? "Cash" : cloudSale.PaymentMethod,
+                        Notes: string.IsNullOrWhiteSpace(cloudSale.Notes)
+                            ? $"[مبيعات من تطبيق الموبايل] فاتورة {cloudSale.InvoiceNumber}"
+                            : $"[مبيعات من تطبيق الموبايل] {cloudSale.Notes} ({cloudSale.InvoiceNumber})",
+                        IsDelivery: cloudSale.IsDelivery,
+                        RecipientName: cloudSale.RecipientName,
+                        RecipientPhone: cloudSale.RecipientPhone,
+                        DeliveryAddress: cloudSale.DeliveryAddress,
+                        DeliveryFloor: cloudSale.DeliveryFloor,
+                        DeliveryFee: cloudSale.DeliveryFee,
+                        IsReserved: cloudSale.IsReserved,
+                        TargetDeliveryDate: cloudSale.TargetDeliveryDate,
+                        IsInstallment: isInstSale,
+                        GuarantorName: cloudSale.GuarantorName,
+                        GuarantorPhone: cloudSale.GuarantorPhone,
+                        InterestPercentage: cloudSale.InterestPercentage,
+                        NumberOfMonths: cloudSale.NumberOfMonths > 0 ? cloudSale.NumberOfMonths : 12,
+                        CustomInvoiceNumber: cloudSale.InvoiceNumber,
+                        BypassStockCheck: true
+                    );
+
+                    var result = await mediator.Send(localCmd, ct);
+                    if (result.IsSuccess)
+                    {
+                        await _cloudHttp.PostAsJsonAsync($"api/sync/sales/{cloudSale.Id}/acknowledge", new { saleId = cloudSale.Id, reference = result.Value?.SaleId.ToString() }, ct);
+                        imported++;
+                        _logger.LogInformation("[CloudSync] Successfully imported mobile sale {InvoiceNumber}", cloudSale.InvoiceNumber);
+                    }
+                    else
+                    {
+                        var errorMsg = result.Error?.Name ?? result.Error?.Code ?? "فشل تسجيل الفاتورة محلياً";
+                        _logger.LogWarning("[CloudSync] Failed to import mobile sale {InvoiceNumber}: {Error}", cloudSale.InvoiceNumber, errorMsg);
+                        await _cloudHttp.PostAsJsonAsync($"api/sync/sales/{cloudSale.Id}/fail", new { saleId = cloudSale.Id, errorMessage = errorMsg }, ct);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[CloudSync] Error in PullPendingSalesFromCloudAsync");
+            }
+            return imported;
+        }
     }
 
+    public record CloudSaleItemSyncDto(Guid Id, Guid ProductId, string ProductName, string? Barcode, string? ModelNumber, string? BrandName, string? SerialNumber, int WarrantyPeriodMonths, decimal Quantity, decimal UnitPrice, decimal Discount, decimal Tax, decimal Total);
+    public record CloudSaleSyncDto(Guid Id, string InvoiceNumber, Guid? CustomerId, string? CustomerName, string? CustomerPhone, DateTime SaleDate, decimal SubTotal, decimal DiscountAmount, decimal TaxAmount, decimal TotalAmount, decimal PaidAmount, decimal RemainingAmount, string PaymentMethod, string? Notes, bool IsDelivery, string? RecipientName, string? RecipientPhone, string? DeliveryAddress, string? DeliveryFloor, decimal DeliveryFee, bool IsInstallment, string? GuarantorName, string? GuarantorPhone, decimal InterestPercentage, int NumberOfMonths, bool IsReserved, DateTime? TargetDeliveryDate, List<CloudSaleItemSyncDto> Items, int ReservationStatus);
     public record PendingDebtPaymentSyncDto(Guid Id, string DebtType, Guid ReferenceId, decimal Amount, string? Notes, DateTime CreatedAt);
     public record PendingCategorySyncDto(Guid Id, string NameAr, string? NameEn, bool IsActive, DateTime CreatedAt);
 
@@ -1156,4 +1406,6 @@ namespace POS.WebAPI.Services
     public record SupplierBalanceSyncItem(Guid SupplierId, decimal NewBalance);
     public record PendingExpenseSyncDto(Guid Id, string Title, decimal Amount, string? Category, DateTime Date, string? Notes);
     public record PendingCloudActionDto(Guid NotificationId, Guid ProductId, Guid? BatchId, string ActionType, decimal Quantity, string? Reason, DateTime? NewExpiryDate, string? NewBatchNumber, string? Notes, DateTime ActionTakenAt);
+    public record PendingBrandSyncDto(Guid Id, string? Name, string? NameAr, string? NameEn, string? Description, string? OriginCountry, string? AgentContactNumber, bool IsActive, DateTime? CreatedAt);
+    public record PushBrandSyncDto(Guid Id, string Name, string? NameAr, string? NameEn, string? Description, string? OriginCountry, string? AgentContactNumber, bool IsActive);
 }

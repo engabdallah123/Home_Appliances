@@ -268,11 +268,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        CloudSync.OnSyncStateChanged += HandleSyncStateChanged;
+        CloudSync.OnDataImported += HandleSyncDataImported;
         await LoadCategories();
     }
 
-    private async void HandleSyncStateChanged()
+    private async void HandleSyncDataImported()
     {
         await InvokeAsync(async () =>
         {
@@ -283,7 +283,7 @@
 
     public void Dispose()
     {
-        CloudSync.OnSyncStateChanged -= HandleSyncStateChanged;
+        CloudSync.OnDataImported -= HandleSyncDataImported;
     }
 
     private async Task LoadCategories()

@@ -695,7 +695,10 @@ namespace POS.CloudAPI.DTOs
         int ItemsCount,
         DateTime CreatedAt,
         List<CloudSaleItemDto> Items,
-        int ReservationStatus = 0);
+        int ReservationStatus = 0,
+        decimal InterestPercentage = 0,
+        string? GuarantorName = null,
+        string? GuarantorPhone = null);
 
     public record CloudSaleSyncDto(
         Guid Id,

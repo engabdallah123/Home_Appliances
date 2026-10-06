@@ -24,7 +24,18 @@ namespace POS.Desktop.Services.Sync
         private readonly HashSet<string> _knownInvoiceNumbers = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _knownSaleInvoiceNumbers = new(StringComparer.OrdinalIgnoreCase);
 
+        private CancellationTokenSource? _syncCts;
+        private volatile bool _skipCurrentStage = false;
+        private readonly List<SyncStageItem> _stages = new();
+        public IReadOnlyList<SyncStageItem> Stages => _stages;
+        private readonly List<PendingSyncItemView> _pendingQueue = new();
+        public IReadOnlyList<PendingSyncItemView> PendingQueue => _pendingQueue;
+
+        public string CurrentSyncStage { get; private set; } = "جاهز للمزامنة";
+        public int CurrentProgressPercent { get; private set; } = 0;
+
         public event Action? OnSyncStateChanged;
+        public event Action? OnDataImported;
 
         public bool IsSyncing => _isSyncing;
         public bool IsOffline => _isOffline;
@@ -204,12 +215,124 @@ namespace POS.Desktop.Services.Sync
             return await SyncNowAsync(forceCatalogPush: false);
         }
 
+        public void CancelSync()
+        {
+            if (_isSyncing && _syncCts != null)
+            {
+                try
+                {
+                    _syncCts.Cancel();
+                }
+                catch { }
+                CurrentSyncStage = "تم إيقاف المزامنة بواسطة المستخدم";
+                LastSyncStatus = "تم إيقاف المزامنة يدوياً بواسطة المستخدم";
+                NotifyStateChanged();
+            }
+        }
+
+        public void SkipCurrentStage()
+        {
+            _skipCurrentStage = true;
+            NotifyStateChanged();
+        }
+
+        private void InitializeStages()
+        {
+            _stages.Clear();
+            _stages.Add(new SyncStageItem { Id = "health", NameAr = "فحص الاتصال والشبكة", DescriptionAr = "التحقق من اتصال الإنترنت واستجابة السيرفر السحابي", Icon = "fa-solid fa-wifi" });
+            _stages.Add(new SyncStageItem { Id = "pull_categories_brands", NameAr = "سحب الأقسام والماركات", DescriptionAr = "تنزيل الأقسام والماركات المسجلة سحابياً", Icon = "fa-solid fa-tags" });
+            _stages.Add(new SyncStageItem { Id = "pull_suppliers", NameAr = "سحب بيانات الموردين", DescriptionAr = "تنزيل حسابات الموردين المضافة حديثاً من الموبايل", Icon = "fa-solid fa-truck" });
+            _stages.Add(new SyncStageItem { Id = "pull_purchases", NameAr = "سحب فواتير المشتريات من الموبايل", DescriptionAr = "استيراد فواتير البضاعة المسجلة من تطبيق الموبايل", Icon = "fa-solid fa-cart-shopping" });
+            _stages.Add(new SyncStageItem { Id = "pull_products", NameAr = "سحب المنتجات والأسعار من الموبايل", DescriptionAr = "تحديث أسعار وباركودات الأجهزة المضافة من الصالة", Icon = "fa-solid fa-box" });
+            _stages.Add(new SyncStageItem { Id = "pull_sales", NameAr = "سحب مبيعات الصالة من الموبايل", DescriptionAr = "استيراد فواتير بيع أجهزة المعرض المسجلة من الموبايل", Icon = "fa-solid fa-receipt" });
+            _stages.Add(new SyncStageItem { Id = "pull_debts", NameAr = "سحب تحصيلات الديون من الموبايل", DescriptionAr = "استيراد سندات سداد ديون العملاء المحصلة عبر الموبايل", Icon = "fa-solid fa-hand-holding-dollar" });
+            _stages.Add(new SyncStageItem { Id = "pull_expenses", NameAr = "سحب المصروفات من الموبايل", DescriptionAr = "استيراد مصاريف التشغيل المسجلة من تطبيق الموبايل", Icon = "fa-solid fa-file-invoice-dollar" });
+            _stages.Add(new SyncStageItem { Id = "push_expenses", NameAr = "رفع المصروفات المحلية", DescriptionAr = "مزامنة مصاريف كاشير المحل إلى السحابة", Icon = "fa-solid fa-outbox" });
+            _stages.Add(new SyncStageItem { Id = "push_settings", NameAr = "تحديث إعدادات ومعلومات المحل", DescriptionAr = "مزامنة اسم المعرض وبيانات الفاتورة", Icon = "fa-solid fa-store" });
+            _stages.Add(new SyncStageItem { Id = "push_suppliers_brands", NameAr = "رفع الموردين والماركات والديون", DescriptionAr = "مزامنة أرصدة الموردين وحسابات الذمم المدينة", Icon = "fa-solid fa-award" });
+            _stages.Add(new SyncStageItem { Id = "push_returns", NameAr = "رفع المرتجعات", DescriptionAr = "مزامنة مرتجعات المبيعات والمشتريات المحلية", Icon = "fa-solid fa-rotate-left" });
+            _stages.Add(new SyncStageItem { Id = "push_sales", NameAr = "رفع المبيعات والأقساط والحجوزات", DescriptionAr = "مزامنة فواتير بيع الكاشير وعقود التقسيط وحجوزات العرائس", Icon = "fa-solid fa-vault" });
+            _stages.Add(new SyncStageItem { Id = "push_offers", NameAr = "رفع العروض وبكجات التخفيض", DescriptionAr = "مزامنة بكجات الأجهزة وعروض الخصم إلى الموبايل", Icon = "fa-solid fa-gift" });
+            _stages.Add(new SyncStageItem { Id = "push_dashboard", NameAr = "تحديث الداشبورد والتقويم المالي", DescriptionAr = "مزامنة أرقام ومبيعات الشهر والتقويم المالي للسحابة", Icon = "fa-solid fa-chart-line" });
+            _stages.Add(new SyncStageItem { Id = "push_catalog", NameAr = "مزامنة كتالوج المنتجات والمخزون", DescriptionAr = "تحديث كامل للأجهزة والأسعار والكميات المتاحة", Icon = "fa-solid fa-boxes-stacked" });
+        }
+
+        private void UpdateProgressPercentage()
+        {
+            if (!_stages.Any())
+            {
+                CurrentProgressPercent = 0;
+                return;
+            }
+            int done = _stages.Count(s => s.Status == SyncStageStatus.Completed || s.Status == SyncStageStatus.Skipped || s.Status == SyncStageStatus.Failed);
+            CurrentProgressPercent = (int)Math.Round((double)done / _stages.Count * 100);
+        }
+
+        private async Task RunStageAsync(string stageId, Func<CancellationToken, Task<string?>> action)
+        {
+            if (_syncCts?.IsCancellationRequested == true)
+            {
+                var s = _stages.FirstOrDefault(x => x.Id == stageId);
+                if (s != null) { s.Status = SyncStageStatus.Skipped; s.Details = "تم الإلغاء"; }
+                return;
+            }
+
+            var stage = _stages.FirstOrDefault(s => s.Id == stageId);
+            if (stage != null)
+            {
+                stage.Status = SyncStageStatus.InProgress;
+                stage.StartedAt = DateTime.Now;
+                CurrentSyncStage = stage.NameAr;
+                NotifyStateChanged();
+            }
+
+            try
+            {
+                if (_syncCts != null)
+                {
+                    var detail = await action(_syncCts.Token);
+                    if (stage != null)
+                    {
+                        stage.Status = _skipCurrentStage ? SyncStageStatus.Skipped : SyncStageStatus.Completed;
+                        stage.Details = detail ?? "اكتملت الخطوة بنجاح";
+                        stage.FinishedAt = DateTime.Now;
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                if (stage != null)
+                {
+                    stage.Status = SyncStageStatus.Skipped;
+                    stage.Details = "تم إلغاء الخطوة بواسطة المستخدم";
+                    stage.FinishedAt = DateTime.Now;
+                }
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (stage != null)
+                {
+                    stage.Status = SyncStageStatus.Failed;
+                    stage.Details = ex.Message;
+                    stage.FinishedAt = DateTime.Now;
+                }
+            }
+            finally
+            {
+                _skipCurrentStage = false;
+                UpdateProgressPercentage();
+                NotifyStateChanged();
+            }
+        }
+
         public async Task<SyncStatusResult> SyncNowAsync(bool forceCatalogPush = false)
         {
             if (!NetworkInterface.GetIsNetworkAvailable())
             {
                 _isOffline = true;
                 IsCloudReachable = false;
+                CurrentSyncStage = "الجهاز غير متصل بالإنترنت";
                 NotifyStateChanged();
                 return new SyncStatusResult
                 {
@@ -228,6 +351,11 @@ namespace POS.Desktop.Services.Sync
             }
 
             _isSyncing = true;
+            _syncCts = new CancellationTokenSource();
+            _skipCurrentStage = false;
+            InitializeStages();
+            CurrentSyncStage = "بدء المزامنة...";
+            UpdateProgressPercentage();
             NotifyStateChanged();
 
             var result = new SyncStatusResult();
@@ -235,78 +363,178 @@ namespace POS.Desktop.Services.Sync
             try
             {
                 // 1. Health check
-                var isOnline = await CheckCloudOnlineAsync();
-                if (!isOnline)
+                await RunStageAsync("health", async (ct) =>
                 {
-                    result.Success = false;
-                    LastSyncSucceeded = false;
-                    result.Error = "تعذر الاتصال بالخادم السحابي (السيرفر غير متصل أو لا يوجد إنترنت).";
-                    LastSyncStatus = "السيرفر السحابي غير متصل";
-                    return result;
-                }
+                    var isOnline = await CheckCloudOnlineAsync();
+                    if (!isOnline)
+                    {
+                        throw new InvalidOperationException("تعذر الاتصال بالخادم السحابي (السيرفر غير متصل أو لا يوجد إنترنت).");
+                    }
+                    return "تم الاتصال بنجاح بالسيرفر السحابي";
+                });
 
-                // 1.5 PRIORITY #0: Pull Pending Categories & Brands from Cloud (So products find them)
-                await PullPendingCategoriesFromCloudAsync();
-                await PullPendingBrandsFromCloudAsync();
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
 
-                // 2. PRIORITY #1: Pull Pending Suppliers from Cloud (So purchases find them)
-                await PullPendingSuppliersFromCloudAsync();
-
-                // 3. PRIORITY #2: Pull Pending Purchases from Cloud (Fast & Critical)
-                int purchasesCount = await PullPendingPurchasesFromCloudAsync();
-                result.SyncedPurchasesCount = purchasesCount;
-
-                // 3.5 PRIORITY #2b: Pull Pending Mobile POS Sales from Cloud
-                int salesCount = await PullPendingSalesFromCloudAsync();
-                result.SyncedSalesCount = salesCount;
-
-                // 4. PRIORITY #3: Pull Pending Products from Mobile
-                await PullPendingProductsFromCloudAsync();
-
-                // 5. PRIORITY #4: Pull Pending Debt Payments from Mobile
-                int debtsCount = await PullPendingDebtPaymentsFromCloudAsync();
-                result.SyncedDebtsCount = debtsCount;
-
-                // 6. PRIORITY #5: Pull Pending Expenses from Mobile
-                int expensesCount = await PullPendingExpensesFromCloudAsync();
-
-                // 7. Push Local Expenses to Cloud
-                await PushLocalExpensesToCloudAsync();
-
-                // 8. Handle Expiry Notifications: Push active alerts to Cloud and pull mobile actions
-                await PushActiveExpiryNotificationsAsync();
-                await PullPendingNotificationActionsFromCloudAsync();
-
-                // 9. Push Store Settings & Shop Name to Cloud (Every sync)
-                await PushStoreSettingsToCloudAsync();
-
-                // 10. Push Suppliers, Brands & Debts to Cloud
-                await PushSuppliersToCloudAsync();
-                await PushBrandsToCloudAsync();
-
-                // 11. Push Sales & Purchase Returns to Cloud
-                await PushReturnsToCloudAsync();
-
-                // 11.5 Push Local Sales, Reservations & Installments to Cloud
-                await PushSalesToCloudAsync();
-
-                // 11.6 Push Active Offers & Bride Packages to Cloud
-                await PushOffersToCloudAsync();
-
-                // 12. Push Dashboard snapshot & Debts (Every 60s or if items imported)
-                if (purchasesCount > 0 || salesCount > 0 || debtsCount > 0 || expensesCount > 0 || (DateTime.UtcNow - _lastDashboardPush) > TimeSpan.FromSeconds(60))
+                // 2. Categories & Brands
+                int catsCount = 0;
+                int brandsCount = 0;
+                await RunStageAsync("pull_categories_brands", async (ct) =>
                 {
-                    await PushDebtsAndDashboardAsync();
-                    _lastDashboardPush = DateTime.UtcNow;
-                }
+                    catsCount = await PullPendingCategoriesFromCloudAsync();
+                    brandsCount = await PullPendingBrandsFromCloudAsync();
+                    return $"تم استيراد {catsCount} أقسام و {brandsCount} ماركات";
+                });
 
-                // 13. Push Full Catalog every 30 seconds or if forced (for low stock alerts)
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 3. Suppliers
+                await RunStageAsync("pull_suppliers", async (ct) =>
+                {
+                    await PullPendingSuppliersFromCloudAsync();
+                    return "تم فحص وسحب الموردين الجدد";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 4. Purchases
+                int purchasesCount = 0;
+                await RunStageAsync("pull_purchases", async (ct) =>
+                {
+                    purchasesCount = await PullPendingPurchasesFromCloudAsync();
+                    result.SyncedPurchasesCount = purchasesCount;
+                    return purchasesCount > 0 ? $"تم استيراد {purchasesCount} فاتورة مشتريات من الموبايل" : "لا توجد مشتريات جديدة معلقة";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 5. Products
+                await RunStageAsync("pull_products", async (ct) =>
+                {
+                    await PullPendingProductsFromCloudAsync();
+                    return "تم فحص وسحب المنتجات المحدثة من الموبايل";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 6. Mobile POS Sales
+                int salesCount = 0;
+                await RunStageAsync("pull_sales", async (ct) =>
+                {
+                    salesCount = await PullPendingSalesFromCloudAsync();
+                    result.SyncedSalesCount = salesCount;
+                    return salesCount > 0 ? $"تم استيراد {salesCount} فواتير بيع من تطبيق الموبايل" : "لا توجد مبيعات صالة جديدة";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 7. Debts
+                int debtsCount = 0;
+                await RunStageAsync("pull_debts", async (ct) =>
+                {
+                    debtsCount = await PullPendingDebtPaymentsFromCloudAsync();
+                    result.SyncedDebtsCount = debtsCount;
+                    return debtsCount > 0 ? $"تم استيراد {debtsCount} سندات سداد ديون" : "لا توجد سندات سداد معلقة";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 8. Expenses
+                int expensesCount = 0;
+                await RunStageAsync("pull_expenses", async (ct) =>
+                {
+                    expensesCount = await PullPendingExpensesFromCloudAsync();
+                    return expensesCount > 0 ? $"تم استيراد {expensesCount} مصروفات مسجلة بالموبايل" : "لا توجد مصروفات جديدة";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 9. Push Local Expenses
+                await RunStageAsync("push_expenses", async (ct) =>
+                {
+                    await PushLocalExpensesToCloudAsync();
+                    return "تم رفع المصروفات المحلية بنجاح";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 10. Push Settings
+                await RunStageAsync("push_settings", async (ct) =>
+                {
+                    await PushStoreSettingsToCloudAsync();
+                    return "تم تحديث بيانات المحل بالسحابة";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 11. Push Suppliers, Brands, Debts
+                await RunStageAsync("push_suppliers_brands", async (ct) =>
+                {
+                    await PushSuppliersToCloudAsync();
+                    await PushBrandsToCloudAsync();
+                    return "تمت مزامنة الموردين والماركات والديون";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 12. Push Returns
+                await RunStageAsync("push_returns", async (ct) =>
+                {
+                    await PushReturnsToCloudAsync();
+                    return "تمت مزامنة مرتجعات المبيعات والمشتريات";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 13. Push Sales, Reservations & Installments
+                await RunStageAsync("push_sales", async (ct) =>
+                {
+                    await PushSalesToCloudAsync();
+                    return "تمت مزامنة المبيعات المحلية والأقساط والحجوزات";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 14. Push Offers
+                await RunStageAsync("push_offers", async (ct) =>
+                {
+                    await PushOffersToCloudAsync();
+                    return "تمت مزامنة العروض وبكجات العرائس";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 15. Push Dashboard Snapshot
+                await RunStageAsync("push_dashboard", async (ct) =>
+                {
+                    if (purchasesCount > 0 || salesCount > 0 || debtsCount > 0 || expensesCount > 0 || (DateTime.UtcNow - _lastDashboardPush) > TimeSpan.FromSeconds(60))
+                    {
+                        await PushDebtsAndDashboardAsync();
+                        _lastDashboardPush = DateTime.UtcNow;
+                        return "تم تحديث أرقام الداشبورد والتقويم المالي بالسحابة";
+                    }
+                    return "الداشبورد السحابي محدث ومطابق";
+                });
+
+                if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
+
+                // 16. Push Catalog
                 int catalogCount = 0;
-                if (forceCatalogPush || (DateTime.UtcNow - _lastCatalogPush) > TimeSpan.FromSeconds(30))
+                await RunStageAsync("push_catalog", async (ct) =>
                 {
-                    catalogCount = await PushLocalCatalogToCloudAsync();
-                    result.SyncedCatalogCount = catalogCount;
-                    _lastCatalogPush = DateTime.UtcNow;
+                    if (forceCatalogPush || (DateTime.UtcNow - _lastCatalogPush) > TimeSpan.FromMinutes(15))
+                    {
+                        catalogCount = await PushLocalCatalogToCloudAsync();
+                        result.SyncedCatalogCount = catalogCount;
+                        _lastCatalogPush = DateTime.UtcNow;
+                        return $"تم تحديث كتالوج المنتجات ({catalogCount} صنف)";
+                    }
+                    return "الكتالوج السحابي محدث";
+                });
+
+                // Notify pages ONLY when new data was actually pulled/imported from remote
+                if (purchasesCount > 0 || salesCount > 0 || debtsCount > 0 || expensesCount > 0 || brandsCount > 0 || catsCount > 0)
+                {
+                    NotifyDataImported();
                 }
 
                 result.Success = true;
@@ -314,25 +542,194 @@ namespace POS.Desktop.Services.Sync
                 _isOffline = false;
                 _hasLocalChanges = false;
                 LastSyncTime = DateTime.Now;
-                LastSyncStatus = (purchasesCount > 0 || salesCount > 0)
-                    ? $"اكتملت المزامنة بنجاح (تم استيراد {purchasesCount} مشتريات و {salesCount} مبيعات موبايل)"
+                CurrentSyncStage = "اكتملت المزامنة بنجاح";
+                CurrentProgressPercent = 100;
+                LastSyncStatus = (purchasesCount > 0 || salesCount > 0 || brandsCount > 0)
+                    ? $"اكتملت المزامنة بنجاح (تم استيراد {purchasesCount} مشتريات و {salesCount} مبيعات و {brandsCount} ماركات)"
                     : "المزامنة نشطة ومحدثة بنجاح";
-                result.Message = $"تمت المزامنة بنجاح! ({purchasesCount} مشتريات، {salesCount} مبيعات، {debtsCount} سدادات ديون)";
+                result.Message = $"تمت المزامنة بنجاح! ({purchasesCount} مشتريات، {salesCount} مبيعات، {debtsCount} سدادات ديون، {brandsCount} ماركات)";
+            }
+            catch (OperationCanceledException)
+            {
+                result.Success = false;
+                LastSyncSucceeded = false;
+                result.Error = "تم إلغاء المزامنة بواسطة المستخدم.";
+                CurrentSyncStage = "تم إيقاف المزامنة";
+                LastSyncStatus = "تم إيقاف المزامنة يدوياً بواسطة المستخدم";
+                result.Message = "تم إيقاف المزامنة.";
             }
             catch (Exception ex)
             {
                 result.Success = false;
                 LastSyncSucceeded = false;
                 result.Error = ex.Message;
+                CurrentSyncStage = $"خطأ: {ex.Message}";
                 LastSyncStatus = $"فشلت المزامنة: {ex.Message}";
             }
             finally
             {
                 _isSyncing = false;
                 NotifyStateChanged();
+                // Refresh pending queue after sync finishes
+                _ = Task.Run(async () => { try { await FetchPendingQueueAsync(); } catch { } });
             }
 
             return result;
+        }
+
+        public async Task<List<PendingSyncItemView>> FetchPendingQueueAsync()
+        {
+            var list = new List<PendingSyncItemView>();
+            try
+            {
+                var pendingPurchases = await _cloudHttp.GetFromJsonAsync<List<CloudPurchaseSyncDto>>("api/sync/purchases/pending");
+                if (pendingPurchases != null)
+                {
+                    foreach (var p in pendingPurchases)
+                    {
+                        list.Add(new PendingSyncItemView
+                        {
+                            Id = p.Id,
+                            EntityType = "Purchase",
+                            Title = $"فاتورة مشتريات #{p.InvoiceNumber}",
+                            Subtitle = $"المورد: {p.SupplierName ?? "غير محدد"} | التاريخ: {p.PurchaseDate:yyyy-MM-dd}",
+                            Details = $"{p.Items.Count} أصناف | الإجمالي: {p.TotalAmount:N2} ج.م",
+                            Amount = p.TotalAmount,
+                            Date = p.PurchaseDate,
+                            Source = "تطبيق الموبايل",
+                            Status = "بانتظار السحب للديسكتوب"
+                        });
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                var pendingSales = await _cloudHttp.GetFromJsonAsync<List<CloudSaleSyncDto>>("api/sync/sales/pending");
+                if (pendingSales != null)
+                {
+                    foreach (var s in pendingSales)
+                    {
+                        list.Add(new PendingSyncItemView
+                        {
+                            Id = s.Id,
+                            EntityType = "Sale",
+                            Title = $"فاتورة بيع صالة #{s.InvoiceNumber}",
+                            Subtitle = $"العميل: {s.CustomerName ?? "عميل نقدي"} | {s.PaymentMethod}",
+                            Details = $"{s.Items.Count} أجهزة | الإجمالي: {s.TotalAmount:N2} ج.م",
+                            Amount = s.TotalAmount,
+                            Date = s.SaleDate,
+                            Source = "موبايل الصالة (POS)",
+                            Status = "بانتظار السحب للديسكتوب"
+                        });
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                var pendingDebts = await _cloudHttp.GetFromJsonAsync<List<PendingDebtPaymentDto>>("api/sync/debts/pending");
+                if (pendingDebts != null)
+                {
+                    foreach (var d in pendingDebts)
+                    {
+                        list.Add(new PendingSyncItemView
+                        {
+                            Id = d.Id,
+                            EntityType = "DebtPayment",
+                            Title = $"سند تحصيل دين ({d.DebtType})",
+                            Subtitle = $"ملاحظات: {d.Notes ?? "تحصيل من الموبايل"}",
+                            Details = $"المبلغ المحصل: {d.Amount:N2} ج.م",
+                            Amount = d.Amount,
+                            Date = d.CreatedAt,
+                            Source = "تطبيق الموبايل",
+                            Status = "بانتظار السحب للديسكتوب"
+                        });
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                var pendingExpenses = await _cloudHttp.GetFromJsonAsync<List<CloudExpenseSyncDto>>("api/sync/expenses/pending");
+                if (pendingExpenses != null)
+                {
+                    foreach (var e in pendingExpenses)
+                    {
+                        list.Add(new PendingSyncItemView
+                        {
+                            Id = e.Id,
+                            EntityType = "Expense",
+                            Title = $"مصروف: {e.Category}",
+                            Subtitle = e.Description ?? "مصروف مسجل من الموبايل",
+                            Details = $"المبلغ: {e.Amount:N2} ج.م",
+                            Amount = e.Amount,
+                            Date = e.Date,
+                            Source = "تطبيق الموبايل",
+                            Status = "بانتظار السحب للديسكتوب"
+                        });
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                var pendingProds = await _cloudHttp.GetFromJsonAsync<List<PendingCloudProductDto>>("api/sync/products/pending");
+                if (pendingProds != null)
+                {
+                    foreach (var pr in pendingProds)
+                    {
+                        list.Add(new PendingSyncItemView
+                        {
+                            Id = pr.Id,
+                            EntityType = "Product",
+                            Title = $"منتج جديد: {pr.NameAr}",
+                            Subtitle = $"باركود: {pr.Barcode} | القسم: {pr.CategoryName ?? "عام"}",
+                            Details = $"سعر البيع: {pr.SellingPrice:N2} ج.م | الشراء: {pr.PurchasePrice:N2} ج.م",
+                            Amount = pr.SellingPrice,
+                            Date = DateTime.Now,
+                            Source = "تطبيق الموبايل",
+                            Status = "بانتظار السحب للديسكتوب"
+                        });
+                    }
+                }
+            }
+            catch { }
+
+            _pendingQueue.Clear();
+            _pendingQueue.AddRange(list);
+            NotifyStateChanged();
+            return list;
+        }
+
+        public async Task<bool> DismissPendingItemAsync(string entityType, Guid id)
+        {
+            try
+            {
+                var response = await _cloudHttp.PostAsync($"api/sync/items/{entityType}/{id}/dismiss", null);
+                if (response.IsSuccessStatusCode)
+                {
+                    _pendingQueue.RemoveAll(x => x.Id == id && string.Equals(x.EntityType, entityType, StringComparison.OrdinalIgnoreCase));
+                    NotifyStateChanged();
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error dismissing pending item: {ex.Message}");
+            }
+            return false;
+        }
+
+        public async Task<bool> SyncSinglePendingItemAsync(string entityType, Guid id)
+        {
+            await SyncNowAsync();
+            await FetchPendingQueueAsync();
+            return true;
         }
 
         private async Task<int> PullPendingPurchasesFromCloudAsync()
@@ -596,7 +993,7 @@ namespace POS.Desktop.Services.Sync
                     else if (!string.IsNullOrWhiteSpace(prod.BrandName))
                     {
                         var matchingBrand = brands.FirstOrDefault(b =>
-                            b.Name.Trim().Equals(prod.BrandName.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                            (!string.IsNullOrWhiteSpace(b.Name) && b.Name.Trim().Equals(prod.BrandName.Trim(), StringComparison.OrdinalIgnoreCase)) ||
                             (!string.IsNullOrWhiteSpace(b.NameAr) && b.NameAr.Trim().Equals(prod.BrandName.Trim(), StringComparison.OrdinalIgnoreCase)));
                         if (matchingBrand != null)
                         {
@@ -621,7 +1018,7 @@ namespace POS.Desktop.Services.Sync
                     var formModel = new CreateProductFormModel
                     {
                         Id = prod.Id,
-                        Barcode = prod.Barcode,
+                        Barcode = prod.Barcode ?? string.Empty,
                         NameAr = prod.NameAr,
                         NameEn = prod.NameEn ?? string.Empty,
                         BaseUnit = prod.BaseUnit ?? "قطعة",
@@ -839,7 +1236,7 @@ namespace POS.Desktop.Services.Sync
                         SupplierDebtsTotal: supplierDebts?.Sum(s => s.RemainingAmount) ?? 0,
                         LowStockCount: dashData.LowStockProductsCount,
                         ExpiryAlertsCount: dashData.ActiveExpiryNotificationsCount,
-                        MonthlySalesJson: calendar != null ? JsonSerializer.Serialize(calendar.Days) : null,
+                        MonthlySalesJson: calendar != null ? JsonSerializer.Serialize(calendar) : null,
                         TodayWasteLoss: dashData.WasteLosses?.TodayLoss ?? 0,
                         MonthWasteLoss: dashData.WasteLosses?.MonthLoss ?? 0,
                         TotalWasteLoss: dashData.WasteLosses?.TotalLoss ?? 0,
@@ -979,26 +1376,36 @@ namespace POS.Desktop.Services.Sync
                     return 0;
 
                 var localBrands = await _posApi.GetBrandsAsync();
-                var localByName = localBrands?.ToDictionary(b => b.NameAr.Trim().ToLower(), b => b) ?? new();
+                var localByName = localBrands?
+                    .Where(b => !string.IsNullOrWhiteSpace(b.NameAr) || !string.IsNullOrWhiteSpace(b.Name))
+                    .ToDictionary(b => (!string.IsNullOrWhiteSpace(b.NameAr) ? b.NameAr : b.Name!).Trim().ToLower(), b => b) ?? new();
                 var localById = localBrands?.ToDictionary(b => b.Id, b => b) ?? new();
 
                 foreach (var brand in pendingBrands)
                 {
-                    if (localById.ContainsKey(brand.Id) || localByName.ContainsKey(brand.NameAr.Trim().ToLower()))
+                    var brandName = !string.IsNullOrWhiteSpace(brand.NameAr)
+                        ? brand.NameAr.Trim()
+                        : !string.IsNullOrWhiteSpace(brand.Name)
+                            ? brand.Name.Trim()
+                            : brand.NameEn?.Trim() ?? "ماركة";
+
+                    if (localById.ContainsKey(brand.Id) || localByName.ContainsKey(brandName.ToLower()))
                     {
                         await AcknowledgeBrandAsync(brand.Id);
                         continue;
                     }
 
                     var req = new CreateBrandRequest(
-                        NameAr: brand.NameAr.Trim(),
-                        NameEn: !string.IsNullOrWhiteSpace(brand.NameEn) ? brand.NameEn.Trim() : brand.NameAr.Trim(),
+                        NameAr: brandName,
+                        NameEn: !string.IsNullOrWhiteSpace(brand.NameEn) ? brand.NameEn.Trim() : brandName,
                         Description: brand.Description,
-                        Name: brand.NameAr.Trim()
+                        OriginCountry: brand.OriginCountry,
+                        AgentContactNumber: brand.AgentContactNumber,
+                        Name: brandName
                     );
 
                     var (brandId, error) = await _posApi.CreateBrandAsync(req);
-                    if (brandId.HasValue && brandId.Value != Guid.Empty || (error != null && error.Contains("مسبقاً")))
+                    if ((brandId.HasValue && brandId.Value != Guid.Empty) || (error != null && error.Contains("مسبقاً")))
                     {
                         await AcknowledgeBrandAsync(brand.Id);
                         importedCount++;
@@ -1006,19 +1413,19 @@ namespace POS.Desktop.Services.Sync
                     else
                     {
                         var refreshedBrands = await _posApi.GetBrandsAsync();
-                        if (refreshedBrands != null && refreshedBrands.Any(b => b.NameAr.Trim().Equals(brand.NameAr.Trim(), StringComparison.OrdinalIgnoreCase)))
+                        if (refreshedBrands != null && refreshedBrands.Any(b =>
+                            (!string.IsNullOrWhiteSpace(b.NameAr) && b.NameAr.Trim().Equals(brandName, StringComparison.OrdinalIgnoreCase)) ||
+                            (!string.IsNullOrWhiteSpace(b.Name) && b.Name.Trim().Equals(brandName, StringComparison.OrdinalIgnoreCase))))
                         {
                             await AcknowledgeBrandAsync(brand.Id);
                         }
                     }
                 }
-
-                if (importedCount > 0)
-                {
-                    NotifyStateChanged();
-                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CloudSync] Error in PullPendingBrandsFromCloudAsync: {ex.Message}");
+            }
             return importedCount;
         }
 
@@ -1040,10 +1447,12 @@ namespace POS.Desktop.Services.Sync
 
                 var brandsToPush = localBrands.Select(b => new PushBrandDto(
                     Id: b.Id,
+                    Name: !string.IsNullOrWhiteSpace(b.Name) ? b.Name : b.NameAr,
                     NameAr: b.NameAr,
                     NameEn: b.NameEn,
                     Description: b.Description,
-                    LogoUrl: null,
+                    OriginCountry: b.OriginCountry,
+                    AgentContactNumber: b.AgentContactNumber,
                     IsActive: b.IsActive
                 )).ToList();
 
@@ -1179,6 +1588,21 @@ namespace POS.Desktop.Services.Sync
                 if (pendingSales == null || !pendingSales.Any())
                     return 0;
 
+                // Preload known local sales invoices if cache is empty
+                if (!_knownSaleInvoiceNumbers.Any())
+                {
+                    try
+                    {
+                        var existingLocal = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddDays(-180), DateTime.UtcNow.AddDays(1));
+                        foreach (var s in existingLocal ?? Enumerable.Empty<SaleDto>())
+                        {
+                            if (!string.IsNullOrWhiteSpace(s.InvoiceNumber))
+                                _knownSaleInvoiceNumbers.Add(s.InvoiceNumber.Trim());
+                        }
+                    }
+                    catch { }
+                }
+
                 var adminUserId = _authState.UserId != Guid.Empty ? _authState.UserId : Guid.Parse("2bc4e49b-fe29-4c7b-9eed-649de1c32cef");
 
                 var localProducts = await _posApi.GetProductsAsync();
@@ -1187,27 +1611,47 @@ namespace POS.Desktop.Services.Sync
                     .Where(p => !string.IsNullOrWhiteSpace(p.Barcode))
                     .GroupBy(p => p.Barcode.Trim().ToLower())
                     .ToDictionary(g => g.Key, g => g.First()) ?? new();
+                var localByName = localProducts?
+                    .Where(p => !string.IsNullOrWhiteSpace(p.NameAr))
+                    .GroupBy(p => p.NameAr.Trim().ToLower())
+                    .ToDictionary(g => g.Key, g => g.First()) ?? new();
 
                 var affectedProductIds = new HashSet<Guid>();
 
                 foreach (var cloudSale in pendingSales)
                 {
-                    if (!string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber) && _knownSaleInvoiceNumbers.Contains(cloudSale.InvoiceNumber.Trim()))
+                    bool isKnown = !string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber) && _knownSaleInvoiceNumbers.Contains(cloudSale.InvoiceNumber.Trim());
+                    SaleDto? matchedSale = null;
+
+                    if (isKnown || !string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber))
                     {
-                        if (cloudSale.ReservationStatus > 0)
+                        try
+                        {
+                            var existingSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddDays(-180), DateTime.UtcNow.AddDays(1));
+                            matchedSale = existingSales?.FirstOrDefault(s =>
+                                s.Id == cloudSale.Id ||
+                                (!string.IsNullOrWhiteSpace(s.InvoiceNumber) && !string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber) &&
+                                 s.InvoiceNumber.Trim().Equals(cloudSale.InvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
+                        }
+                        catch { }
+                    }
+
+                    if (matchedSale != null)
+                    {
+                        if (cloudSale.ReservationStatus > 0 && matchedSale.ReservationStatus != cloudSale.ReservationStatus)
                         {
                             try
                             {
-                                var existingSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddDays(-60), DateTime.UtcNow.AddDays(1));
-                                var matchedSale = existingSales?.FirstOrDefault(s => s.InvoiceNumber.Trim().Equals(cloudSale.InvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase));
-                                if (matchedSale != null && matchedSale.ReservationStatus != cloudSale.ReservationStatus)
-                                {
-                                    await _posApi.UpdateReservationStatusAsync(matchedSale.Id, cloudSale.ReservationStatus);
-                                }
+                                await _posApi.UpdateReservationStatusAsync(matchedSale.Id, cloudSale.ReservationStatus);
+                                importedCount++;
                             }
                             catch { }
                         }
-                        await AcknowledgeSaleAsync(cloudSale.Id, "Already Exists Locally");
+                        await AcknowledgeSaleAsync(cloudSale.Id, matchedSale.Id.ToString());
+                        if (!string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber))
+                        {
+                            _knownSaleInvoiceNumbers.Add(cloudSale.InvoiceNumber.Trim());
+                        }
                         continue;
                     }
 
@@ -1257,6 +1701,10 @@ namespace POS.Desktop.Services.Sync
                             {
                                 resolvedProductId = pMatch.Id;
                             }
+                            else if (!string.IsNullOrWhiteSpace(i.ProductName) && localByName.TryGetValue(i.ProductName.Trim().ToLower(), out var pMatchName))
+                            {
+                                resolvedProductId = pMatchName.Id;
+                            }
                         }
 
                         return new CreateSaleItemRequest(
@@ -1268,6 +1716,8 @@ namespace POS.Desktop.Services.Sync
                             SerialNumber: i.SerialNumber
                         );
                     }).ToList();
+
+                    bool isInstSale = cloudSale.IsInstallment || cloudSale.PaymentMethod == "Installment";
 
                     var localCmd = new CreateSaleCommand(
                         CashierId: adminUserId,
@@ -1289,11 +1739,13 @@ namespace POS.Desktop.Services.Sync
                         DeliveryFee: cloudSale.DeliveryFee,
                         IsReserved: cloudSale.IsReserved,
                         TargetDeliveryDate: cloudSale.TargetDeliveryDate,
-                        IsInstallment: cloudSale.IsInstallment,
+                        IsInstallment: isInstSale,
                         GuarantorName: cloudSale.GuarantorName,
                         GuarantorPhone: cloudSale.GuarantorPhone,
                         InterestPercentage: cloudSale.InterestPercentage,
-                        NumberOfMonths: cloudSale.NumberOfMonths
+                        NumberOfMonths: cloudSale.NumberOfMonths > 0 ? cloudSale.NumberOfMonths : 12,
+                        CustomInvoiceNumber: cloudSale.InvoiceNumber,
+                        BypassStockCheck: true
                     );
 
                     var (result, error) = await _posApi.CreateSaleAsync(localCmd);
@@ -1321,6 +1773,14 @@ namespace POS.Desktop.Services.Sync
                             affectedProductIds.Add(item.ProductId);
                         }
                     }
+                    else if (error != null && (error.Contains("مسجل مسبقاً") || error.Contains("Duplicate") || error.Contains("already exists") || error.Contains("موجودة")))
+                    {
+                        await AcknowledgeSaleAsync(cloudSale.Id, "Duplicate Detected Locally");
+                        if (!string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber))
+                        {
+                            _knownSaleInvoiceNumbers.Add(cloudSale.InvoiceNumber.Trim());
+                        }
+                    }
                     else
                     {
                         await FailSaleAsync(cloudSale.Id, error ?? "Unknown error creating sale locally");
@@ -1330,7 +1790,6 @@ namespace POS.Desktop.Services.Sync
                 if (importedCount > 0)
                 {
                     await PushFastStockAndSuppliersAsync(affectedProductIds, Enumerable.Empty<Guid>());
-                    NotifyStateChanged();
                 }
             }
             catch (Exception ex)
@@ -1590,13 +2049,14 @@ namespace POS.Desktop.Services.Sync
                     {
                         resStatus = 1; // Default to Reserved (1)
                     }
+                    bool isRes = (s.IsReserved || resStatus == 1 || resStatus == 2) && resStatus != 3 && resStatus != 0;
 
                     return new CloudSaleSyncDto(
                         Id: s.Id,
                         InvoiceNumber: s.InvoiceNumber,
                         CustomerId: s.CustomerId,
                         CustomerName: s.CustomerName,
-                        CustomerPhone: s.RecipientPhone,
+                        CustomerPhone: !string.IsNullOrWhiteSpace(s.RecipientPhone) ? s.RecipientPhone : (customerDebts?.FirstOrDefault(d => d.CustomerId == s.CustomerId)?.CustomerPhone ?? null),
                         SaleDate: s.SaleDate,
                         SubTotal: s.SubTotal,
                         DiscountAmount: s.DiscountAmount,
@@ -1617,7 +2077,7 @@ namespace POS.Desktop.Services.Sync
                         GuarantorPhone: contract?.GuarantorPhone,
                         InterestPercentage: contract?.InterestPercentage ?? 0,
                         NumberOfMonths: contract?.NumberOfMonths ?? 12,
-                        IsReserved: s.IsReserved,
+                        IsReserved: isRes,
                         TargetDeliveryDate: s.TargetDeliveryDate,
                         Items: (s.Items ?? new List<SaleItemDto>()).Select(i => new CloudSaleItemSyncDto(
                             Id: i.Id != Guid.Empty ? i.Id : Guid.NewGuid(),
@@ -1651,7 +2111,7 @@ namespace POS.Desktop.Services.Sync
             try
             {
                 var localOffers = await _posApi.GetOffersAsync();
-                if (localOffers == null || !localOffers.Any()) return;
+                if (localOffers == null) return;
 
                 var offersToPush = localOffers.Select(o => new PushOfferDto(
                     Id: o.Id,
@@ -1681,10 +2141,7 @@ namespace POS.Desktop.Services.Sync
                     )).ToList()
                 )).ToList();
 
-                if (offersToPush.Any())
-                {
-                    await _cloudHttp.PostAsJsonAsync("api/sync/offers/push", new PushOffersRequest(offersToPush));
-                }
+                await _cloudHttp.PostAsJsonAsync("api/sync/offers/push", new PushOffersRequest(offersToPush));
             }
             catch { }
         }
@@ -1799,6 +2256,7 @@ namespace POS.Desktop.Services.Sync
         }
 
         private void NotifyStateChanged() => OnSyncStateChanged?.Invoke();
+        private void NotifyDataImported() => OnDataImported?.Invoke();
 
         public void Dispose()
         {

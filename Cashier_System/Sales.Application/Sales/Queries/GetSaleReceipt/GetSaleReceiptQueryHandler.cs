@@ -112,6 +112,8 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
                     ISNULL(s.IsReserved, 0) AS IsReserved, s.TargetDeliveryDate,
                     ISNULL(s.IsInstallment, 0) AS IsInstallment,
                     inst.MonthlyInstallmentAmount, inst.NumberOfMonths, inst.DownPayment,
+                    inst.InterestPercentage, inst.InterestAmount, inst.TotalInstallmentAmount, inst.TotalCashAmount,
+                    inst.GuarantorName, inst.GuarantorPhone,
                     ISNULL((
                         SELECT COUNT(*) 
                         FROM [Sales].[Sales] s2 
@@ -121,7 +123,7 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
                 FROM [Sales].[Sales] s
                 LEFT JOIN [Identity].[AspNetUsers] u ON s.CashierId = CAST(u.Id AS uniqueidentifier)
                 LEFT JOIN [Sales].[Customers] c ON s.CustomerId = c.Id
-                LEFT JOIN [Sales].[InstallmentContracts] inst ON s.InstallmentContractId = inst.Id
+                LEFT JOIN [Sales].[InstallmentContracts] inst ON (s.InstallmentContractId = inst.Id OR inst.SaleId = s.Id)
                 WHERE s.Id = @SaleId
                 """;
 
@@ -211,10 +213,20 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
             DateTime? targetDeliveryDate = (DateTime?)saleHeader.TargetDeliveryDate;
             bool isInstallment = (bool)(saleHeader.IsInstallment ?? false);
 
+            decimal? instInterestPct = saleHeader.InterestPercentage != null ? (decimal)saleHeader.InterestPercentage : null;
+            decimal? instInterestAmt = saleHeader.InterestAmount != null ? (decimal)saleHeader.InterestAmount : null;
+            decimal? instTotalCash = saleHeader.TotalCashAmount != null ? (decimal)saleHeader.TotalCashAmount : null;
+            decimal? instRemaining = saleHeader.TotalInstallmentAmount != null ? (decimal)saleHeader.TotalInstallmentAmount : null;
+            decimal? instMonthly = saleHeader.MonthlyInstallmentAmount != null ? (decimal)saleHeader.MonthlyInstallmentAmount : null;
+            int? instMonths = saleHeader.NumberOfMonths != null ? (int)saleHeader.NumberOfMonths : null;
+            decimal? instDown = saleHeader.DownPayment != null ? (decimal)saleHeader.DownPayment : null;
+            string? guarantorName = (string?)saleHeader.GuarantorName;
+            string? guarantorPhone = (string?)saleHeader.GuarantorPhone;
+
             string? installmentSummary = null;
-            if (isInstallment && saleHeader.MonthlyInstallmentAmount != null)
+            if (isInstallment && instMonthly != null)
             {
-                installmentSummary = $"تقسيط: قسط شهري {((decimal)saleHeader.MonthlyInstallmentAmount):N2} {currency} لمدة {((int)saleHeader.NumberOfMonths)} شهر (مقدم: {((decimal)saleHeader.DownPayment):N2} {currency})";
+                installmentSummary = $"تقسيط: نقدي {instTotalCash ?? saleHeader.SubTotal:N2} {currency} | مقدم {instDown ?? saleHeader.PaidAmount:N2} {currency} | فائدة {instInterestPct ?? 0:G29}% ({instInterestAmt ?? 0:N2} {currency}) | قسط {instMonthly:N2} {currency}/شهر ({instMonths ?? 12} شهر)";
             }
 
             string rawPaymentMethod = (string?)saleHeader.PaymentMethod ?? "Cash";
@@ -279,7 +291,16 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
                 customerPhone,
                 customerAddress,
                 driverName,
-                saleType);
+                saleType,
+                instInterestPct,
+                instInterestAmt,
+                instTotalCash,
+                instRemaining,
+                instMonthly,
+                instMonths,
+                instDown,
+                guarantorName,
+                guarantorPhone);
 
             return Result<ReceiptResponse>.Success(receipt);
         }

@@ -601,6 +601,36 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
               ),
             ],
           ),
+
+          if (item.discount > 0) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.35)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.local_offer_rounded, size: 12, color: Color(0xFF10B981)),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      "خصم العرض: -${item.discount.toStringAsFixed(0)} ج.م ${item.appliedOfferTitle != null ? '(${item.appliedOfferTitle})' : ''}",
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF10B981),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1136,6 +1166,101 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
   }
 
   Future<void> _confirmAndSubmitSale(BuildContext context, SalesProvider salesProv) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Show Confirmation Dialog before submitting if it's an installment sale
+    if (salesProv.isInstallment) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) {
+          return AlertDialog(
+            backgroundColor: AppColors.getSurface(isDark),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6366F1).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.event_repeat_rounded, color: Color(0xFF6366F1), size: 24),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    "تأكيد عملية البيع بالتقسيط",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6366F1).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25)),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildInstallmentConfirmRow("سعر الأجهزة نقداً:", "${salesProv.cashTotal.toStringAsFixed(0)} ج.م", isDark),
+                        const SizedBox(height: 6),
+                        _buildInstallmentConfirmRow("المقدم المدفوع الآن:", "${salesProv.paidAmount.toStringAsFixed(0)} ج.م", isDark, valueColor: const Color(0xFF10B981)),
+                        const SizedBox(height: 6),
+                        _buildInstallmentConfirmRow("أصل التمويل المتبقي:", "${salesProv.financedBase.toStringAsFixed(0)} ج.م", isDark),
+                        const SizedBox(height: 6),
+                        _buildInstallmentConfirmRow("نسبة الفائدة / الأرباح:", "${salesProv.interestPercentage.toStringAsFixed(0)}% (+${salesProv.interestAmount.toStringAsFixed(0)} ج.م)", isDark, valueColor: const Color(0xFFF59E0B)),
+                        const Divider(height: 16),
+                        _buildInstallmentConfirmRow("إجمالي الفاتورة بالفوائد:", "${salesProv.grandTotal.toStringAsFixed(0)} ج.م", isDark, isBold: true, valueColor: const Color(0xFF6366F1)),
+                        const SizedBox(height: 6),
+                        _buildInstallmentConfirmRow("المتبقي للأقساط:", "${salesProv.remainingAmount.toStringAsFixed(0)} ج.م", isDark, isBold: true),
+                        const SizedBox(height: 6),
+                        _buildInstallmentConfirmRow("القسط الشهري المستحق:", "${salesProv.monthlyInstallmentAmount.toStringAsFixed(0)} ج.م / شهر", isDark, isBold: true, valueColor: const Color(0xFF6366F1)),
+                        const SizedBox(height: 6),
+                        _buildInstallmentConfirmRow("مدة التقسيط:", "${salesProv.numberOfMonths} شهر", isDark),
+                      ],
+                    ),
+                  ),
+                  if (salesProv.customerName != null && salesProv.customerName!.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text("العميل: ${salesProv.customerName} (${salesProv.customerPhone ?? '-'})", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.getTextPrimary(isDark))),
+                  ],
+                  if (salesProv.guarantorName != null && salesProv.guarantorName!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text("الضامن: ${salesProv.guarantorName} (${salesProv.guarantorPhone ?? '-'})", style: TextStyle(fontSize: 12, color: AppColors.getTextMuted(isDark))),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("رجوع للتعديل"),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.check_circle_rounded, size: 18),
+                label: const Text("تأكيد وإصدار الفاتورة", style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () => Navigator.pop(ctx, true),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed != true) return;
+    }
+
     final created = await salesProv.submitSale();
     if (!context.mounted) return;
 
@@ -1235,6 +1360,36 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
         ),
       );
     }
+  }
+
+  static Widget _buildInstallmentConfirmRow(
+    String label,
+    String value,
+    bool isDark, {
+    bool isBold = false,
+    Color? valueColor,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            color: isBold ? AppColors.getTextPrimary(isDark) : AppColors.getTextMuted(isDark),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isBold ? 13.5 : 12,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            color: valueColor ?? AppColors.getTextPrimary(isDark),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _showInstallmentOptionsModal(
@@ -1840,8 +1995,18 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
                                         style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                                       ),
                                       onPressed: () {
-                                        salesProv.applyOffer(off, prodProv.products);
+                                        final error = salesProv.applyOffer(off, prodProv.products);
                                         Navigator.pop(sheetCtx);
+                                        if (error != null) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(error),
+                                              backgroundColor: const Color(0xFFD97706),
+                                              behavior: SnackBarBehavior.floating,
+                                            ),
+                                          );
+                                          return;
+                                        }
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
                                             content: Text("تم تطبيق: $title بنجاح!"),

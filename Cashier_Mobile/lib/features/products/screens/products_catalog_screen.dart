@@ -441,10 +441,10 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
               child: Icon(
                 p.isWeighable
                     ? Icons.scale_rounded
-                    : (isAppliance ? Icons.tv_rounded : (p.trackExpiry ? Icons.timelapse_rounded : Icons.inventory_2_rounded)),
+                    : (isAppliance ? Icons.tv_rounded : Icons.inventory_2_rounded),
                 color: p.isWeighable
                     ? AppColors.cyan
-                    : (isAppliance ? AppColors.accent : (p.trackExpiry ? AppColors.warning : AppColors.primaryLight)),
+                    : (isAppliance ? AppColors.accent : AppColors.primaryLight),
                 size: 24,
               ),
             ),
@@ -539,8 +539,6 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
                         _buildBadge(p.color!, const Color(0xFF0D9488)),
                       if (p.isWeighable)
                         _buildBadge("بالوزن ⚖️", AppColors.cyan),
-                      if (p.trackExpiry)
-                        _buildBadge(p.shelfLifeDays > 0 ? "صلاحية: ${p.shelfLifeDays} يوم ⏳" : "تتبع الصلاحية ⏳", AppColors.warning),
                       if (isLowStock)
                         _buildBadge("منخفض ⚠️", AppColors.danger),
                     ],

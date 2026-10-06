@@ -7,6 +7,8 @@
 @inject PosApiClient ApiClient
 @inject CustomAuthStateProvider AuthState
 @inject IJSRuntime JS
+@inject global::POS.Desktop.Services.Sync.ICloudSyncService CloudSync
+@implements IDisposable
 
 <div>
     <div class="page-header">
@@ -221,7 +223,22 @@
 
     protected override async Task OnInitializedAsync()
     {
+        CloudSync.OnDataImported += HandleSyncDataImported;
         await LoadBrandsAsync();
+    }
+
+    private async void HandleSyncDataImported()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadBrandsAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        CloudSync.OnDataImported -= HandleSyncDataImported;
     }
 
     private async Task LoadBrandsAsync()
@@ -329,6 +346,12 @@
 
             showModal = false;
             await LoadBrandsAsync();
+            try
+            {
+                CloudSync.RecordLocalChange();
+                _ = Task.Run(async () => await CloudSync.SyncNowAsync());
+            }
+            catch { }
         }
         catch (Exception ex)
         {
@@ -349,6 +372,12 @@
             if (success)
             {
                 await LoadBrandsAsync();
+                try
+                {
+                    CloudSync.RecordLocalChange();
+                    _ = Task.Run(async () => await CloudSync.SyncNowAsync());
+                }
+                catch { }
             }
             else
             {

@@ -98,22 +98,41 @@ class SalesProvider with ChangeNotifier {
 
   // Financial Calculations
   double get subTotal => _cartItems.fold(0.0, (sum, i) => sum + i.total);
-  double get grandTotal {
+
+  double get cashTotal {
     double total = subTotal - _discountAmount + (_isDelivery ? _deliveryFee : 0);
-    if (_isInstallment && _interestPercentage > 0) {
-      total += total * (_interestPercentage / 100);
-    }
     return total < 0 ? 0 : total;
   }
 
+  double get financedBase {
+    if (!_isInstallment) return 0;
+    double base = cashTotal - _paidAmount;
+    return base < 0 ? 0 : base;
+  }
+
+  double get interestAmount {
+    if (!_isInstallment || _interestPercentage <= 0) return 0;
+    return financedBase * (_interestPercentage / 100);
+  }
+
+  double get grandTotal {
+    if (_isInstallment) {
+      return cashTotal + interestAmount;
+    }
+    return cashTotal;
+  }
+
   double get remainingAmount {
+    if (_isInstallment) {
+      return financedBase + interestAmount;
+    }
     double remaining = grandTotal - _paidAmount;
     return remaining < 0 ? 0 : remaining;
   }
 
   double get monthlyInstallmentAmount {
     if (!_isInstallment || _numberOfMonths <= 0) return 0;
-    return grandTotal / _numberOfMonths;
+    return remainingAmount / _numberOfMonths;
   }
 
   // Cart Management
@@ -133,6 +152,8 @@ class SalesProvider with ChangeNotifier {
           barcode: product.barcode,
           modelNumber: product.modelNumber,
           brandName: product.brandName,
+          brandId: product.brandId,
+          categoryId: product.categoryId,
           quantity: quantity,
           unitPrice: product.sellingPrice,
           serialNumber: serialNumber,
@@ -316,58 +337,171 @@ class SalesProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void applyOffer(Map<String, dynamic> offer, List<ProductModel> catalog) {
-    final items = offer['items'];
-    if (items is List && items.isNotEmpty) {
-      for (final rawItem in items) {
-        final itm = rawItem is Map<String, dynamic> ? rawItem : <String, dynamic>{};
-        final pId = itm['productId']?.toString();
-        final pName = itm['productName']?.toString();
-        final qty = (itm['quantity'] as num?)?.toDouble() ?? 1.0;
-        final specialPrice = (itm['specialPrice'] as num?)?.toDouble();
+  String? applyOffer(Map<String, dynamic> offer, List<ProductModel> catalog) {
+    final offerType = offer['offerType']?.toString() ?? '';
+    final type = (offer['type'] as num?)?.toInt();
+    final isBundle = offerType == 'BundlePackage' || type == 3;
+    final isBrand = offerType == 'BrandDiscount' || type == 2;
+    final isCategory = offerType == 'CategoryDiscount' || type == 1;
+    final isProduct = offerType == 'ProductDiscount' || type == 0;
 
-        ProductModel? prod;
-        if (pId != null && pId.isNotEmpty) {
-          prod = catalog.where((p) => p.id == pId).firstOrNull;
+    final targetBrandId = offer['targetBrandId']?.toString();
+    final targetBrandName = offer['targetBrandName']?.toString()?.toLowerCase();
+    final targetCategoryId = offer['targetCategoryId']?.toString();
+    final targetCategoryName = offer['targetCategoryName']?.toString()?.toLowerCase();
+    final targetProductId = offer['targetProductId']?.toString();
+    final offerTitle = offer['titleAr']?.toString() ?? offer['title']?.toString() ?? 'عرض خاص';
+
+    final pkgPrice = (offer['packagePrice'] as num?)?.toDouble() ??
+        (offer['bundlePrice'] as num?)?.toDouble() ??
+        0.0;
+    final discountPercent = (offer['discountPercent'] as num?)?.toDouble() ??
+        (offer['discountPercentage'] as num?)?.toDouble() ??
+        0.0;
+    final discountAmount = (offer['discountAmount'] as num?)?.toDouble() ??
+        (offer['fixedDiscountAmount'] as num?)?.toDouble() ??
+        0.0;
+
+    // 1. Bundle Package
+    if (isBundle) {
+      final items = offer['items'];
+      if (items is List && items.isNotEmpty) {
+        for (final rawItem in items) {
+          final itm = rawItem is Map<String, dynamic> ? rawItem : <String, dynamic>{};
+          final pId = itm['productId']?.toString();
+          final pName = itm['productName']?.toString();
+          final qty = (itm['quantity'] as num?)?.toDouble() ?? 1.0;
+          final specialPrice = (itm['specialPrice'] as num?)?.toDouble();
+
+          ProductModel? prod;
+          if (pId != null && pId.isNotEmpty) {
+            prod = catalog.where((p) => p.id == pId).firstOrNull;
+          }
+          if (prod == null && pName != null && pName.isNotEmpty) {
+            prod = catalog.where((p) => p.nameAr.toLowerCase() == pName.toLowerCase()).firstOrNull;
+          }
+          if (prod != null) {
+            addProduct(prod, quantity: qty);
+          } else if (pId != null && pId.isNotEmpty) {
+            _cartItems.add(
+              CartItemModel(
+                productId: pId,
+                productName: pName ?? "جهاز كهربائي",
+                quantity: qty,
+                unitPrice: specialPrice ?? 0,
+                warrantyPeriodMonths: 12,
+              ),
+            );
+          }
         }
-        if (prod == null && pName != null && pName.isNotEmpty) {
-          prod = catalog.where((p) => p.nameAr.toLowerCase() == pName.toLowerCase()).firstOrNull;
+      }
+
+      if (pkgPrice > 0) {
+        final currentSub = subTotal;
+        if (currentSub > pkgPrice) {
+          setDiscountAmount(currentSub - pkgPrice);
+        } else {
+          setDiscountAmount(0);
         }
-        if (prod != null) {
-          addProduct(prod, quantity: qty);
-        } else if (pId != null && pId.isNotEmpty) {
-          // Fallback placeholder item
-          _cartItems.add(
-            CartItemModel(
-              productId: pId,
-              productName: pName ?? "جهاز كهربائي",
-              quantity: qty,
-              unitPrice: specialPrice ?? 0,
-              warrantyPeriodMonths: 12,
-            ),
-          );
+      }
+      _autoSyncPaidAmount();
+      notifyListeners();
+      return null;
+    }
+
+    // 2. Brand Discount: Apply ONLY to items matching target brand
+    if (isBrand) {
+      final matchingItems = _cartItems.where((item) {
+        if (targetBrandId != null && targetBrandId.isNotEmpty && item.brandId == targetBrandId) {
+          return true;
         }
+        if (targetBrandName != null && targetBrandName.isNotEmpty && item.brandName?.toLowerCase() == targetBrandName) {
+          return true;
+        }
+        return false;
+      }).toList();
+
+      if (matchingItems.isEmpty) {
+        return "لا توجد أجهزة في السلة تابعة لماركة ${offer['targetBrandName'] ?? 'المحددة'}. يرجى إضافة أجهزة من هذه الماركة أولاً.";
+      }
+
+      for (final item in matchingItems) {
+        if (discountPercent > 0) {
+          item.discount = (item.subTotal * (discountPercent / 100)).roundToDouble();
+        } else if (discountAmount > 0) {
+          item.discount = discountAmount.clamp(0.0, item.subTotal);
+        }
+        item.appliedOfferTitle = offerTitle;
+      }
+      _autoSyncPaidAmount();
+      notifyListeners();
+      return null;
+    }
+
+    // 3. Category Discount: Apply ONLY to items matching target category
+    if (isCategory) {
+      final matchingItems = _cartItems.where((item) {
+        if (targetCategoryId != null && targetCategoryId.isNotEmpty && item.categoryId == targetCategoryId) {
+          return true;
+        }
+        return false;
+      }).toList();
+
+      if (matchingItems.isEmpty) {
+        return "لا توجد أجهزة في السلة تابعة لتصنيف ${offer['targetCategoryName'] ?? 'المحدد'}. يرجى إضافة أجهزة من هذا التصنيف أولاً.";
+      }
+
+      for (final item in matchingItems) {
+        if (discountPercent > 0) {
+          item.discount = (item.subTotal * (discountPercent / 100)).roundToDouble();
+        } else if (discountAmount > 0) {
+          item.discount = discountAmount.clamp(0.0, item.subTotal);
+        }
+        item.appliedOfferTitle = offerTitle;
+      }
+      _autoSyncPaidAmount();
+      notifyListeners();
+      return null;
+    }
+
+    // 4. Product Discount: Apply ONLY to target product (auto-add if missing)
+    if (isProduct) {
+      CartItemModel? matchedItem;
+      if (targetProductId != null && targetProductId.isNotEmpty) {
+        matchedItem = _cartItems.where((i) => i.productId == targetProductId).firstOrNull;
+        if (matchedItem == null) {
+          final prod = catalog.where((p) => p.id == targetProductId).firstOrNull;
+          if (prod != null) {
+            addProduct(prod, quantity: 1);
+            matchedItem = _cartItems.where((i) => i.productId == targetProductId).firstOrNull;
+          }
+        }
+      }
+
+      if (matchedItem != null) {
+        if (discountPercent > 0) {
+          matchedItem.discount = (matchedItem.subTotal * (discountPercent / 100)).roundToDouble();
+        } else if (discountAmount > 0) {
+          matchedItem.discount = discountAmount.clamp(0.0, matchedItem.subTotal);
+        }
+        matchedItem.appliedOfferTitle = offerTitle;
+        _autoSyncPaidAmount();
+        notifyListeners();
+        return null;
+      } else {
+        return "الجهاز المستهدف بالعرض غير متوفر في الكتالوج.";
       }
     }
 
-    final pkgPrice = (offer['packagePrice'] as num?)?.toDouble() ?? 0.0;
-    final discountPercent = (offer['discountPercent'] as num?)?.toDouble() ?? 0.0;
-    final discountAmount = (offer['discountAmount'] as num?)?.toDouble() ?? 0.0;
-
-    if (pkgPrice > 0) {
-      final currentSub = subTotal;
-      if (currentSub > pkgPrice) {
-        setDiscountAmount(currentSub - pkgPrice);
-      } else {
-        setDiscountAmount(0);
-      }
-    } else if (discountPercent > 0) {
+    // Fallback: General Cart Discount
+    if (discountPercent > 0) {
       setDiscountAmount(subTotal * (discountPercent / 100));
     } else if (discountAmount > 0) {
       setDiscountAmount(discountAmount);
     }
     _autoSyncPaidAmount();
     notifyListeners();
+    return null;
   }
 
   void setReservation({required bool enabled, DateTime? deliveryDate}) {
@@ -378,11 +512,10 @@ class SalesProvider with ChangeNotifier {
 
   void _autoSyncPaidAmount() {
     if (_paymentMethod == "Cash" || _paymentMethod == "Card") {
-      _paidAmount = grandTotal;
+      _paidAmount = cashTotal;
     } else if (_paymentMethod == "Installment" || _paymentMethod == "Credit") {
-      // In installments, default paid could be down payment (e.g. 0 or previous value)
-      if (_paidAmount > grandTotal) {
-        _paidAmount = grandTotal;
+      if (_paidAmount > cashTotal) {
+        _paidAmount = cashTotal;
       }
     }
   }

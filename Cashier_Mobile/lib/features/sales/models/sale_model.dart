@@ -4,6 +4,9 @@ class CartItemModel {
   final String? barcode;
   final String? modelNumber;
   final String? brandName;
+  final String? brandId;
+  final String? categoryId;
+  String? appliedOfferTitle;
   double quantity;
   double unitPrice;
   double discount;
@@ -18,6 +21,9 @@ class CartItemModel {
     this.barcode,
     this.modelNumber,
     this.brandName,
+    this.brandId,
+    this.categoryId,
+    this.appliedOfferTitle,
     this.quantity = 1,
     required this.unitPrice,
     this.discount = 0,
@@ -41,6 +47,9 @@ class CartItemModel {
         'serialNumber': serialNumber,
         'modelNumber': modelNumber,
         'brandName': brandName,
+        'brandId': brandId,
+        'categoryId': categoryId,
+        'appliedOfferTitle': appliedOfferTitle,
         'warrantyPeriodMonths': warrantyPeriodMonths,
       };
 
@@ -51,6 +60,9 @@ class CartItemModel {
       barcode: json['barcode']?.toString(),
       modelNumber: json['modelNumber']?.toString(),
       brandName: json['brandName']?.toString(),
+      brandId: json['brandId']?.toString(),
+      categoryId: json['categoryId']?.toString(),
+      appliedOfferTitle: json['appliedOfferTitle']?.toString(),
       quantity: (json['quantity'] as num?)?.toDouble() ?? 1.0,
       unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0.0,
       discount: (json['discount'] as num?)?.toDouble() ?? 0.0,
@@ -174,6 +186,7 @@ class SaleSummaryModel {
   final bool isDelivery;
   final bool isInstallment;
   final bool isReserved;
+  final int reservationStatus;
   final String syncStatus;
   final DateTime? syncedAt;
   final String? syncError;
@@ -257,7 +270,11 @@ class SaleDetailModel {
   final double deliveryFee;
   final bool isInstallment;
   final int numberOfMonths;
+  final double interestPercentage;
+  final String? guarantorName;
+  final String? guarantorPhone;
   final bool isReserved;
+  final int reservationStatus;
   final String syncStatus;
   final DateTime? syncedAt;
   final String? syncError;
@@ -285,6 +302,9 @@ class SaleDetailModel {
     this.deliveryFee = 0,
     this.isInstallment = false,
     this.numberOfMonths = 12,
+    this.interestPercentage = 0,
+    this.guarantorName,
+    this.guarantorPhone,
     this.isReserved = false,
     this.reservationStatus = 0,
     required this.syncStatus,
@@ -292,6 +312,11 @@ class SaleDetailModel {
     this.syncError,
     required this.items,
   });
+
+  double get itemsSubTotal => items.fold(0.0, (sum, i) => sum + i.total);
+  double get cashTotal => subTotal - discountAmount + deliveryFee;
+  double get interestAmount => isInstallment && interestPercentage > 0 ? (totalAmount - cashTotal) : 0.0;
+  double get monthlyInstallmentAmount => isInstallment && numberOfMonths > 0 ? remainingAmount / numberOfMonths : 0.0;
 
   factory SaleDetailModel.fromJson(Map<String, dynamic> json) {
     var rawItems = json['items'] as List? ?? [];
@@ -319,6 +344,9 @@ class SaleDetailModel {
       deliveryFee: (json['deliveryFee'] as num?)?.toDouble() ?? 0.0,
       isInstallment: json['isInstallment'] ?? false,
       numberOfMonths: (json['numberOfMonths'] as num?)?.toInt() ?? 12,
+      interestPercentage: (json['interestPercentage'] as num?)?.toDouble() ?? 0.0,
+      guarantorName: json['guarantorName']?.toString(),
+      guarantorPhone: json['guarantorPhone']?.toString(),
       isReserved: json['isReserved'] ?? false,
       reservationStatus: (json['reservationStatus'] as num?)?.toInt() ?? 0,
       syncStatus: json['syncStatus']?.toString() ?? 'PendingSync',

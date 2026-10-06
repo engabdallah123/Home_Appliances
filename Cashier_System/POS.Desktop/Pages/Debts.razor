@@ -469,7 +469,6 @@
                                 <th style="width: 100px; text-align: center; padding: 0.55rem 0.75rem;">الكمية</th>
                                 <th style="min-width: 120px; text-align: left; padding: 0.55rem 0.75rem;">سعر الشراء</th>
                                 <th style="min-width: 120px; text-align: left; padding: 0.55rem 0.75rem;">الإجمالي</th>
-                                <th style="min-width: 120px; padding: 0.55rem 0.75rem;">تاريخ الصلاحية</th>
                                 <th style="min-width: 110px; padding: 0.55rem 0.75rem;">رقم الدفعة</th>
                             </tr>
                         </thead>
@@ -486,7 +485,6 @@
                                         <td style="text-align: center; font-weight: 800; font-size: 0.95rem; padding: 0.5rem 0.75rem;">@itm.Quantity</td>
                                         <td style="text-align: left; padding: 0.5rem 0.75rem;">@itm.UnitCost.ToString("N2") ج.م</td>
                                         <td style="text-align: left; font-weight: 800; color: var(--accent-emerald); padding: 0.5rem 0.75rem;">@itm.Total.ToString("N2") ج.م</td>
-                                        <td style="padding: 0.5rem 0.75rem;">@(itm.ExpiryDate.HasValue ? itm.ExpiryDate.Value.ToString("dd/MM/yyyy") : "-")</td>
                                         <td style="padding: 0.5rem 0.75rem;"><code>@(itm.BatchNumber ?? "-")</code></td>
                                     </tr>
                                 }
@@ -494,7 +492,7 @@
                             else
                             {
                                 <tr>
-                                    <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">لا توجد أصناف مسجلة داخل الفاتورة</td>
+                                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">لا توجد أصناف مسجلة داخل الفاتورة</td>
                                 </tr>
                             }
                         </tbody>
@@ -614,11 +612,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        CloudSync.OnSyncStateChanged += HandleSyncStateChanged;
+        CloudSync.OnDataImported += HandleSyncDataImported;
         await LoadDebts();
     }
 
-    private async void HandleSyncStateChanged()
+    private async void HandleSyncDataImported()
     {
         await InvokeAsync(async () =>
         {
@@ -629,7 +627,7 @@
 
     public void Dispose()
     {
-        CloudSync.OnSyncStateChanged -= HandleSyncStateChanged;
+        CloudSync.OnDataImported -= HandleSyncDataImported;
     }
 
     private async Task HandleManualRefresh()

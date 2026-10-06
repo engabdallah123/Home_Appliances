@@ -728,8 +728,9 @@ namespace POS.Desktop.Services.Api
 
                 return await _http.GetFromJsonAsync<DashboardDataDto>(url);
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"[PosApiClient] Error fetching dashboard: {ex.Message}");
                 return null;
             }
         }

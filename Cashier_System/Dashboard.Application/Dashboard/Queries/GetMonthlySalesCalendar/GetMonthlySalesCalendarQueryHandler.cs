@@ -77,13 +77,16 @@ namespace Dashboard.Application.Dashboard.Queries.GetMonthlySalesCalendar
                         END
                     ), 0) AS TotalPaid,
                     ISNULL(SUM(
-                        s.TotalAmount - (
-                            CASE 
-                                WHEN s.PaidAmount <= 0 THEN 0
-                                WHEN s.PaidAmount - ISNULL(col.TotalCollected, 0) < 0 THEN 0
-                                ELSE s.PaidAmount - ISNULL(col.TotalCollected, 0)
-                            END
-                        )
+                        CASE 
+                            WHEN s.IsInstallment = 1 OR s.PaymentMethod = 'Installment' THEN 0
+                            ELSE s.TotalAmount - (
+                                CASE 
+                                    WHEN s.PaidAmount <= 0 THEN 0
+                                    WHEN s.PaidAmount - ISNULL(col.TotalCollected, 0) < 0 THEN 0
+                                    ELSE s.PaidAmount - ISNULL(col.TotalCollected, 0)
+                                END
+                            )
+                        END
                     ), 0) AS TotalCredit,
                     COUNT(1) AS InvoiceCount
                 FROM [Sales].[Sales] s

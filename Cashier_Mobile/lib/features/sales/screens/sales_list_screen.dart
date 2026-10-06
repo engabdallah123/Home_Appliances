@@ -493,6 +493,57 @@ class _SalesListScreenState extends State<SalesListScreen> {
                         ),
                       ],
                     ),
+                    if (detail.isInstallment) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1).withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.calculate_rounded, size: 18, color: Color(0xFF6366F1)),
+                                SizedBox(width: 6),
+                                Text(
+                                  "تفاصيل عقد التقسيط والفوائد:",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Color(0xFF6366F1),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Divider(height: 14),
+                            _buildDetailRow("سعر الأجهزة نقداً:", "${detail.cashTotal.toStringAsFixed(0)} ج.م", isDark),
+                            const SizedBox(height: 5),
+                            _buildDetailRow("المقدم المدفوع:", "${detail.paidAmount.toStringAsFixed(0)} ج.م", isDark, valueColor: const Color(0xFF10B981)),
+                            const SizedBox(height: 5),
+                            _buildDetailRow(
+                              "نسبة وقيمة الفائدة:",
+                              "${detail.interestPercentage.toStringAsFixed(0)}% (+${detail.interestAmount.toStringAsFixed(0)} ج.م)",
+                              isDark,
+                              valueColor: const Color(0xFFF59E0B),
+                            ),
+                            const Divider(height: 14),
+                            _buildDetailRow("إجمالي العقد بالفوائد:", "${detail.totalAmount.toStringAsFixed(0)} ج.م", isDark, isBold: true, valueColor: const Color(0xFF6366F1)),
+                            const SizedBox(height: 5),
+                            _buildDetailRow("المتبقي للأقساط:", "${detail.remainingAmount.toStringAsFixed(0)} ج.م", isDark, isBold: true),
+                            const SizedBox(height: 5),
+                            _buildDetailRow("القسط الشهري:", "${detail.monthlyInstallmentAmount.toStringAsFixed(0)} ج.م / شهر (${detail.numberOfMonths} شهر)", isDark, isBold: true, valueColor: const Color(0xFF6366F1)),
+                            if (detail.guarantorName != null && detail.guarantorName!.isNotEmpty) ...[
+                              const Divider(height: 14),
+                              _buildDetailRow("الضامن:", "${detail.guarantorName} (${detail.guarantorPhone ?? '-'})", isDark),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -501,6 +552,36 @@ class _SalesListScreenState extends State<SalesListScreen> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildDetailRow(
+    String label,
+    String value,
+    bool isDark, {
+    bool isBold = false,
+    Color? valueColor,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            color: isBold ? AppColors.getTextPrimary(isDark) : AppColors.getTextMuted(isDark),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isBold ? 13 : 12,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            color: valueColor ?? AppColors.getTextPrimary(isDark),
+          ),
+        ),
+      ],
     );
   }
 }
