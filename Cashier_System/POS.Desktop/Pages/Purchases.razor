@@ -1824,9 +1824,9 @@
 
     private async Task TriggerCloudSync()
     {
-        var result = await CloudSync.SyncNowAsync();
+        var success = await CloudSync.SyncPurchasesOnlyAsync();
         await LoadData();
-        syncToastMessage = result.Success ? (result.Message ?? "تمت المزامنة بنجاح!") : (result.Error ?? "فشلت المزامنة");
+        syncToastMessage = success ? "تمت مزامنة المشتريات بنجاح!" : "فشلت مزامنة المشتريات";
         showSyncToast = true;
         StateHasChanged();
     }
@@ -1947,7 +1947,7 @@
             CloseModals();
             await LoadData();
             CloudSync.RecordLocalChange();
-            _ = Task.Run(async () => await CloudSync.SyncNowAsync(forceCatalogPush: true));
+            _ = Task.Run(async () => await CloudSync.SyncPurchasesOnlyAsync());
         }
         else
         {
@@ -2572,7 +2572,7 @@
             searchQuerySuppliers = string.Empty;
             await LoadData();
             CloudSync.RecordLocalChange();
-            _ = Task.Run(async () => await CloudSync.SyncNowAsync(forceCatalogPush: true));
+            _ = Task.Run(async () => await CloudSync.SyncPurchasesOnlyAsync());
         }
         else
         {
@@ -2624,7 +2624,7 @@
             CloseModals();
             await LoadData();
             CloudSync.RecordLocalChange();
-            _ = Task.Run(async () => await CloudSync.SyncNowAsync(forceCatalogPush: true));
+            _ = Task.Run(async () => await CloudSync.SyncPurchasesOnlyAsync());
         }
         else
         {

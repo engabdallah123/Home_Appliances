@@ -17,7 +17,7 @@ class LowStockNotificationsScreen extends StatefulWidget {
 
 class _LowStockNotificationsScreenState extends State<LowStockNotificationsScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final NumberFormat _currencyFormatter = NumberFormat("#,##0.##", "ar_EG");
+  final NumberFormat _currencyFormatter = NumberFormat("#,##0.##", "en_US");
   String _selectedFilter = "all"; // "all", "out_of_stock", "near_low"
 
   @override

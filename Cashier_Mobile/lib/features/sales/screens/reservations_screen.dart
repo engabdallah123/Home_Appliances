@@ -19,7 +19,7 @@ class ReservationsScreen extends StatefulWidget {
 class _ReservationsScreenState extends State<ReservationsScreen> {
   final ApiClient _apiClient = ApiClient();
   final TextEditingController _searchCtrl = TextEditingController();
-  final NumberFormat _currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
+  final NumberFormat _currencyFormatter = NumberFormat("#,##0.00", "en_US");
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -82,6 +82,12 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       } else if (res != null && res is Map<String, dynamic> && res['items'] != null) {
         loaded = (res['items'] as List).map((i) => SaleSummaryModel.fromJson(i)).toList();
       }
+
+      // Filter out completed (status 3: Fully Delivered) and cancelled (status 0 or 4) so only active reservations appear
+      loaded = loaded.where((r) {
+        final st = r.reservationStatus;
+        return st != 3 && st != 0 && st != 4 && (r.isReserved || st > 0);
+      }).toList();
 
       setState(() {
         if (refresh) {
@@ -780,6 +786,13 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   }
 
   Future<void> _updateReservationStatus(SaleSummaryModel r, int newStatus) async {
+    // If delivered (3) or cancelled (0, 4), immediately remove from local UI list for instant feedback
+    if (newStatus == 3 || newStatus == 4 || newStatus == 0) {
+      setState(() {
+        _reservations.removeWhere((item) => item.id == r.id);
+      });
+    }
+
     try {
       await _apiClient.post(
         "api/cloud/sales/${r.id}/reservation-status",
@@ -787,8 +800,12 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("تم تحديث حالة الحجز بنجاح ومزامنته"),
+          SnackBar(
+            content: Text(newStatus == 3
+                ? "تم تسليم الحجز بالكامل وإزالته من قائمة الحجوزات بنجاح"
+                : newStatus == 4 || newStatus == 0
+                    ? "تم إلغاء الحجز وإزالته من قائمة الحجوزات بنجاح"
+                    : "تم تحديث حالة الحجز بنجاح ومزامنته"),
             backgroundColor: AppColors.success,
           ),
         );
@@ -802,6 +819,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
             backgroundColor: AppColors.danger,
           ),
         );
+        _fetchReservations();
       }
     }
   }

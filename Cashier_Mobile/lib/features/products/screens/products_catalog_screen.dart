@@ -64,7 +64,7 @@ class _ProductsCatalogScreenState extends State<ProductsCatalogScreen> {
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
     final prov = Provider.of<ProductsProvider>(context);
-    final currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
+    final currencyFormatter = NumberFormat("#,##0.00", "en_US");
 
     return Scaffold(
       backgroundColor: AppColors.getBackground(isDark),

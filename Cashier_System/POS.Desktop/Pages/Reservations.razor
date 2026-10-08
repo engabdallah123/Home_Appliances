@@ -354,8 +354,8 @@
                 </div>
 
                 <!-- Items Table -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 0.65rem; overflow: hidden;">
-                    <div style="background: var(--bg-secondary); padding: 0.65rem 1rem; border-bottom: 1px solid var(--border-color); font-weight: 700; font-size: 0.88rem; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 0.65rem; max-height: 400px; overflow-y: auto;">
+                    <div style="background: var(--bg-secondary); padding: 0.65rem 1rem; border-bottom: 1px solid var(--border-color); font-weight: 700; font-size: 0.88rem; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 2;">
                         <span><i class="fa-solid fa-list-check me-2" style="color: #ec4899;"></i> قائمة الأجهزة المحجوزة</span>
                         <span class="badge" style="background: rgba(236, 72, 153, 0.15); color: #ec4899;">
                             @(selectedReservation.Items?.Count ?? 0) صنف
@@ -363,7 +363,7 @@
                     </div>
 
                     <table class="table" style="margin: 0; width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-                        <thead>
+                        <thead style="position: sticky; top: 40px; background: var(--bg-secondary); z-index: 1;">
                             <tr style="background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
                                 <th style="padding: 0.6rem 1rem; text-align: right;">اسم الجهاز</th>
                                 <th style="padding: 0.6rem; text-align: center;">الكمية</th>
@@ -818,7 +818,7 @@
                 try
                 {
                     CloudSync.RecordLocalChange();
-                    _ = Task.Run(async () => await CloudSync.SyncNowAsync(forceCatalogPush: true));
+                    _ = Task.Run(async () => await CloudSync.SyncDebtsAndInstallmentsOnlyAsync());
                 }
                 catch { }
             }
@@ -861,7 +861,7 @@
                 try
                 {
                     CloudSync.RecordLocalChange();
-                    _ = Task.Run(async () => await CloudSync.SyncNowAsync());
+                    _ = Task.Run(async () => await CloudSync.SyncReservationsAndSalesOnlyAsync());
                 }
                 catch { }
             }
@@ -880,21 +880,18 @@
     {
         selectedReservation = res;
         showDetailsModal = true;
-        if (res.Items == null || !res.Items.Any())
+        try
         {
-            try
+            var detail = await ApiClient.GetSaleByIdAsync(res.Id);
+            if (detail != null && detail.Items != null && detail.Items.Any())
             {
-                var detail = await ApiClient.GetSaleByIdAsync(res.Id);
-                if (detail != null && detail.Items != null && detail.Items.Any())
-                {
-                    selectedReservation = detail;
-                    StateHasChanged();
-                }
+                selectedReservation = detail;
+                StateHasChanged();
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching reservation details: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching reservation details: {ex.Message}");
         }
     }
 

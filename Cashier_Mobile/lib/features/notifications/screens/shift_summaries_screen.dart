@@ -12,7 +12,7 @@ class ShiftSummariesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final notifProv = Provider.of<NotificationsProvider>(context);
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
-    final currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
+    final currencyFormatter = NumberFormat("#,##0.00", "en_US");
     final dateFormatter = DateFormat("dd/MM/yyyy HH:mm");
 
     return Scaffold(

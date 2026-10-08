@@ -373,7 +373,7 @@
                 CloseModals();
                 await LoadCategories();
                 CloudSync.RecordLocalChange();
-                _ = CloudSync.SyncNowAsync(forceCatalogPush: true);
+                _ = CloudSync.SyncBrandsAndCategoriesOnlyAsync();
             }
             else
             {
@@ -391,7 +391,7 @@
                 CloseModals();
                 await LoadCategories();
                 CloudSync.RecordLocalChange();
-                _ = CloudSync.SyncNowAsync(forceCatalogPush: true);
+                _ = CloudSync.SyncBrandsAndCategoriesOnlyAsync();
             }
             else
             {
@@ -414,7 +414,7 @@
             CloseModals();
             await LoadCategories();
             CloudSync.RecordLocalChange();
-            _ = CloudSync.SyncNowAsync(forceCatalogPush: true);
+            _ = CloudSync.SyncBrandsAndCategoriesOnlyAsync();
         }
         else
         {

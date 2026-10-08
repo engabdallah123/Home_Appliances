@@ -168,7 +168,7 @@ class _SuppliersListScreenState extends State<SuppliersListScreen> {
   @override
   Widget build(BuildContext context) {
     final prov = Provider.of<SuppliersProvider>(context);
-    final currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
+    final currencyFormatter = NumberFormat("#,##0.00", "en_US");
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = AppColors.getBackground(isDark);
     final surface = AppColors.getSurface(isDark);

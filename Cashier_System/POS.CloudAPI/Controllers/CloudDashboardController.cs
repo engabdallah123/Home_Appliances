@@ -121,7 +121,7 @@ namespace POS.CloudAPI.Controllers
 
             var response = new DashboardStatsDto(
                 TodaySalesAmount: (snapshot != null && snapshot.TodaySales > 0) ? snapshot.TodaySales : todayDirectSales,
-                TodayProfitAmount: (snapshot != null && snapshot.TodayProfit > 0) ? snapshot.TodayProfit : todayDirectPaid,
+                TodayProfitAmount: snapshot != null ? snapshot.TodayProfit : Math.Max(0, todayDirectSales - (todayPurchases?.Amount ?? 0) - todayExpensesSum),
                 TodayPurchasesAmount: (snapshot != null && snapshot.TodayPurchases > 0) ? snapshot.TodayPurchases : (todayPurchases?.Amount ?? 0),
                 TodayPurchasesCount: todayPurchases?.Count ?? 0,
                 TodayExpensesAmount: (snapshot != null && snapshot.TodayExpenses > 0) ? snapshot.TodayExpenses : todayExpensesSum,

@@ -654,7 +654,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
     final supProv = Provider.of<SuppliersProvider>(context);
     final purchasesProv = Provider.of<PurchasesProvider>(context);
-    final currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
+    final currencyFormatter = NumberFormat("#,##0.00", "en_US");
 
     return Scaffold(
       backgroundColor: AppColors.getBackground(isDark),

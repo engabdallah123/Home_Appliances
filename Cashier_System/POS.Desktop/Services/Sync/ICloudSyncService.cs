@@ -30,5 +30,12 @@ namespace POS.Desktop.Services.Sync
         Task<List<PendingSyncItemView>> FetchPendingQueueAsync();
         Task<bool> DismissPendingItemAsync(string entityType, Guid id);
         Task<bool> SyncSinglePendingItemAsync(string entityType, Guid id);
+
+        // Targeted / Incremental delta sync methods
+        Task<bool> SyncOffersOnlyAsync();
+        Task<bool> SyncBrandsAndCategoriesOnlyAsync();
+        Task<bool> SyncDebtsAndInstallmentsOnlyAsync();
+        Task<bool> SyncReservationsAndSalesOnlyAsync();
+        Task<bool> SyncPurchasesOnlyAsync();
     }
 }

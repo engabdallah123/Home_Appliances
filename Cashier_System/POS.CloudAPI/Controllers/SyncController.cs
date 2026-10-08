@@ -506,8 +506,8 @@ namespace POS.CloudAPI.Controllers
             var tenant = await AuthenticateSyncClientAsync();
             if (tenant == null) return Unauthorized();
 
-            if (req.Offers == null)
-                return Ok(new { success = true, count = 0 });
+            if (req.Offers == null || !req.Offers.Any())
+                return Ok(new { success = true, count = 0, message = "لم يتم إرسال عروض لتحديثها (تم الحفاظ على العروض السحابية القائمة)." });
 
             var pushedIds = req.Offers.Select(x => x.Id).Where(id => id != Guid.Empty).ToHashSet();
             var existingTenantOffers = await _db.Offers
@@ -515,7 +515,10 @@ namespace POS.CloudAPI.Controllers
                 .Where(x => x.TenantId == tenant.Id)
                 .ToListAsync();
 
-            var toRemove = existingTenantOffers.Where(x => !pushedIds.Contains(x.Id)).ToList();
+            var toRemove = pushedIds.Any()
+                ? existingTenantOffers.Where(x => !pushedIds.Contains(x.Id)).ToList()
+                : new List<POS.CloudAPI.Entities.CloudOffer>();
+
             if (toRemove.Any())
             {
                 _db.Offers.RemoveRange(toRemove);

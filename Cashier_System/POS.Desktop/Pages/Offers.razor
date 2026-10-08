@@ -685,9 +685,9 @@
             showCreateModal = false;
             await LoadDataAsync();
 
-            // Trigger immediate background sync to Cloud so Mobile sees the new offer right away
+            // Trigger immediate background targeted sync to Cloud so Mobile sees the new offer right away
             CloudSync.RecordLocalChange();
-            _ = Task.Run(async () => await CloudSync.SyncNowAsync(forceCatalogPush: true));
+            _ = Task.Run(async () => await CloudSync.SyncOffersOnlyAsync());
         }
         catch (Exception ex)
         {
@@ -708,7 +708,7 @@
 
             // Sync updated status to Cloud
             CloudSync.RecordLocalChange();
-            _ = Task.Run(async () => await CloudSync.SyncNowAsync(forceCatalogPush: true));
+            _ = Task.Run(async () => await CloudSync.SyncOffersOnlyAsync());
         }
         else
         {
@@ -728,7 +728,7 @@
 
                 // Sync deletion to Cloud
                 CloudSync.RecordLocalChange();
-                _ = Task.Run(async () => await CloudSync.SyncNowAsync(forceCatalogPush: true));
+                _ = Task.Run(async () => await CloudSync.SyncOffersOnlyAsync());
             }
             else
             {

@@ -204,7 +204,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
     final prov = Provider.of<ExpensesProvider>(context);
-    final currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
+    final currencyFormatter = NumberFormat("#,##0.00", "en_US");
     final dateFormatter = DateFormat("dd/MM/yyyy HH:mm");
     final monthFormatter = DateFormat("MMMM yyyy", "ar_EG");
 

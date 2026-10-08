@@ -20,7 +20,7 @@ class InstallmentsScreen extends StatefulWidget {
 class _InstallmentsScreenState extends State<InstallmentsScreen> {
   final ApiClient _apiClient = ApiClient();
   final TextEditingController _searchCtrl = TextEditingController();
-  final NumberFormat _currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
+  final NumberFormat _currencyFormatter = NumberFormat("#,##0.00", "en_US");
 
   bool _isLoading = false;
   String? _errorMessage;

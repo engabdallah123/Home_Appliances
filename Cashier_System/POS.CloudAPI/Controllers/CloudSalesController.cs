@@ -243,9 +243,9 @@ namespace POS.CloudAPI.Controllers
             if (isReserved.HasValue)
             {
                 if (isReserved.Value)
-                    query = query.Where(s => s.IsReserved || s.ReservationStatus > 0);
+                    query = query.Where(s => (s.IsReserved || (s.ReservationStatus > 0 && s.ReservationStatus < 3)) && s.ReservationStatus != 3 && s.ReservationStatus != 0 && s.ReservationStatus != 4);
                 else
-                    query = query.Where(s => !s.IsReserved && s.ReservationStatus == 0);
+                    query = query.Where(s => !s.IsReserved && (s.ReservationStatus == 0 || s.ReservationStatus >= 3));
             }
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -415,7 +415,7 @@ namespace POS.CloudAPI.Controllers
             if (sale == null) return NotFound(new { message = "فاتورة الحجز غير موجودة." });
 
             sale.ReservationStatus = req.Status;
-            if (req.Status == 0 || req.Status == 3)
+            if (req.Status == 0 || req.Status == 3 || req.Status == 4)
             {
                 sale.IsReserved = false;
             }

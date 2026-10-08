@@ -54,7 +54,7 @@ class _PurchaseDetailScreenState extends State<PurchaseDetailScreen> {
     final textSecondary = AppColors.getTextSecondary(isDark);
     final textMuted = AppColors.getTextMuted(isDark);
 
-    final currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
+    final currencyFormatter = NumberFormat("#,##0.00", "en_US");
     final dateFormatter = DateFormat("dd/MM/yyyy HH:mm");
 
     return Scaffold(

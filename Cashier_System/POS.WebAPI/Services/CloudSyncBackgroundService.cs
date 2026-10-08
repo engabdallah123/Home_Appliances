@@ -660,8 +660,24 @@ namespace POS.WebAPI.Services
 
                 string? monthlySalesJson = null;
                 var mediator = sp.GetService<IMediator>();
+                decimal todayProfit = todaySales - (todayPurchases * 0.7m) - todayExpenses;
+                decimal monthProfit = monthSales - (monthPurchases * 0.7m) - monthExpenses;
+
                 if (mediator != null)
                 {
+                    try
+                    {
+                        var dashRes = await mediator.Send(new Dashboard.Application.Dashboard.Queries.GetDashboard.GetDashboardQuery(), ct);
+                        if (dashRes.IsSuccess && dashRes.Value != null)
+                        {
+                            todaySales = dashRes.Value.TodayMetrics?.TotalSales ?? todaySales;
+                            todayProfit = dashRes.Value.TodayMetrics?.NetProfit ?? todayProfit;
+                            monthSales = dashRes.Value.MonthMetrics?.TotalSales ?? monthSales;
+                            monthProfit = dashRes.Value.MonthMetrics?.NetProfit ?? monthProfit;
+                        }
+                    }
+                    catch { }
+
                     try
                     {
                         var calRes = await mediator.Send(new Dashboard.Application.Dashboard.Queries.GetMonthlySalesCalendar.GetMonthlySalesCalendarQuery(today.Year, today.Month), ct);
@@ -676,11 +692,11 @@ namespace POS.WebAPI.Services
                 var dashReq = new
                 {
                     todaySales,
-                    todayProfit = todaySales - (todayPurchases * 0.7m) - todayExpenses,
+                    todayProfit,
                     todayPurchases,
                     todayExpenses,
                     monthSales,
-                    monthProfit = monthSales - (monthPurchases * 0.7m) - monthExpenses,
+                    monthProfit,
                     monthPurchases,
                     monthExpenses,
                     customerDebtsTotal,
@@ -1067,7 +1083,62 @@ namespace POS.WebAPI.Services
                     bool success = false;
                     string? err = null;
 
-                    if (string.Equals(payment.DebtType, "Customer", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(payment.DebtType, "Installment", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var salesDb = sp.GetService<SalesDbContext>();
+                        if (salesDb != null)
+                        {
+                            var contract = await salesDb.InstallmentContracts
+                                .Include(c => c.Schedules)
+                                .FirstOrDefaultAsync(c => c.Id == payment.ReferenceId || c.SaleId == payment.ReferenceId, ct);
+
+                            if (contract != null)
+                            {
+                                var pendingSchedules = contract.Schedules
+                                    .Where(s => s.RemainingAmount > 0)
+                                    .OrderBy(s => s.DueDate)
+                                    .ToList();
+
+                                if (pendingSchedules.Any())
+                                {
+                                    decimal remainingToPay = payment.Amount;
+                                    bool anyPaid = false;
+                                    foreach (var sch in pendingSchedules)
+                                    {
+                                        if (remainingToPay <= 0) break;
+                                        var payAmt = Math.Min(remainingToPay, sch.RemainingAmount);
+                                        var cmdRes = await mediator.Send(new global::Sales.Application.Installments.Commands.PayInstallmentSchedule.PayInstallmentScheduleCommand(
+                                            contract.Id,
+                                            sch.Id,
+                                            payAmt,
+                                            PaymentMethod: "Cash",
+                                            CashierId: null,
+                                            ShiftId: null,
+                                            Notes: $"[سداد قسط من الموبايل] {payment.Notes}".Trim()), ct);
+                                        if (cmdRes.IsSuccess)
+                                        {
+                                            anyPaid = true;
+                                            remainingToPay -= payAmt;
+                                        }
+                                        else
+                                        {
+                                            err = cmdRes.Error.Name;
+                                            break;
+                                        }
+                                    }
+                                    success = anyPaid;
+                                }
+                            }
+                        }
+
+                        if (!success)
+                        {
+                            var res = await mediator.Send(new global::Sales.Application.Sales.Commands.PaySaleInvoice.PaySaleInvoiceCommand(payment.ReferenceId, payment.Amount), ct);
+                            success = res.IsSuccess;
+                            err = res.IsFailure ? res.Error.Name : null;
+                        }
+                    }
+                    else if (string.Equals(payment.DebtType, "Customer", StringComparison.OrdinalIgnoreCase))
                     {
                         var res = await mediator.Send(new global::Sales.Application.Sales.Commands.PaySaleInvoice.PaySaleInvoiceCommand(payment.ReferenceId, payment.Amount), ct);
                         success = res.IsSuccess;
@@ -1273,13 +1344,30 @@ namespace POS.WebAPI.Services
 
                 foreach (var cloudSale in pendingSales)
                 {
-                    // Check if already imported
-                    var existingSale = await salesDb.Sales.AsNoTracking().FirstOrDefaultAsync(s =>
+                    // Check if already imported locally
+                    var existingSale = await salesDb.Sales.FirstOrDefaultAsync(s =>
                         s.Id == cloudSale.Id ||
                         (!string.IsNullOrWhiteSpace(s.InvoiceNumber) && !string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber) && s.InvoiceNumber == cloudSale.InvoiceNumber), ct);
 
                     if (existingSale != null)
                     {
+                        bool isUpdated = false;
+                        if ((int)existingSale.ReservationStatus != cloudSale.ReservationStatus)
+                        {
+                            existingSale.UpdateReservationStatus((global::Sales.Domain.Sales.Entities.ReservationStatus)cloudSale.ReservationStatus);
+                            isUpdated = true;
+                        }
+                        if (cloudSale.PaidAmount > existingSale.PaidAmount)
+                        {
+                            // Sync payment amount progress if mobile collected payment
+                            existingSale.AddPayment(cloudSale.PaidAmount - existingSale.PaidAmount, notes: "سداد من تطبيق الموبايل");
+                            isUpdated = true;
+                        }
+                        if (isUpdated)
+                        {
+                            await salesDb.SaveChangesAsync(ct);
+                        }
+
                         await _cloudHttp.PostAsJsonAsync($"api/sync/sales/{cloudSale.Id}/acknowledge", new { saleId = cloudSale.Id, reference = existingSale.Id.ToString() }, ct);
                         continue;
                     }

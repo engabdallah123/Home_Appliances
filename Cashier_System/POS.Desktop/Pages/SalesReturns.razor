@@ -1334,7 +1334,7 @@
             selectedSaleDetail = null;
             returnItems.Clear();
             CloudSync.RecordLocalChange();
-            _ = Task.Run(async () => await CloudSync.SyncNowAsync(forceCatalogPush: true));
+            _ = Task.Run(async () => await CloudSync.SyncReservationsAndSalesOnlyAsync());
         }
         else
         {

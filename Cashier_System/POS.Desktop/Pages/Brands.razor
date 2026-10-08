@@ -349,7 +349,7 @@
             try
             {
                 CloudSync.RecordLocalChange();
-                _ = Task.Run(async () => await CloudSync.SyncNowAsync());
+                _ = Task.Run(async () => await CloudSync.SyncBrandsAndCategoriesOnlyAsync());
             }
             catch { }
         }
@@ -375,7 +375,7 @@
                 try
                 {
                     CloudSync.RecordLocalChange();
-                    _ = Task.Run(async () => await CloudSync.SyncNowAsync());
+                    _ = Task.Run(async () => await CloudSync.SyncBrandsAndCategoriesOnlyAsync());
                 }
                 catch { }
             }

@@ -49,7 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final auth = Provider.of<AuthProvider>(context);
     final dash = Provider.of<DashboardProvider>(context);
     final stats = dash.stats;
-    final currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
+    final currencyFormatter = NumberFormat("#,##0.00", "en_US");
 
     return Scaffold(
       backgroundColor: AppColors.getBackground(isDark),

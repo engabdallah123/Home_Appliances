@@ -50,8 +50,8 @@ class _ReturnsListScreenState extends State<ReturnsListScreen> {
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
     final prov = Provider.of<ReturnsProvider>(context);
-    final currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
-    final dateFormatter = DateFormat("yyyy/MM/dd - hh:mm a", "ar_EG");
+    final currencyFormatter = NumberFormat("#,##0.00", "en_US");
+    final dateFormatter = DateFormat("yyyy/MM/dd - hh:mm a");
 
     return Scaffold(
       backgroundColor: AppColors.getBackground(isDark),

@@ -20,7 +20,7 @@ class EntityDebtsDetailScreen extends StatefulWidget {
 }
 
 class _EntityDebtsDetailScreenState extends State<EntityDebtsDetailScreen> {
-  final currencyFormatter = NumberFormat("#,##0.00", "ar_EG");
+  final currencyFormatter = NumberFormat("#,##0.00", "en_US");
   final dateFormatter = DateFormat("dd/MM/yyyy");
 
   Future<void> _openPayModal(DebtItemModel debt) async {

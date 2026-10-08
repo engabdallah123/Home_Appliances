@@ -15,6 +15,7 @@ namespace POS.Desktop.Services.Sync
         private readonly CustomAuthStateProvider _authState;
         private Timer? _syncTimer;
         private bool _isSyncing;
+        private readonly SemaphoreSlim _syncLock = new(1, 1);
         private bool _isOffline;
         private bool _hasLocalChanges = true;
         private readonly string _syncApiKey = "KEY-SHOP01-SECURE-SYNC-2026";
@@ -197,7 +198,8 @@ namespace POS.Desktop.Services.Sync
                     return false;
                 }
 
-                var response = await _cloudHttp.GetAsync("api/sync/health");
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+                var response = await _cloudHttp.GetAsync("api/sync/health", cts.Token);
                 IsCloudReachable = response.IsSuccessStatusCode;
                 _isOffline = !IsCloudReachable;
             }
@@ -341,7 +343,7 @@ namespace POS.Desktop.Services.Sync
                 };
             }
 
-            if (_isSyncing)
+            if (!await _syncLock.WaitAsync(50))
             {
                 return new SyncStatusResult
                 {
@@ -569,6 +571,7 @@ namespace POS.Desktop.Services.Sync
             finally
             {
                 _isSyncing = false;
+                try { _syncLock.Release(); } catch { }
                 NotifyStateChanged();
                 // Refresh pending queue after sync finishes
                 _ = Task.Run(async () => { try { await FetchPendingQueueAsync(); } catch { } });
@@ -727,9 +730,43 @@ namespace POS.Desktop.Services.Sync
 
         public async Task<bool> SyncSinglePendingItemAsync(string entityType, Guid id)
         {
-            await SyncNowAsync();
-            await FetchPendingQueueAsync();
-            return true;
+            try
+            {
+                if (string.Equals(entityType, "DebtPayment", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(entityType, "Debt", StringComparison.OrdinalIgnoreCase))
+                {
+                    await PullPendingDebtPaymentsFromCloudAsync();
+                }
+                else if (string.Equals(entityType, "Purchase", StringComparison.OrdinalIgnoreCase))
+                {
+                    await PullPendingPurchasesFromCloudAsync();
+                }
+                else if (string.Equals(entityType, "Sale", StringComparison.OrdinalIgnoreCase))
+                {
+                    await PullPendingSalesFromCloudAsync();
+                }
+                else if (string.Equals(entityType, "Expense", StringComparison.OrdinalIgnoreCase))
+                {
+                    await PullPendingExpensesFromCloudAsync();
+                }
+                else if (string.Equals(entityType, "Product", StringComparison.OrdinalIgnoreCase))
+                {
+                    await PullPendingProductsFromCloudAsync();
+                }
+                else
+                {
+                    await SyncNowAsync();
+                }
+
+                await FetchPendingQueueAsync();
+                NotifyStateChanged();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error syncing single pending item: {ex.Message}");
+                return false;
+            }
         }
 
         private async Task<int> PullPendingPurchasesFromCloudAsync()
@@ -1081,7 +1118,72 @@ namespace POS.Desktop.Services.Sync
                 {
                     bool success = false;
                     string? err = null;
-                    if (string.Equals(payment.DebtType, "Customer", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(payment.DebtType, "Installment", StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            var contracts = await _posApi.GetInstallmentContractsAsync();
+                            var contract = contracts?.FirstOrDefault(c => c.Id == payment.ReferenceId || c.SaleId == payment.ReferenceId);
+                            if (contract != null)
+                            {
+                                var fullContract = await _posApi.GetInstallmentContractByIdAsync(contract.Id);
+                                var pendingSchedules = fullContract?.Schedules?
+                                    .Where(s => s.RemainingAmount > 0)
+                                    .OrderBy(s => s.DueDate)
+                                    .ToList();
+
+                                if (pendingSchedules != null && pendingSchedules.Any())
+                                {
+                                    decimal remainingToPay = payment.Amount;
+                                    bool anySchedulePaid = false;
+
+                                    foreach (var schedule in pendingSchedules)
+                                    {
+                                        if (remainingToPay <= 0) break;
+
+                                        var payAmt = Math.Min(remainingToPay, schedule.RemainingAmount);
+                                        var payReq = new PayInstallmentRequest(
+                                            ContractId: contract.Id,
+                                            ScheduleId: schedule.Id,
+                                            Amount: payAmt,
+                                            PaymentMethod: "Cash",
+                                            Notes: $"[سداد قسط من الموبايل] {payment.Notes}".Trim()
+                                        );
+
+                                        var (instRes, instErr) = await _posApi.PayInstallmentScheduleAsync(payReq);
+                                        if (instRes)
+                                        {
+                                            anySchedulePaid = true;
+                                            remainingToPay -= payAmt;
+                                        }
+                                        else
+                                        {
+                                            err = instErr;
+                                            break;
+                                        }
+                                    }
+
+                                    if (anySchedulePaid)
+                                    {
+                                        success = true;
+                                        err = null;
+                                    }
+                                }
+                            }
+
+                            if (!success)
+                            {
+                                var (res, errorMsg) = await _posApi.PayCustomerDebtAsync(payment.ReferenceId, payment.Amount);
+                                success = res;
+                                err = errorMsg;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            err = ex.Message;
+                        }
+                    }
+                    else if (string.Equals(payment.DebtType, "Customer", StringComparison.OrdinalIgnoreCase))
                     {
                         var (res, errorMsg) = await _posApi.PayCustomerDebtAsync(payment.ReferenceId, payment.Amount);
                         if (!res)
@@ -1125,9 +1227,21 @@ namespace POS.Desktop.Services.Sync
                         success = res;
                         err = errorMsg;
                     }
-                    else
+                    else if (string.Equals(payment.DebtType, "Supplier", StringComparison.OrdinalIgnoreCase))
                     {
                         var (res, errorMsg) = await _posApi.PaySupplierDebtAsync(payment.ReferenceId, payment.Amount);
+                        success = res;
+                        err = errorMsg;
+                    }
+                    else
+                    {
+                        var (res, errorMsg) = await _posApi.PayCustomerDebtAsync(payment.ReferenceId, payment.Amount);
+                        if (!res)
+                        {
+                            var (supRes, supErr) = await _posApi.PaySupplierDebtAsync(payment.ReferenceId, payment.Amount);
+                            res = supRes;
+                            errorMsg = supErr;
+                        }
                         success = res;
                         err = errorMsg;
                     }
@@ -1140,17 +1254,15 @@ namespace POS.Desktop.Services.Sync
                     else
                     {
                         Console.WriteLine($"[CloudSync] Failed to apply {payment.DebtType} debt payment {payment.ReferenceId}: {err}");
-                        // Acknowledge permanent failures to prevent infinite retry loops
-                        // that cause stale debt snapshots to overwrite mobile payments.
-                        // Permanent errors: already paid, not found, invalid amount, or any
-                        // application-level error (not a transient network error).
                         bool isPermanentError = err != null && (
                             err.Contains("مسددة بالكامل") ||
                             err.Contains("AlreadyFullyPaid") ||
                             err.Contains("NotFound") ||
                             err.Contains("InvalidPaymentAmount") ||
                             err.Contains("أكبر من") ||
-                            err.Contains("يجب أن يكون"));
+                            err.Contains("يجب أن يكون") ||
+                            err.Contains("غير موجود") ||
+                            err.Contains("لا يوجد"));
 
                         if (isPermanentError)
                         {
@@ -1618,27 +1730,23 @@ namespace POS.Desktop.Services.Sync
 
                 var affectedProductIds = new HashSet<Guid>();
 
+                List<SaleDto>? existingSales = null;
+                try
+                {
+                    existingSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddDays(-180), DateTime.UtcNow.AddDays(1));
+                }
+                catch { }
+
                 foreach (var cloudSale in pendingSales)
                 {
-                    bool isKnown = !string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber) && _knownSaleInvoiceNumbers.Contains(cloudSale.InvoiceNumber.Trim());
-                    SaleDto? matchedSale = null;
-
-                    if (isKnown || !string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber))
-                    {
-                        try
-                        {
-                            var existingSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddDays(-180), DateTime.UtcNow.AddDays(1));
-                            matchedSale = existingSales?.FirstOrDefault(s =>
-                                s.Id == cloudSale.Id ||
-                                (!string.IsNullOrWhiteSpace(s.InvoiceNumber) && !string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber) &&
-                                 s.InvoiceNumber.Trim().Equals(cloudSale.InvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
-                        }
-                        catch { }
-                    }
+                    SaleDto? matchedSale = existingSales?.FirstOrDefault(s =>
+                        s.Id == cloudSale.Id ||
+                        (!string.IsNullOrWhiteSpace(s.InvoiceNumber) && !string.IsNullOrWhiteSpace(cloudSale.InvoiceNumber) &&
+                         s.InvoiceNumber.Trim().Equals(cloudSale.InvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
 
                     if (matchedSale != null)
                     {
-                        if (cloudSale.ReservationStatus > 0 && matchedSale.ReservationStatus != cloudSale.ReservationStatus)
+                        if (matchedSale.ReservationStatus != cloudSale.ReservationStatus)
                         {
                             try
                             {
@@ -2111,7 +2219,7 @@ namespace POS.Desktop.Services.Sync
             try
             {
                 var localOffers = await _posApi.GetOffersAsync();
-                if (localOffers == null) return;
+                if (localOffers == null || !localOffers.Any()) return;
 
                 var offersToPush = localOffers.Select(o => new PushOfferDto(
                     Id: o.Id,
@@ -2248,6 +2356,82 @@ namespace POS.Desktop.Services.Sync
                     });
                 }
                 return res.IsSuccessStatusCode;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> SyncOffersOnlyAsync()
+        {
+            try
+            {
+                await PushOffersToCloudAsync();
+                NotifyStateChanged();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> SyncBrandsAndCategoriesOnlyAsync()
+        {
+            try
+            {
+                await PullPendingCategoriesFromCloudAsync();
+                await PullPendingBrandsFromCloudAsync();
+                await PushBrandsToCloudAsync();
+                NotifyStateChanged();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> SyncDebtsAndInstallmentsOnlyAsync()
+        {
+            try
+            {
+                await PullPendingDebtPaymentsFromCloudAsync();
+                await PushSuppliersToCloudAsync();
+                _ = Task.Run(async () => await PushDebtsAndDashboardAsync());
+                NotifyStateChanged();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> SyncReservationsAndSalesOnlyAsync()
+        {
+            try
+            {
+                await PullPendingSalesFromCloudAsync();
+                await PushSalesToCloudAsync();
+                _ = Task.Run(async () => await PushDebtsAndDashboardAsync());
+                NotifyStateChanged();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> SyncPurchasesOnlyAsync()
+        {
+            try
+            {
+                await PullPendingPurchasesFromCloudAsync();
+                NotifyStateChanged();
+                return true;
             }
             catch
             {

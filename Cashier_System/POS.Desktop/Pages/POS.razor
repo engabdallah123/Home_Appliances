@@ -2018,7 +2018,7 @@
                 CloudSync.RecordLocalChange();
                 _ = Task.Run(async () =>
                 {
-                    try { await CloudSync.SyncNowAsync(forceCatalogPush: true); } catch { }
+                    try { await CloudSync.SyncReservationsAndSalesOnlyAsync(); } catch { }
                 });
 
                 // Depleted batches alert modal (controlled via Settings - EnableDepletedBatchAlert)
