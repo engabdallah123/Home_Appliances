@@ -4,6 +4,7 @@ namespace POS.CloudAPI.DTOs
 {
     // Auth
     public record LoginRequest(string Username, string Password, string? ShopCode = null);
+    public record RegisterRequest(string FullName, string Username, string Password, string? Phone = null, string? ShopCode = null);
 
     public record AuthResponseDto(
         string Token,
@@ -70,7 +71,8 @@ namespace POS.CloudAPI.DTOs
         decimal PaidAmount,
         int PaymentMethod,
         string? Notes,
-        List<CreateCloudPurchaseItemRequest> Items);
+        List<CreateCloudPurchaseItemRequest> Items,
+        string? CreatedByName = null);
 
     public record CloudPurchaseSummaryDto(
         Guid Id,
@@ -640,7 +642,8 @@ namespace POS.CloudAPI.DTOs
         // Reservation
         bool IsReserved = false,
         DateTime? TargetDeliveryDate = null,
-        int ReservationStatus = 0);
+        int ReservationStatus = 0,
+        string? CreatedByName = null);
 
     public record PayCloudInstallmentRequest(
         decimal Amount,
@@ -729,7 +732,8 @@ namespace POS.CloudAPI.DTOs
         bool IsReserved,
         DateTime? TargetDeliveryDate,
         List<CloudSaleItemDto> Items,
-        int ReservationStatus = 0);
+        int ReservationStatus = 0,
+        string? CreatedByName = null);
 
     public record CloudSyncStatusDto(
         bool HasPending,

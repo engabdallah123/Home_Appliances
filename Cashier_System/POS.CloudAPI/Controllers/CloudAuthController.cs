@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using POS.CloudAPI.Database;
 using POS.CloudAPI.DTOs;
+using POS.CloudAPI.Entities;
 using POS.CloudAPI.Services;
 using System.Security.Claims;
 
@@ -63,6 +64,83 @@ namespace POS.CloudAPI.Controllers
                 TenantId: userTenant.Id,
                 TenantName: userTenant.Name,
                 TenantCode: userTenant.Code,
+                ExpiresAt: DateTime.UtcNow.AddDays(30)
+            );
+
+            return Ok(response);
+        }
+
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest req)
+        {
+            if (string.IsNullOrWhiteSpace(req.FullName))
+                return BadRequest(new { message = "الاسم مطلوب." });
+
+            if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
+                return BadRequest(new { message = "اسم المستخدم وكلمة المرور مطلوبان." });
+
+            if (req.Password.Trim().Length < 4)
+                return BadRequest(new { message = "كلمة المرور يجب ألا تقل عن 4 أحرف أو أرقام." });
+
+            var usernameTrimmed = req.Username.Trim();
+            var existingUser = await _db.Users.AnyAsync(u => u.Username.ToLower() == usernameTrimmed.ToLower());
+            if (existingUser)
+            {
+                return BadRequest(new { message = "اسم المستخدم مسجل بالفعل، يرجى اختيار اسم مستخدم آخر." });
+            }
+
+            Tenant? tenant = null;
+            if (!string.IsNullOrWhiteSpace(req.ShopCode))
+            {
+                tenant = await _db.Tenants.FirstOrDefaultAsync(t => t.Code == req.ShopCode.Trim() && t.IsActive);
+                if (tenant == null)
+                    return BadRequest(new { message = "كود المتجر / الفرع غير صحيح." });
+            }
+            else
+            {
+                tenant = await _db.Tenants.FirstOrDefaultAsync(t => t.IsActive);
+                if (tenant == null)
+                {
+                    tenant = new Tenant
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = "المتجر الرئيسي",
+                        Code = "SHOP01",
+                        SyncApiKey = Guid.NewGuid().ToString("N"),
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _db.Tenants.Add(tenant);
+                    await _db.SaveChangesAsync();
+                }
+            }
+
+            var newUser = new Entities.CloudUser
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenant.Id,
+                Username = usernameTrimmed,
+                PasswordHash = CloudDbContext.HashPassword(req.Password.Trim()),
+                FullName = req.FullName.Trim(),
+                Role = "Cashier",
+                Phone = req.Phone?.Trim() ?? "",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.Users.Add(newUser);
+            await _db.SaveChangesAsync();
+
+            var token = _jwt.GenerateToken(newUser, tenant);
+
+            var response = new AuthResponseDto(
+                Token: token,
+                UserId: newUser.Id,
+                FullName: newUser.FullName,
+                Role: newUser.Role,
+                TenantId: tenant.Id,
+                TenantName: tenant.Name,
+                TenantCode: tenant.Code,
                 ExpiresAt: DateTime.UtcNow.AddDays(30)
             );
 

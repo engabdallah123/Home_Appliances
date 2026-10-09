@@ -251,7 +251,7 @@ namespace POS.CloudAPI.Controllers
                 PaymentMethod = (PurchasePaymentMethod)req.PaymentMethod,
                 Notes = req.Notes?.Trim(),
                 CreatedByUserId = userId,
-                CreatedByName = userName,
+                CreatedByName = !string.IsNullOrWhiteSpace(req.CreatedByName) ? req.CreatedByName.Trim() : userName,
                 SyncStatus = SyncStatus.PendingSync, // Critical requirement: PendingSync by default
                 SyncAttempts = 0,
                 SyncError = null,

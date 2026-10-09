@@ -122,7 +122,9 @@ namespace POS.CloudAPI.Controllers
                 DebtType = normalizedType,
                 ReferenceId = req.ReferenceId,
                 Amount = req.Amount,
-                Notes = req.Notes,
+                Notes = !string.IsNullOrWhiteSpace(req.Notes) 
+                    ? $"{req.Notes.Trim()} (بواسطة: {User.FindFirstValue("FullName") ?? User.Identity?.Name ?? "مستخدم الموبايل"})" 
+                    : $"بواسطة: {User.FindFirstValue("FullName") ?? User.Identity?.Name ?? "مستخدم الموبايل"}",
                 SyncStatus = SyncStatus.PendingSync,
                 CreatedAt = DateTime.UtcNow
             };

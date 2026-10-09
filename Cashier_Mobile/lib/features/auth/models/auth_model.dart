@@ -16,6 +16,30 @@ class LoginRequest {
   };
 }
 
+class RegisterRequest {
+  final String fullName;
+  final String username;
+  final String password;
+  final String? phone;
+  final String? shopCode;
+
+  RegisterRequest({
+    required this.fullName,
+    required this.username,
+    required this.password,
+    this.phone,
+    this.shopCode,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'fullName': fullName,
+    'username': username,
+    'password': password,
+    if (phone != null && phone!.isNotEmpty) 'phone': phone,
+    if (shopCode != null && shopCode!.isNotEmpty) 'shopCode': shopCode,
+  };
+}
+
 class AuthResponse {
   final String token;
   final String userId;

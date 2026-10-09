@@ -6,108 +6,65 @@ import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/company_support_modal.dart';
 import '../providers/auth_provider.dart';
-import 'register_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
   @override
   void dispose() {
+    _nameController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _submitLogin() async {
+  void _submitRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final success = await auth.login(
-      _usernameController.text.trim(),
-      _passwordController.text.trim(),
+    final username = _usernameController.text.trim();
+
+    final success = await auth.register(
+      fullName: _nameController.text.trim(),
+      username: username,
+      password: _passwordController.text.trim(),
     );
 
-    if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.syncFailed,
-          content: Text(
-            auth.errorMessage ?? "فشل تسجيل الدخول",
-            style: const TextStyle(fontWeight: FontWeight.bold),
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppColors.success,
+            content: Text(
+              "تم إنشاء الحساب بنجاح! يرجى تسجيل الدخول باسم المستخدم وكلمة المرور.",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
-        ),
-      );
+        );
+        Navigator.pop(context, username);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.syncFailed,
+            content: Text(
+              auth.errorMessage ?? "فشل إنشاء الحساب، يرجى المحاولة مرة أخرى.",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        );
+      }
     }
-  }
-
-  void _showServerConfigDialog() {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final urlController = TextEditingController(text: auth.currentServerUrl);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Row(
-          children: [
-            Icon(Icons.dns_rounded, color: AppColors.accent),
-            SizedBox(width: 8),
-            Text("عنوان الخادم السحابي", style: TextStyle(color: AppColors.textPrimary, fontSize: 16)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "أدخل رابط الـ Cloud API أو IP الخادم:",
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: urlController,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: InputDecoration(
-                hintText: "http://192.168.1.100:5100",
-                hintStyle: const TextStyle(color: AppColors.textMuted),
-                filled: true,
-                fillColor: AppColors.background,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "ملاحظة: للمحاكي (Emulator) استخدم: http://10.0.2.2:5100\nوللشبكة المحلية استخدم IP جهاز السيرفر.",
-              style: TextStyle(color: AppColors.textMuted, fontSize: 11),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("إلغاء", style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () async {
-              await auth.setServerUrl(urlController.text.trim());
-              if (mounted) Navigator.pop(ctx);
-            },
-            child: const Text("حفظ العنوان", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -132,11 +89,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         // App Logo / Store Icon
                         Container(
-                          width: 88,
-                          height: 88,
+                          width: 80,
+                          height: 80,
                           decoration: BoxDecoration(
                             color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(22),
                             boxShadow: [
                               BoxShadow(
                                 color: AppColors.primary.withOpacity(0.25),
@@ -146,7 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(22),
                             child: Image.asset(
                               'assets/images/app_logo.png',
                               fit: BoxFit.contain,
@@ -157,38 +114,38 @@ class _LoginScreenState extends State<LoginScreen> {
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
-                                  borderRadius: BorderRadius.circular(24),
+                                  borderRadius: BorderRadius.circular(22),
                                 ),
                                 child: const Icon(
-                                  Icons.tv_rounded,
-                                  size: 46,
+                                  Icons.person_add_alt_1_rounded,
+                                  size: 42,
                                   color: Colors.white,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 16),
 
                         const Text(
-                          "إلكترو كاشير",
+                          "إنشاء حساب جديد",
                           style: TextStyle(
-                            fontSize: 26,
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 6),
                         const Text(
-                          "إدارة معارض ومخازن الأجهزة المنزلية والكهربائية",
+                          "أدخل بياناتك لإنشاء حساب كاشير / مندوب مبيعات",
                           style: TextStyle(
                             fontSize: 13,
                             color: AppColors.textSecondary,
                           ),
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 28),
 
-                        // Login Card
+                        // Register Card
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
@@ -199,17 +156,49 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // 1. الاسم (Full Name)
                               CustomTextField(
-                                controller: _usernameController,
-                                label: "اسم المستخدم",
-                                hint: "أدخل اسم المستخدم",
-                                prefixIcon: Icons.person_rounded,
-                                validator: (val) => (val == null || val.trim().isEmpty) ? "اسم المستخدم مطلوب" : null,
+                                controller: _nameController,
+                                label: "الاسم (الاسم الكامل)",
+                                hint: "أدخل اسمك كما سيظهر في الفواتير",
+                                prefixIcon: Icons.badge_rounded,
+                                validator: (val) {
+                                  if (val == null || val.trim().isEmpty) {
+                                    return "الاسم مطلوب";
+                                  }
+                                  if (val.trim().length < 2) {
+                                    return "الاسم يجب ألا يقل عن حرفين";
+                                  }
+                                  return null;
+                                },
                               ),
                               const SizedBox(height: 16),
+
+                              // 2. username
+                              CustomTextField(
+                                controller: _usernameController,
+                                label: "اسم المستخدم (Username)",
+                                hint: "أدخل اسم المستخدم لتسجيل الدخول",
+                                prefixIcon: Icons.person_rounded,
+                                validator: (val) {
+                                  if (val == null || val.trim().isEmpty) {
+                                    return "اسم المستخدم مطلوب";
+                                  }
+                                  if (val.trim().length < 3) {
+                                    return "اسم المستخدم يجب ألا يقل عن 3 أحرف";
+                                  }
+                                  if (val.trim().contains(" ")) {
+                                    return "اسم المستخدم يجب ألا يحتوي على مسافات";
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+
+                              // 3. password
                               CustomTextField(
                                 controller: _passwordController,
-                                label: "كلمة المرور",
+                                label: "كلمة المرور (Password)",
                                 hint: "أدخل كلمة المرور",
                                 prefixIcon: Icons.lock_rounded,
                                 obscureText: _obscurePassword,
@@ -221,40 +210,40 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                 ),
-                                validator: (val) => (val == null || val.trim().isEmpty) ? "كلمة المرور مطلوبة" : null,
+                                validator: (val) {
+                                  if (val == null || val.trim().isEmpty) {
+                                    return "كلمة المرور مطلوبة";
+                                  }
+                                  if (val.trim().length < 4) {
+                                    return "كلمة المرور يجب ألا تقل عن 4 خانات";
+                                  }
+                                  return null;
+                                },
                               ),
                               const SizedBox(height: 24),
+
+                              // Submit Button
                               CustomButton(
-                                text: "تسجيل الدخول",
-                                icon: Icons.login_rounded,
+                                text: "إنشاء الحساب",
+                                icon: Icons.how_to_reg_rounded,
                                 isLoading: auth.isLoading,
-                                onPressed: _submitLogin,
+                                onPressed: _submitRegister,
                               ),
+
                               const SizedBox(height: 14),
+
+                              // Back to Login Link
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Text(
-                                    "ليس لديك حساب؟",
+                                    "لديك حساب بالفعل؟",
                                     style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                                   ),
                                   TextButton(
-                                    onPressed: () async {
-                                      final registeredUsername = await Navigator.push<String>(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => const RegisterScreen(),
-                                        ),
-                                      );
-                                      if (registeredUsername != null && registeredUsername.isNotEmpty) {
-                                        setState(() {
-                                          _usernameController.text = registeredUsername;
-                                          _passwordController.clear();
-                                        });
-                                      }
-                                    },
+                                    onPressed: () => Navigator.pop(context),
                                     child: const Text(
-                                      "إنشاء حساب جديد",
+                                      "تسجيل الدخول",
                                       style: TextStyle(
                                         color: AppColors.primaryLight,
                                         fontWeight: FontWeight.bold,
@@ -268,17 +257,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-
-                        // Server URL settings button
-                        TextButton.icon(
-                          onPressed: _showServerConfigDialog,
-                          icon: const Icon(Icons.settings_input_component_rounded, size: 16, color: AppColors.accent),
-                          label: Text(
-                            "ضبط عنوان السيرفر (${auth.currentServerUrl})",
-                            style: const TextStyle(color: AppColors.accent, fontSize: 12),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
 
                         // 3A Tech Branding & Direct Support Footer
                         InkWell(

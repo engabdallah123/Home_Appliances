@@ -127,7 +127,9 @@ namespace POS.CloudAPI.Controllers
                 PaymentMethod = req.PaymentMethod,
                 Notes = req.Notes,
                 CreatedByUserId = userId,
-                CreatedByName = user?.FullName ?? "مندوب المبيعات",
+                CreatedByName = !string.IsNullOrWhiteSpace(req.CreatedByName) 
+                    ? req.CreatedByName.Trim() 
+                    : (!string.IsNullOrWhiteSpace(user?.FullName) ? user.FullName : (User.FindFirstValue("FullName") ?? User.Identity?.Name ?? "مندوب المبيعات")),
                 IsDelivery = req.IsDelivery,
                 RecipientName = req.RecipientName,
                 RecipientPhone = req.RecipientPhone,

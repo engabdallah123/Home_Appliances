@@ -14,6 +14,7 @@ import '../../suppliers/providers/suppliers_provider.dart';
 import '../../suppliers/screens/suppliers_list_screen.dart';
 import '../models/purchase_model.dart';
 import '../providers/purchases_provider.dart';
+import '../../auth/providers/auth_provider.dart';
 
 class CreatePurchaseScreen extends StatefulWidget {
   const CreatePurchaseScreen({super.key});
@@ -593,6 +594,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
       paymentMethod: _paymentMethod,
       notes: _notesController.text.trim(),
       items: _items,
+      createdByName: Provider.of<AuthProvider>(context, listen: false).userName,
     );
 
     final provider = Provider.of<PurchasesProvider>(context, listen: false);

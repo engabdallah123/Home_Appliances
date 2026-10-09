@@ -4,6 +4,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/widgets/camera_barcode_scanner.dart';
 import '../../products/models/product_model.dart';
 import '../models/sale_model.dart';
+import '../../../core/storage/secure_storage.dart';
 
 class SalesProvider with ChangeNotifier {
   final ApiClient _apiClient = ApiClient();
@@ -673,6 +674,9 @@ class SalesProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      final userData = await AppStorage.getUserData();
+      final currentUserName = userData['fullName'];
+
       final req = CreateSaleModel(
         customerId: _customerId,
         customerName: _customerName,
@@ -699,6 +703,7 @@ class SalesProvider with ChangeNotifier {
         numberOfMonths: _numberOfMonths,
         isReserved: _isReserved,
         targetDeliveryDate: _targetDeliveryDate,
+        createdByName: currentUserName,
       );
 
       final response = await _apiClient.post(ApiEndpoints.sales, body: req.toJson());

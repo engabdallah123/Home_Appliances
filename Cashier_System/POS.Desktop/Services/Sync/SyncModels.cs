@@ -336,7 +336,8 @@ namespace POS.Desktop.Services.Sync
         bool IsReserved,
         DateTime? TargetDeliveryDate,
         List<CloudSaleItemSyncDto> Items,
-        int ReservationStatus = 0);
+        int ReservationStatus = 0,
+        string? CreatedByName = null);
 
     public record PushSalesRequest(List<CloudSaleSyncDto> Sales);
 

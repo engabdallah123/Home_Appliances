@@ -340,7 +340,8 @@ namespace POS.CloudAPI.Controllers
                     i.Tax,
                     i.Total
                 )).ToList(),
-                s.ReservationStatus
+                s.ReservationStatus,
+                s.CreatedByName
             )).ToList();
 
             return Ok(result);

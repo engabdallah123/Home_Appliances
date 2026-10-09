@@ -1438,9 +1438,13 @@ namespace POS.WebAPI.Services
                         TaxAmount: cloudSale.TaxAmount,
                         PaidAmount: cloudSale.PaidAmount,
                         PaymentMethod: string.IsNullOrWhiteSpace(cloudSale.PaymentMethod) ? "Cash" : cloudSale.PaymentMethod,
-                        Notes: string.IsNullOrWhiteSpace(cloudSale.Notes)
-                            ? $"[مبيعات من تطبيق الموبايل] فاتورة {cloudSale.InvoiceNumber}"
-                            : $"[مبيعات من تطبيق الموبايل] {cloudSale.Notes} ({cloudSale.InvoiceNumber})",
+                        Notes: !string.IsNullOrWhiteSpace(cloudSale.CreatedByName)
+                            ? (string.IsNullOrWhiteSpace(cloudSale.Notes)
+                                ? $"[مبيعات من تطبيق الموبايل - بواسطة: {cloudSale.CreatedByName}] فاتورة {cloudSale.InvoiceNumber}"
+                                : $"[مبيعات من تطبيق الموبايل - بواسطة: {cloudSale.CreatedByName}] {cloudSale.Notes} ({cloudSale.InvoiceNumber})")
+                            : (string.IsNullOrWhiteSpace(cloudSale.Notes)
+                                ? $"[مبيعات من تطبيق الموبايل] فاتورة {cloudSale.InvoiceNumber}"
+                                : $"[مبيعات من تطبيق الموبايل] {cloudSale.Notes} ({cloudSale.InvoiceNumber})"),
                         IsDelivery: cloudSale.IsDelivery,
                         RecipientName: cloudSale.RecipientName,
                         RecipientPhone: cloudSale.RecipientPhone,
@@ -1482,7 +1486,7 @@ namespace POS.WebAPI.Services
     }
 
     public record CloudSaleItemSyncDto(Guid Id, Guid ProductId, string ProductName, string? Barcode, string? ModelNumber, string? BrandName, string? SerialNumber, int WarrantyPeriodMonths, decimal Quantity, decimal UnitPrice, decimal Discount, decimal Tax, decimal Total);
-    public record CloudSaleSyncDto(Guid Id, string InvoiceNumber, Guid? CustomerId, string? CustomerName, string? CustomerPhone, DateTime SaleDate, decimal SubTotal, decimal DiscountAmount, decimal TaxAmount, decimal TotalAmount, decimal PaidAmount, decimal RemainingAmount, string PaymentMethod, string? Notes, bool IsDelivery, string? RecipientName, string? RecipientPhone, string? DeliveryAddress, string? DeliveryFloor, decimal DeliveryFee, bool IsInstallment, string? GuarantorName, string? GuarantorPhone, decimal InterestPercentage, int NumberOfMonths, bool IsReserved, DateTime? TargetDeliveryDate, List<CloudSaleItemSyncDto> Items, int ReservationStatus);
+    public record CloudSaleSyncDto(Guid Id, string InvoiceNumber, Guid? CustomerId, string? CustomerName, string? CustomerPhone, DateTime SaleDate, decimal SubTotal, decimal DiscountAmount, decimal TaxAmount, decimal TotalAmount, decimal PaidAmount, decimal RemainingAmount, string PaymentMethod, string? Notes, bool IsDelivery, string? RecipientName, string? RecipientPhone, string? DeliveryAddress, string? DeliveryFloor, decimal DeliveryFee, bool IsInstallment, string? GuarantorName, string? GuarantorPhone, decimal InterestPercentage, int NumberOfMonths, bool IsReserved, DateTime? TargetDeliveryDate, List<CloudSaleItemSyncDto> Items, int ReservationStatus, string? CreatedByName = null);
     public record PendingDebtPaymentSyncDto(Guid Id, string DebtType, Guid ReferenceId, decimal Amount, string? Notes, DateTime CreatedAt);
     public record PendingCategorySyncDto(Guid Id, string NameAr, string? NameEn, bool IsActive, DateTime CreatedAt);
 

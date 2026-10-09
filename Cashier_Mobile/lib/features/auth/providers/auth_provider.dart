@@ -106,6 +106,46 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> register({
+    required String fullName,
+    required String username,
+    required String password,
+    String? phone,
+    String? shopCode,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final req = RegisterRequest(
+        fullName: fullName,
+        username: username,
+        password: password,
+        phone: phone,
+        shopCode: shopCode,
+      );
+
+      final response = await _apiClient.post(
+        ApiEndpoints.register,
+        body: req.toJson(),
+        requiresAuth: false,
+      );
+
+      if (response != null && response is Map<String, dynamic>) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+      throw ApiException("فشل إنشاء الحساب، استجابة غير متوقعة من الخادم.");
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> setServerUrl(String url) async {
     await AppStorage.setBaseUrl(url);
     _currentServerUrl = await AppStorage.getBaseUrl();

@@ -8,6 +8,7 @@ class ApiEndpoints {
 
   // Auth
   static const String login = "/api/cloud/auth/login";
+  static const String register = "/api/cloud/auth/register";
   static const String profile = "/api/cloud/auth/me";
 
   // Dashboard & Financial Reports

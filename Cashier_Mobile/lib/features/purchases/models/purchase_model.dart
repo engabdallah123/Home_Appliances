@@ -60,6 +60,7 @@ class CreatePurchaseModel {
   final int paymentMethod; // 1: Cash, 2: Card, 3: Wallet, 4: Credit
   final String? notes;
   final List<CreatePurchaseItemModel> items;
+  final String? createdByName;
 
   CreatePurchaseModel({
     required this.invoiceNumber,
@@ -72,6 +73,7 @@ class CreatePurchaseModel {
     this.paymentMethod = 1,
     this.notes,
     required this.items,
+    this.createdByName,
   });
 
   double get subTotal => items.fold(0.0, (sum, i) => sum + i.total);
@@ -89,6 +91,7 @@ class CreatePurchaseModel {
     'paymentMethod': paymentMethod,
     'notes': notes,
     'items': items.map((i) => i.toJson()).toList(),
+    if (createdByName != null && createdByName!.isNotEmpty) 'createdByName': createdByName,
   };
 }
 

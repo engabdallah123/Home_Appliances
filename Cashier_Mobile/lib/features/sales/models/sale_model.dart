@@ -107,6 +107,7 @@ class CreateSaleModel {
   // Layaway / Reservation (حجز مسبق)
   final bool isReserved;
   final DateTime? targetDeliveryDate;
+  final String? createdByName;
 
   CreateSaleModel({
     this.invoiceNumber,
@@ -135,6 +136,7 @@ class CreateSaleModel {
     this.numberOfMonths = 12,
     this.isReserved = false,
     this.targetDeliveryDate,
+    this.createdByName,
   });
 
   double get itemsSubTotal => items.fold(0.0, (sum, i) => sum + i.total);
@@ -168,6 +170,7 @@ class CreateSaleModel {
         'numberOfMonths': numberOfMonths,
         'isReserved': isReserved,
         'targetDeliveryDate': targetDeliveryDate?.toIso8601String(),
+        if (createdByName != null && createdByName!.isNotEmpty) 'createdByName': createdByName,
       };
 }
 

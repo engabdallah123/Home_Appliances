@@ -845,7 +845,9 @@ namespace POS.Desktop.Services.Sync
                         TaxAmount: cloudPurchase.TaxAmount,
                         PaidAmount: cloudPurchase.PaidAmount,
                         PaymentMethod: cloudPurchase.PaymentMethod,
-                        Notes: $"[وارد من تطبيق الموبايل] {cloudPurchase.Notes}".Trim(),
+                        Notes: (!string.IsNullOrWhiteSpace(cloudPurchase.CreatedByName)
+                            ? $"[وارد من تطبيق الموبايل - بواسطة: {cloudPurchase.CreatedByName}] {cloudPurchase.Notes}"
+                            : $"[وارد من تطبيق الموبايل] {cloudPurchase.Notes}").Trim(),
                         PurchaseDate: cloudPurchase.PurchaseDate
                     );
 
@@ -1836,9 +1838,13 @@ namespace POS.Desktop.Services.Sync
                         TaxAmount: cloudSale.TaxAmount,
                         PaidAmount: cloudSale.PaidAmount,
                         PaymentMethod: string.IsNullOrWhiteSpace(cloudSale.PaymentMethod) ? "Cash" : cloudSale.PaymentMethod,
-                        Notes: string.IsNullOrWhiteSpace(cloudSale.Notes)
-                            ? $"[مبيعات من تطبيق الموبايل] فاتورة {cloudSale.InvoiceNumber}"
-                            : $"[مبيعات من تطبيق الموبايل] {cloudSale.Notes} ({cloudSale.InvoiceNumber})",
+                        Notes: !string.IsNullOrWhiteSpace(cloudSale.CreatedByName)
+                            ? (string.IsNullOrWhiteSpace(cloudSale.Notes)
+                                ? $"[مبيعات من تطبيق الموبايل - بواسطة: {cloudSale.CreatedByName}] فاتورة {cloudSale.InvoiceNumber}"
+                                : $"[مبيعات من تطبيق الموبايل - بواسطة: {cloudSale.CreatedByName}] {cloudSale.Notes} ({cloudSale.InvoiceNumber})")
+                            : (string.IsNullOrWhiteSpace(cloudSale.Notes)
+                                ? $"[مبيعات من تطبيق الموبايل] فاتورة {cloudSale.InvoiceNumber}"
+                                : $"[مبيعات من تطبيق الموبايل] {cloudSale.Notes} ({cloudSale.InvoiceNumber})"),
                         IsDelivery: cloudSale.IsDelivery,
                         RecipientName: cloudSale.RecipientName,
                         RecipientPhone: cloudSale.RecipientPhone,

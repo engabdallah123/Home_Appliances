@@ -98,7 +98,9 @@ namespace POS.CloudAPI.Controllers
                 Amount = req.Amount,
                 Category = req.Category?.Trim() ?? "عام",
                 Date = req.Date ?? DateTime.UtcNow,
-                Notes = req.Notes?.Trim(),
+                Notes = !string.IsNullOrWhiteSpace(req.Notes) 
+                    ? $"{req.Notes.Trim()} (بواسطة: {User.FindFirstValue("FullName") ?? User.Identity?.Name ?? "مستخدم الموبايل"})" 
+                    : $"بواسطة: {User.FindFirstValue("FullName") ?? User.Identity?.Name ?? "مستخدم الموبايل"}",
                 SyncStatus = SyncStatus.PendingSync,
                 CreatedAt = DateTime.UtcNow
             };
