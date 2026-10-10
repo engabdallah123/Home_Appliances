@@ -24,6 +24,11 @@ namespace POS.Desktop.Services.Sync
         private DateTime _lastDashboardPush = DateTime.MinValue;
         private readonly HashSet<string> _knownInvoiceNumbers = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _knownSaleInvoiceNumbers = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<Guid> _pushedSalesReturnIds = new();
+        private readonly HashSet<Guid> _pushedPurchaseReturnIds = new();
+        private DateTime _lastReturnsPush = DateTime.MinValue;
+        private DateTime _lastNotifyStateUtc = DateTime.MinValue;
+        private readonly object _notifyLock = new();
 
         private CancellationTokenSource? _syncCts;
         private volatile bool _skipCurrentStage = false;
@@ -358,7 +363,7 @@ namespace POS.Desktop.Services.Sync
             InitializeStages();
             CurrentSyncStage = "بدء المزامنة...";
             UpdateProgressPercentage();
-            NotifyStateChanged();
+            NotifyStateChanged(force: true);
 
             var result = new SyncStatusResult();
 
@@ -481,7 +486,7 @@ namespace POS.Desktop.Services.Sync
                 // 12. Push Returns
                 await RunStageAsync("push_returns", async (ct) =>
                 {
-                    await PushReturnsToCloudAsync();
+                    await PushReturnsToCloudAsync(forceCatalogPush);
                     return "تمت مزامنة مرتجعات المبيعات والمشتريات";
                 });
 
@@ -490,7 +495,7 @@ namespace POS.Desktop.Services.Sync
                 // 13. Push Sales, Reservations & Installments
                 await RunStageAsync("push_sales", async (ct) =>
                 {
-                    await PushSalesToCloudAsync();
+                    await PushSalesToCloudAsync(forceCatalogPush);
                     return "تمت مزامنة المبيعات المحلية والأقساط والحجوزات";
                 });
 
@@ -572,7 +577,7 @@ namespace POS.Desktop.Services.Sync
             {
                 _isSyncing = false;
                 try { _syncLock.Release(); } catch { }
-                NotifyStateChanged();
+                NotifyStateChanged(force: true);
                 // Refresh pending queue after sync finishes
                 _ = Task.Run(async () => { try { await FetchPendingQueueAsync(); } catch { } });
             }
@@ -638,12 +643,16 @@ namespace POS.Desktop.Services.Sync
                 {
                     foreach (var d in pendingDebts)
                     {
+                        string titleText = string.Equals(d.DebtType, "Installment", StringComparison.OrdinalIgnoreCase)
+                            ? (string.IsNullOrWhiteSpace(d.InvoiceNumber) ? "سداد قسط مبيعات" : $"سداد قسط فاتورة #{d.InvoiceNumber}")
+                            : (string.IsNullOrWhiteSpace(d.InvoiceNumber) ? $"سند تحصيل دين ({d.DebtType})" : $"سند تحصيل دين #{d.InvoiceNumber} ({d.DebtType})");
+
                         list.Add(new PendingSyncItemView
                         {
                             Id = d.Id,
                             EntityType = "DebtPayment",
-                            Title = $"سند تحصيل دين ({d.DebtType})",
-                            Subtitle = $"ملاحظات: {d.Notes ?? "تحصيل من الموبايل"}",
+                            Title = titleText,
+                            Subtitle = $"ملاحظات: {d.Notes ?? "سداد من تطبيق الموبايل"}",
                             Details = $"المبلغ المحصل: {d.Amount:N2} ج.م",
                             Amount = d.Amount,
                             Date = d.CreatedAt,
@@ -759,6 +768,7 @@ namespace POS.Desktop.Services.Sync
                 }
 
                 await FetchPendingQueueAsync();
+                NotifyDataImported();
                 NotifyStateChanged();
                 return true;
             }
@@ -1120,16 +1130,69 @@ namespace POS.Desktop.Services.Sync
                 {
                     bool success = false;
                     string? err = null;
+
+                    string? targetInvoiceNumber = payment.InvoiceNumber;
+                    if (string.IsNullOrWhiteSpace(targetInvoiceNumber) && !string.IsNullOrWhiteSpace(payment.Notes))
+                    {
+                        var match = System.Text.RegularExpressions.Regex.Match(payment.Notes, @"(INV-[A-Za-z0-9\-]+|MOB-[A-Za-z0-9\-]+|فاتورة\s+([A-Za-z0-9\-]+)|رقم\s+([A-Za-z0-9\-]+))");
+                        if (match.Success)
+                        {
+                            targetInvoiceNumber = match.Groups[1].Value.Replace("فاتورة", "").Replace("رقم", "").Trim();
+                        }
+                    }
+
                     if (string.Equals(payment.DebtType, "Installment", StringComparison.OrdinalIgnoreCase))
                     {
                         try
                         {
                             var contracts = await _posApi.GetInstallmentContractsAsync();
-                            var contract = contracts?.FirstOrDefault(c => c.Id == payment.ReferenceId || c.SaleId == payment.ReferenceId);
+                            var contract = contracts?.FirstOrDefault(c =>
+                                c.Id == payment.ReferenceId ||
+                                c.SaleId == payment.ReferenceId ||
+                                (!string.IsNullOrWhiteSpace(targetInvoiceNumber) && !string.IsNullOrWhiteSpace(c.InvoiceNumber) &&
+                                 c.InvoiceNumber.Trim().Equals(targetInvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+                            SaleDto? matchedSale = null;
+                            if (contract == null)
+                            {
+                                var localSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddYears(-2), DateTime.UtcNow.AddDays(1));
+                                matchedSale = localSales?.FirstOrDefault(s =>
+                                    s.Id == payment.ReferenceId ||
+                                    (!string.IsNullOrWhiteSpace(targetInvoiceNumber) && !string.IsNullOrWhiteSpace(s.InvoiceNumber) &&
+                                     s.InvoiceNumber.Trim().Equals(targetInvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+                                if (matchedSale != null)
+                                {
+                                    contract = contracts?.FirstOrDefault(c =>
+                                        c.SaleId == matchedSale.Id ||
+                                        (!string.IsNullOrWhiteSpace(matchedSale.InvoiceNumber) && !string.IsNullOrWhiteSpace(c.InvoiceNumber) &&
+                                         c.InvoiceNumber.Trim().Equals(matchedSale.InvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
+                                }
+                            }
+
+                            // If neither contract nor sale is found locally, try pulling pending sales first
+                            if (contract == null && matchedSale == null)
+                            {
+                                await PullPendingSalesFromCloudAsync();
+                                var localSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddYears(-2), DateTime.UtcNow.AddDays(1));
+                                matchedSale = localSales?.FirstOrDefault(s =>
+                                    s.Id == payment.ReferenceId ||
+                                    (!string.IsNullOrWhiteSpace(targetInvoiceNumber) && !string.IsNullOrWhiteSpace(s.InvoiceNumber) &&
+                                     s.InvoiceNumber.Trim().Equals(targetInvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+                                contracts = await _posApi.GetInstallmentContractsAsync();
+                                contract = contracts?.FirstOrDefault(c =>
+                                    c.Id == payment.ReferenceId ||
+                                    c.SaleId == payment.ReferenceId ||
+                                    (matchedSale != null && c.SaleId == matchedSale.Id) ||
+                                    (!string.IsNullOrWhiteSpace(targetInvoiceNumber) && !string.IsNullOrWhiteSpace(c.InvoiceNumber) &&
+                                     c.InvoiceNumber.Trim().Equals(targetInvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
+                            }
+
                             if (contract != null)
                             {
                                 var fullContract = await _posApi.GetInstallmentContractByIdAsync(contract.Id);
-                                var pendingSchedules = fullContract?.Schedules?
+                                var pendingSchedules = (fullContract?.Schedules ?? contract.Schedules)?
                                     .Where(s => s.RemainingAmount > 0)
                                     .OrderBy(s => s.DueDate)
                                     .ToList();
@@ -1171,9 +1234,36 @@ namespace POS.Desktop.Services.Sync
                                         err = null;
                                     }
                                 }
-                            }
+                                else if (contract.RemainingBalance <= 0.01m)
+                                {
+                                    // Contract is already fully settled locally
+                                    success = true;
+                                    err = null;
+                                }
 
-                            if (!success)
+                                if (!success)
+                                {
+                                    Guid targetSaleId = contract.SaleId != Guid.Empty ? contract.SaleId : (matchedSale?.Id ?? payment.ReferenceId);
+                                    var (res, errorMsg) = await _posApi.PayCustomerDebtAsync(targetSaleId, payment.Amount);
+                                    success = res;
+                                    err = errorMsg;
+                                }
+                            }
+                            else if (matchedSale != null)
+                            {
+                                if (matchedSale.RemainingAmount <= 0.01m)
+                                {
+                                    success = true;
+                                    err = null;
+                                }
+                                else
+                                {
+                                    var (res, errorMsg) = await _posApi.PayCustomerDebtAsync(matchedSale.Id, payment.Amount);
+                                    success = res;
+                                    err = errorMsg;
+                                }
+                            }
+                            else
                             {
                                 var (res, errorMsg) = await _posApi.PayCustomerDebtAsync(payment.ReferenceId, payment.Amount);
                                 success = res;
@@ -1187,53 +1277,103 @@ namespace POS.Desktop.Services.Sync
                     }
                     else if (string.Equals(payment.DebtType, "Customer", StringComparison.OrdinalIgnoreCase))
                     {
-                        var (res, errorMsg) = await _posApi.PayCustomerDebtAsync(payment.ReferenceId, payment.Amount);
-                        if (!res)
+                        try
                         {
-                            try
-                            {
-                                var contracts = await _posApi.GetInstallmentContractsAsync();
-                                var contract = contracts?.FirstOrDefault(c => c.Id == payment.ReferenceId || c.SaleId == payment.ReferenceId);
-                                if (contract != null)
-                                {
-                                    var fullContract = await _posApi.GetInstallmentContractByIdAsync(contract.Id);
-                                    var pendingSchedule = fullContract?.Schedules?
-                                        .Where(s => s.RemainingAmount > 0)
-                                        .OrderBy(s => s.DueDate)
-                                        .FirstOrDefault();
+                            var localSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddYears(-2), DateTime.UtcNow.AddDays(1));
+                            var matchedSale = localSales?.FirstOrDefault(s =>
+                                s.Id == payment.ReferenceId ||
+                                (!string.IsNullOrWhiteSpace(targetInvoiceNumber) && !string.IsNullOrWhiteSpace(s.InvoiceNumber) &&
+                                 s.InvoiceNumber.Trim().Equals(targetInvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
 
-                                    if (pendingSchedule != null)
+                            Guid targetSaleId = matchedSale?.Id ?? payment.ReferenceId;
+                            if (matchedSale != null && matchedSale.RemainingAmount <= 0.01m)
+                            {
+                                success = true;
+                                err = null;
+                            }
+                            else
+                            {
+                                var (res, errorMsg) = await _posApi.PayCustomerDebtAsync(targetSaleId, payment.Amount);
+                                if (!res)
+                                {
+                                    var contracts = await _posApi.GetInstallmentContractsAsync();
+                                    var contract = contracts?.FirstOrDefault(c =>
+                                        c.Id == targetSaleId ||
+                                        c.SaleId == targetSaleId ||
+                                        (!string.IsNullOrWhiteSpace(targetInvoiceNumber) && !string.IsNullOrWhiteSpace(c.InvoiceNumber) &&
+                                         c.InvoiceNumber.Trim().Equals(targetInvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+                                    if (contract != null)
                                     {
-                                        var payReq = new PayInstallmentRequest(
-                                            ContractId: contract.Id,
-                                            ScheduleId: pendingSchedule.Id,
-                                            Amount: Math.Min(payment.Amount, pendingSchedule.RemainingAmount),
-                                            PaymentMethod: "Cash",
-                                            Notes: $"[سداد من الموبايل] {payment.Notes}".Trim()
-                                        );
-                                        var (instRes, instErr) = await _posApi.PayInstallmentScheduleAsync(payReq);
-                                        if (instRes)
+                                        var fullContract = await _posApi.GetInstallmentContractByIdAsync(contract.Id);
+                                        var pendingSchedule = (fullContract?.Schedules ?? contract.Schedules)?
+                                            .Where(s => s.RemainingAmount > 0)
+                                            .OrderBy(s => s.DueDate)
+                                            .FirstOrDefault();
+
+                                        if (pendingSchedule != null)
+                                        {
+                                            var payReq = new PayInstallmentRequest(
+                                                ContractId: contract.Id,
+                                                ScheduleId: pendingSchedule.Id,
+                                                Amount: Math.Min(payment.Amount, pendingSchedule.RemainingAmount),
+                                                PaymentMethod: "Cash",
+                                                Notes: $"[سداد من الموبايل] {payment.Notes}".Trim()
+                                            );
+                                            var (instRes, instErr) = await _posApi.PayInstallmentScheduleAsync(payReq);
+                                            if (instRes)
+                                            {
+                                                res = true;
+                                                errorMsg = null;
+                                            }
+                                            else
+                                            {
+                                                errorMsg = instErr;
+                                            }
+                                        }
+                                        else if (contract.RemainingBalance <= 0.01m)
                                         {
                                             res = true;
                                             errorMsg = null;
                                         }
-                                        else
-                                        {
-                                            errorMsg = instErr;
-                                        }
                                     }
                                 }
+                                success = res;
+                                err = errorMsg;
                             }
-                            catch { }
                         }
-                        success = res;
-                        err = errorMsg;
+                        catch (Exception ex)
+                        {
+                            err = ex.Message;
+                        }
                     }
                     else if (string.Equals(payment.DebtType, "Supplier", StringComparison.OrdinalIgnoreCase))
                     {
-                        var (res, errorMsg) = await _posApi.PaySupplierDebtAsync(payment.ReferenceId, payment.Amount);
-                        success = res;
-                        err = errorMsg;
+                        try
+                        {
+                            var supplierDebts = await _posApi.GetSupplierDebtsAsync();
+                            var matchedDebt = supplierDebts?.FirstOrDefault(sd =>
+                                sd.PurchaseId == payment.ReferenceId ||
+                                (!string.IsNullOrWhiteSpace(targetInvoiceNumber) && !string.IsNullOrWhiteSpace(sd.InvoiceNumber) &&
+                                 sd.InvoiceNumber.Trim().Equals(targetInvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+                            Guid targetPurchaseId = matchedDebt?.PurchaseId ?? payment.ReferenceId;
+                            if (matchedDebt != null && matchedDebt.RemainingAmount <= 0.01m)
+                            {
+                                success = true;
+                                err = null;
+                            }
+                            else
+                            {
+                                var (res, errorMsg) = await _posApi.PaySupplierDebtAsync(targetPurchaseId, payment.Amount);
+                                success = res;
+                                err = errorMsg;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            err = ex.Message;
+                        }
                     }
                     else
                     {
@@ -1251,24 +1391,27 @@ namespace POS.Desktop.Services.Sync
                     if (success)
                     {
                         await _cloudHttp.PostAsync($"api/sync/debts/{payment.Id}/acknowledge", null);
+                        _pendingQueue.RemoveAll(x => x.Id == payment.Id);
                         count++;
                     }
                     else
                     {
-                        Console.WriteLine($"[CloudSync] Failed to apply {payment.DebtType} debt payment {payment.ReferenceId}: {err}");
+                        Console.WriteLine($"[CloudSync] Failed to apply {payment.DebtType} debt payment {payment.ReferenceId} (Inv: {targetInvoiceNumber}): {err}");
                         bool isPermanentError = err != null && (
                             err.Contains("مسددة بالكامل") ||
                             err.Contains("AlreadyFullyPaid") ||
                             err.Contains("NotFound") ||
+                            err.Contains("غير موجود") ||
+                            err.Contains("لا توجد") ||
+                            err.Contains("لا يوجد") ||
                             err.Contains("InvalidPaymentAmount") ||
                             err.Contains("أكبر من") ||
-                            err.Contains("يجب أن يكون") ||
-                            err.Contains("غير موجود") ||
-                            err.Contains("لا يوجد"));
+                            err.Contains("يجب أن يكون"));
 
                         if (isPermanentError)
                         {
                             await _cloudHttp.PostAsync($"api/sync/debts/{payment.Id}/acknowledge", null);
+                            _pendingQueue.RemoveAll(x => x.Id == payment.Id);
                             count++;
                         }
                     }
@@ -1276,8 +1419,10 @@ namespace POS.Desktop.Services.Sync
 
                 if (count > 0)
                 {
-                    // Fire state changed event so any open UI (like Debts.razor) refreshes instantly!
+                    // Fire events so all open UI screens refresh instantly with updated balances!
+                    NotifyDataImported();
                     NotifyStateChanged();
+                    RecordLocalChange();
                 }
             }
             catch (Exception ex)
@@ -2018,12 +2163,28 @@ namespace POS.Desktop.Services.Sync
             catch { }
         }
 
-        private async Task PushReturnsToCloudAsync()
+        private async Task PushReturnsToCloudAsync(bool force = false)
         {
             try
             {
-                var salesReturns = await _posApi.GetSalesReturnsAsync(cashierId: null, shiftId: null, page: 1, pageSize: 100);
-                var purchaseReturns = await _posApi.GetPurchaseReturnsAsync(supplierId: null, page: 1, pageSize: 100);
+                // Quick bypass if pushed recently and we already have cached returns
+                if (!force && (DateTime.UtcNow - _lastReturnsPush) < TimeSpan.FromMinutes(5) && _pushedSalesReturnIds.Any())
+                {
+                    var latestSalesReturns = await _posApi.GetSalesReturnsAsync(cashierId: null, shiftId: null, page: 1, pageSize: 5);
+                    var latestPurchaseReturns = await _posApi.GetPurchaseReturnsAsync(supplierId: null, page: 1, pageSize: 5);
+
+                    bool hasNewSales = latestSalesReturns?.Any(r => !_pushedSalesReturnIds.Contains(r.Id)) ?? false;
+                    bool hasNewPurchases = latestPurchaseReturns?.Any(r => !_pushedPurchaseReturnIds.Contains(r.Id)) ?? false;
+
+                    if (!hasNewSales && !hasNewPurchases)
+                    {
+                        return; // No new returns to push! Zero N+1 HTTP calls.
+                    }
+                }
+
+                int pageSize = force ? 100 : 25;
+                var salesReturns = await _posApi.GetSalesReturnsAsync(cashierId: null, shiftId: null, page: 1, pageSize: pageSize);
+                var purchaseReturns = await _posApi.GetPurchaseReturnsAsync(supplierId: null, page: 1, pageSize: pageSize);
 
                 var itemsToPush = new List<PushReturnSyncItem>();
 
@@ -2031,6 +2192,9 @@ namespace POS.Desktop.Services.Sync
                 {
                     foreach (var sr in salesReturns)
                     {
+                        if (!force && _pushedSalesReturnIds.Contains(sr.Id))
+                            continue;
+
                         try
                         {
                             SalesReturnDetailDto? detail = null;
@@ -2063,6 +2227,8 @@ namespace POS.Desktop.Services.Sync
                                 JsonSerializer.Serialize(returnItems),
                                 returnItems.Count
                             ));
+
+                            _pushedSalesReturnIds.Add(sr.Id);
                         }
                         catch { }
                     }
@@ -2072,6 +2238,9 @@ namespace POS.Desktop.Services.Sync
                 {
                     foreach (var pr in purchaseReturns)
                     {
+                        if (!force && _pushedPurchaseReturnIds.Contains(pr.Id))
+                            continue;
+
                         try
                         {
                             PurchaseReturnDetailDto? detail = null;
@@ -2104,6 +2273,8 @@ namespace POS.Desktop.Services.Sync
                                 JsonSerializer.Serialize(returnItems),
                                 returnItems.Count
                             ));
+
+                            _pushedPurchaseReturnIds.Add(pr.Id);
                         }
                         catch { }
                     }
@@ -2113,15 +2284,18 @@ namespace POS.Desktop.Services.Sync
                 {
                     await _cloudHttp.PostAsJsonAsync("api/sync/returns/push", new PushReturnsRequest(itemsToPush));
                 }
+
+                _lastReturnsPush = DateTime.UtcNow;
             }
             catch { }
         }
 
-        private async Task PushSalesToCloudAsync()
+        private async Task PushSalesToCloudAsync(bool fullHistory = false)
         {
             try
             {
-                var localSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddDays(-60), DateTime.UtcNow.AddDays(1));
+                int lookbackDays = fullHistory ? -60 : -3;
+                var localSales = await _posApi.GetSalesListAsync(DateTime.UtcNow.AddDays(lookbackDays), DateTime.UtcNow.AddDays(1));
                 if (localSales == null || !localSales.Any()) return;
 
                 var customerDebts = await _posApi.GetCustomerDebtsAsync();
@@ -2390,7 +2564,7 @@ namespace POS.Desktop.Services.Sync
                 await PullPendingCategoriesFromCloudAsync();
                 await PullPendingBrandsFromCloudAsync();
                 await PushBrandsToCloudAsync();
-                NotifyStateChanged();
+                NotifyStateChanged(force: true);
                 return true;
             }
             catch
@@ -2405,8 +2579,11 @@ namespace POS.Desktop.Services.Sync
             {
                 await PullPendingDebtPaymentsFromCloudAsync();
                 await PushSuppliersToCloudAsync();
-                _ = Task.Run(async () => await PushDebtsAndDashboardAsync());
-                NotifyStateChanged();
+                if ((DateTime.UtcNow - _lastDashboardPush) > TimeSpan.FromSeconds(60))
+                {
+                    _ = Task.Run(async () => await PushDebtsAndDashboardAsync());
+                }
+                NotifyStateChanged(force: true);
                 return true;
             }
             catch
@@ -2420,9 +2597,12 @@ namespace POS.Desktop.Services.Sync
             try
             {
                 await PullPendingSalesFromCloudAsync();
-                await PushSalesToCloudAsync();
-                _ = Task.Run(async () => await PushDebtsAndDashboardAsync());
-                NotifyStateChanged();
+                await PushSalesToCloudAsync(fullHistory: false);
+                if ((DateTime.UtcNow - _lastDashboardPush) > TimeSpan.FromSeconds(60))
+                {
+                    _ = Task.Run(async () => await PushDebtsAndDashboardAsync());
+                }
+                NotifyStateChanged(force: true);
                 return true;
             }
             catch
@@ -2436,7 +2616,7 @@ namespace POS.Desktop.Services.Sync
             try
             {
                 await PullPendingPurchasesFromCloudAsync();
-                NotifyStateChanged();
+                NotifyStateChanged(force: true);
                 return true;
             }
             catch
@@ -2445,7 +2625,22 @@ namespace POS.Desktop.Services.Sync
             }
         }
 
-        private void NotifyStateChanged() => OnSyncStateChanged?.Invoke();
+        private void NotifyStateChanged(bool force = false)
+        {
+            lock (_notifyLock)
+            {
+                var now = DateTime.UtcNow;
+                if (force || (now - _lastNotifyStateUtc).TotalMilliseconds >= 350)
+                {
+                    _lastNotifyStateUtc = now;
+                    try
+                    {
+                        OnSyncStateChanged?.Invoke();
+                    }
+                    catch { }
+                }
+            }
+        }
         private void NotifyDataImported() => OnDataImported?.Invoke();
 
         public void Dispose()

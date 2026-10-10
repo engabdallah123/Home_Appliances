@@ -382,6 +382,10 @@ namespace POS.CloudAPI.Controllers
             sale.PaidAmount += payAmt;
             sale.RemainingAmount = Math.Max(0, sale.RemainingAmount - payAmt);
 
+            string noteText = string.IsNullOrWhiteSpace(req.Notes)
+                ? $"سداد قسط مبيعات رقم {sale.InvoiceNumber}"
+                : $"[فاتورة {sale.InvoiceNumber}] {req.Notes.Trim()}";
+
             _db.DebtPayments.Add(new CloudDebtPayment
             {
                 Id = Guid.NewGuid(),
@@ -389,7 +393,7 @@ namespace POS.CloudAPI.Controllers
                 DebtType = "Installment",
                 ReferenceId = sale.Id,
                 Amount = payAmt,
-                Notes = req.Notes ?? $"سداد قسط مبيعات رقم {sale.InvoiceNumber}",
+                Notes = noteText,
                 SyncStatus = SyncStatus.PendingSync,
                 CreatedAt = DateTime.UtcNow
             });

@@ -1,11 +1,14 @@
 @page "/installments"
+@implements IDisposable
 @using Microsoft.AspNetCore.Authorization
 @using global::POS.Desktop.Services.Api
 @using global::POS.Desktop.Services.Auth
 @using global::POS.Desktop.Services.State
+@using global::POS.Desktop.Services.Sync
 @attribute [Authorize]
 @inject PosApiClient ApiClient
 @inject CustomAuthStateProvider AuthState
+@inject ICloudSyncService CloudSync
 @inject IJSRuntime JS
 
 <div>
@@ -431,6 +434,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        CloudSync.OnDataImported += HandleSyncDataImported;
         await LoadDataAsync();
     }
 
@@ -557,5 +561,27 @@
         {
             isSubmittingPayment = false;
         }
+    }
+
+    private void HandleSyncDataImported()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await LoadDataAsync();
+            if (selectedContract != null)
+            {
+                var reloaded = await ApiClient.GetInstallmentContractByIdAsync(selectedContract.Id);
+                if (reloaded != null)
+                {
+                    selectedContract = reloaded;
+                }
+            }
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        CloudSync.OnDataImported -= HandleSyncDataImported;
     }
 }

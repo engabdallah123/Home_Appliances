@@ -1083,14 +1083,33 @@ namespace POS.WebAPI.Services
                     bool success = false;
                     string? err = null;
 
+                    string? targetInvoiceNumber = payment.InvoiceNumber;
+                    if (string.IsNullOrWhiteSpace(targetInvoiceNumber) && !string.IsNullOrWhiteSpace(payment.Notes))
+                    {
+                        var match = System.Text.RegularExpressions.Regex.Match(payment.Notes, @"(INV-[A-Za-z0-9\-]+|MOB-[A-Za-z0-9\-]+|فاتورة\s+([A-Za-z0-9\-]+)|رقم\s+([A-Za-z0-9\-]+))");
+                        if (match.Success)
+                        {
+                            targetInvoiceNumber = match.Groups[1].Value.Replace("فاتورة", "").Replace("رقم", "").Trim();
+                        }
+                    }
+
                     if (string.Equals(payment.DebtType, "Installment", StringComparison.OrdinalIgnoreCase))
                     {
                         var salesDb = sp.GetService<SalesDbContext>();
                         if (salesDb != null)
                         {
+                            // 1. Resolve local sale by ID or InvoiceNumber
+                            var sale = await salesDb.Sales
+                                .Include(s => s.Payments)
+                                .FirstOrDefaultAsync(s => s.Id == payment.ReferenceId ||
+                                    (!string.IsNullOrEmpty(targetInvoiceNumber) && s.InvoiceNumber == targetInvoiceNumber), ct);
+
+                            // 2. Resolve contract by ID, SaleId, or linked sale
                             var contract = await salesDb.InstallmentContracts
                                 .Include(c => c.Schedules)
-                                .FirstOrDefaultAsync(c => c.Id == payment.ReferenceId || c.SaleId == payment.ReferenceId, ct);
+                                .FirstOrDefaultAsync(c => c.Id == payment.ReferenceId ||
+                                    c.SaleId == payment.ReferenceId ||
+                                    (sale != null && c.SaleId == sale.Id), ct);
 
                             if (contract != null)
                             {
@@ -1128,10 +1147,31 @@ namespace POS.WebAPI.Services
                                     }
                                     success = anyPaid;
                                 }
+                                else if (contract.RemainingBalance <= 0.01m)
+                                {
+                                    success = true;
+                                    err = null;
+                                }
+                            }
+
+                            if (!success && sale != null)
+                            {
+                                decimal saleRemaining = Math.Max(0, sale.TotalAmount - sale.PaidAmount);
+                                if (saleRemaining <= 0.01m)
+                                {
+                                    success = true;
+                                    err = null;
+                                }
+                                else
+                                {
+                                    var res = await mediator.Send(new global::Sales.Application.Sales.Commands.PaySaleInvoice.PaySaleInvoiceCommand(sale.Id, payment.Amount), ct);
+                                    success = res.IsSuccess;
+                                    err = res.IsFailure ? res.Error.Name : null;
+                                }
                             }
                         }
 
-                        if (!success)
+                        if (!success && salesDb == null)
                         {
                             var res = await mediator.Send(new global::Sales.Application.Sales.Commands.PaySaleInvoice.PaySaleInvoiceCommand(payment.ReferenceId, payment.Amount), ct);
                             success = res.IsSuccess;
@@ -1140,15 +1180,44 @@ namespace POS.WebAPI.Services
                     }
                     else if (string.Equals(payment.DebtType, "Customer", StringComparison.OrdinalIgnoreCase))
                     {
-                        var res = await mediator.Send(new global::Sales.Application.Sales.Commands.PaySaleInvoice.PaySaleInvoiceCommand(payment.ReferenceId, payment.Amount), ct);
-                        success = res.IsSuccess;
-                        err = res.IsFailure ? res.Error.Name : null;
+                        var salesDb = sp.GetService<SalesDbContext>();
+                        var sale = salesDb != null
+                            ? await salesDb.Sales.FirstOrDefaultAsync(s => s.Id == payment.ReferenceId ||
+                                (!string.IsNullOrEmpty(targetInvoiceNumber) && s.InvoiceNumber == targetInvoiceNumber), ct)
+                            : null;
+
+                        Guid targetSaleId = sale?.Id ?? payment.ReferenceId;
+                        decimal saleRemaining = sale != null ? Math.Max(0, sale.TotalAmount - sale.PaidAmount) : 0m;
+                        if (sale != null && saleRemaining <= 0.01m)
+                        {
+                            success = true;
+                        }
+                        else
+                        {
+                            var res = await mediator.Send(new global::Sales.Application.Sales.Commands.PaySaleInvoice.PaySaleInvoiceCommand(targetSaleId, payment.Amount), ct);
+                            success = res.IsSuccess;
+                            err = res.IsFailure ? res.Error.Name : null;
+                        }
                     }
                     else
                     {
-                        var res = await mediator.Send(new global::Purchases.Application.Purchases.Commands.PayPurchaseInvoice.PayPurchaseInvoiceCommand(payment.ReferenceId, payment.Amount), ct);
-                        success = res.IsSuccess;
-                        err = res.IsFailure ? res.Error.Name : null;
+                        var purchDb = sp.GetService<PurchasesDbContext>();
+                        var purchase = purchDb != null
+                            ? await purchDb.Purchases.FirstOrDefaultAsync(pu => pu.Id == payment.ReferenceId ||
+                                (!string.IsNullOrEmpty(targetInvoiceNumber) && pu.InvoiceNumber == targetInvoiceNumber), ct)
+                            : null;
+
+                        Guid targetPurchaseId = purchase?.Id ?? payment.ReferenceId;
+                        if (purchase != null && purchase.RemainingAmount <= 0.01m)
+                        {
+                            success = true;
+                        }
+                        else
+                        {
+                            var res = await mediator.Send(new global::Purchases.Application.Purchases.Commands.PayPurchaseInvoice.PayPurchaseInvoiceCommand(targetPurchaseId, payment.Amount), ct);
+                            success = res.IsSuccess;
+                            err = res.IsFailure ? res.Error.Name : null;
+                        }
                     }
 
                     if (success)
@@ -1165,6 +1234,8 @@ namespace POS.WebAPI.Services
                             err.Contains("مسددة بالكامل") ||
                             err.Contains("AlreadyFullyPaid") ||
                             err.Contains("NotFound") ||
+                            err.Contains("غير موجود") ||
+                            err.Contains("لا توجد") ||
                             err.Contains("InvalidPaymentAmount") ||
                             err.Contains("أكبر من") ||
                             err.Contains("يجب أن يكون"));
@@ -1487,7 +1558,7 @@ namespace POS.WebAPI.Services
 
     public record CloudSaleItemSyncDto(Guid Id, Guid ProductId, string ProductName, string? Barcode, string? ModelNumber, string? BrandName, string? SerialNumber, int WarrantyPeriodMonths, decimal Quantity, decimal UnitPrice, decimal Discount, decimal Tax, decimal Total);
     public record CloudSaleSyncDto(Guid Id, string InvoiceNumber, Guid? CustomerId, string? CustomerName, string? CustomerPhone, DateTime SaleDate, decimal SubTotal, decimal DiscountAmount, decimal TaxAmount, decimal TotalAmount, decimal PaidAmount, decimal RemainingAmount, string PaymentMethod, string? Notes, bool IsDelivery, string? RecipientName, string? RecipientPhone, string? DeliveryAddress, string? DeliveryFloor, decimal DeliveryFee, bool IsInstallment, string? GuarantorName, string? GuarantorPhone, decimal InterestPercentage, int NumberOfMonths, bool IsReserved, DateTime? TargetDeliveryDate, List<CloudSaleItemSyncDto> Items, int ReservationStatus, string? CreatedByName = null);
-    public record PendingDebtPaymentSyncDto(Guid Id, string DebtType, Guid ReferenceId, decimal Amount, string? Notes, DateTime CreatedAt);
+    public record PendingDebtPaymentSyncDto(Guid Id, string DebtType, Guid ReferenceId, decimal Amount, string? Notes, DateTime CreatedAt, string? InvoiceNumber = null);
     public record PendingCategorySyncDto(Guid Id, string NameAr, string? NameEn, bool IsActive, DateTime CreatedAt);
 
     public record PendingSupplierSyncDto(Guid Id, string Name, string? Phone, string? Email, string? Address, string? ContactPerson, decimal Balance = 0);

@@ -528,12 +528,39 @@
         }
     }
 
+    private DateTime _lastSyncRenderTime = DateTime.MinValue;
+    private CancellationTokenSource? _syncRenderCts;
+
+    private void HandleSyncStateChanged()
+    {
+        var now = DateTime.UtcNow;
+        if ((now - _lastSyncRenderTime).TotalMilliseconds >= 500)
+        {
+            _lastSyncRenderTime = now;
+            InvokeAsync(StateHasChanged);
+        }
+        else
+        {
+            _syncRenderCts?.Cancel();
+            _syncRenderCts = new CancellationTokenSource();
+            var token = _syncRenderCts.Token;
+            _ = Task.Delay(500, token).ContinueWith(_ =>
+            {
+                if (!token.IsCancellationRequested)
+                {
+                    _lastSyncRenderTime = DateTime.UtcNow;
+                    InvokeAsync(StateHasChanged);
+                }
+            }, TaskScheduler.Default);
+        }
+    }
+
     protected override void OnInitialized()
     {
         ShiftState.OnShiftStateChanged += StateHasChanged;
         CalcState.OnStateChanged += StateHasChanged;
         AuthState.AuthenticationStateChanged += OnAuthStateChanged;
-        CloudSync.OnSyncStateChanged += StateHasChanged;
+        CloudSync.OnSyncStateChanged += HandleSyncStateChanged;
         StoreState.OnStateChanged += StateHasChanged;
         Nav.LocationChanged += OnLocationChanged;
     }
@@ -593,10 +620,12 @@
     public void Dispose()
     {
         _dotNetRef?.Dispose();
+        _syncRenderCts?.Cancel();
+        _syncRenderCts?.Dispose();
         ShiftState.OnShiftStateChanged -= StateHasChanged;
         CalcState.OnStateChanged -= StateHasChanged;
         AuthState.AuthenticationStateChanged -= OnAuthStateChanged;
-        CloudSync.OnSyncStateChanged -= StateHasChanged;
+        CloudSync.OnSyncStateChanged -= HandleSyncStateChanged;
         StoreState.OnStateChanged -= StateHasChanged;
         Nav.LocationChanged -= OnLocationChanged;
     }

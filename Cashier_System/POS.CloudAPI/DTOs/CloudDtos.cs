@@ -305,7 +305,8 @@ namespace POS.CloudAPI.DTOs
         Guid ReferenceId,
         decimal Amount,
         string? Notes,
-        DateTime CreatedAt);
+        DateTime CreatedAt,
+        string? InvoiceNumber = null);
 
     // Expenses
     public record CloudExpenseDto(

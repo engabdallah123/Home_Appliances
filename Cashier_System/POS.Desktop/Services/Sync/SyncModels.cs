@@ -171,7 +171,8 @@ namespace POS.Desktop.Services.Sync
         Guid ReferenceId,
         decimal Amount,
         string? Notes,
-        DateTime CreatedAt);
+        DateTime CreatedAt,
+        string? InvoiceNumber = null);
 
     public record PendingCloudProductDto(
         Guid Id,

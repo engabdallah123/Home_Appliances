@@ -697,14 +697,43 @@ namespace POS.CloudAPI.Controllers
                 .Take(50)
                 .ToListAsync();
 
-            var result = pendingPayments.Select(p => new DebtPaymentSyncDto(
-                p.Id,
-                p.DebtType,
-                p.ReferenceId,
-                p.Amount,
-                p.Notes,
-                p.CreatedAt
-            )).ToList();
+            if (!pendingPayments.Any())
+                return Ok(new List<DebtPaymentSyncDto>());
+
+            var refIds = pendingPayments.Select(p => p.ReferenceId).Distinct().ToList();
+
+            var salesMap = await _db.Sales
+                .AsNoTracking()
+                .Where(s => s.TenantId == tenant.Id && refIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, s => s.InvoiceNumber);
+
+            var purchasesMap = await _db.Purchases
+                .AsNoTracking()
+                .Where(pu => pu.TenantId == tenant.Id && refIds.Contains(pu.Id))
+                .ToDictionaryAsync(pu => pu.Id, pu => pu.InvoiceNumber);
+
+            var result = pendingPayments.Select(p =>
+            {
+                string? invNumber = null;
+                if (string.Equals(p.DebtType, "Supplier", StringComparison.OrdinalIgnoreCase))
+                {
+                    purchasesMap.TryGetValue(p.ReferenceId, out invNumber);
+                }
+                else
+                {
+                    salesMap.TryGetValue(p.ReferenceId, out invNumber);
+                }
+
+                return new DebtPaymentSyncDto(
+                    p.Id,
+                    p.DebtType,
+                    p.ReferenceId,
+                    p.Amount,
+                    p.Notes,
+                    p.CreatedAt,
+                    invNumber
+                );
+            }).ToList();
 
             return Ok(result);
         }

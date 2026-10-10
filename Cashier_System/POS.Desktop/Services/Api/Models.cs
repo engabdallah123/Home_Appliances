@@ -454,6 +454,7 @@ namespace POS.Desktop.Services.Api
         public int DeliveryStatus { get; set; } = 0;
         public bool IsInstallment { get; set; } = false;
         public Guid? InstallmentContractId { get; set; }
+        public decimal RemainingAmount => Math.Max(0, TotalAmount - PaidAmount);
     }
 
     public record StoreSettingDto(
