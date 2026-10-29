@@ -391,7 +391,15 @@
                                                 }
                                             </td>
                                             <td style="padding: 0.6rem 0.85rem; text-align: center;">
-                                                <span class="badge" style="font-size: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color);">
+                                                <span class="badge @(s.PaymentMethod == "Cash" ? "badge-green" : (s.PaymentMethod == "Visa" || s.PaymentMethod == "Card" || s.PaymentMethod == "فيزا" || s.PaymentMethod == "بطاقة") ? "badge-blue" : (s.PaymentMethod == "Credit" || s.PaymentMethod == "آجل") ? "badge-amber" : (s.PaymentMethod == "Installment" || s.PaymentMethod == "تقسيط") ? "badge-indigo" : "badge-secondary")" style="font-size: 0.75rem;">
+                                                    @if (s.PaymentMethod == "Visa" || s.PaymentMethod == "Card" || s.PaymentMethod == "فيزا" || s.PaymentMethod == "بطاقة")
+                                                    {
+                                                        <i class="fa-solid fa-credit-card me-1"></i>
+                                                    }
+                                                    else if (s.PaymentMethod == "Cash")
+                                                    {
+                                                        <i class="fa-solid fa-money-bill-wave me-1"></i>
+                                                    }
                                                     @FormatPaymentMethod(s.PaymentMethod)
                                                 </span>
                                             </td>
@@ -1125,11 +1133,18 @@
 
         if (selectedSaleForWhatsApp != null)
         {
+            InstallmentContractDto? contract = null;
+            if (selectedSaleForWhatsApp.IsInstallment || selectedSaleForWhatsApp.InstallmentContractId.HasValue)
+            {
+                contract = installmentContracts.FirstOrDefault(c => c.SaleId == selectedSaleForWhatsApp.Id || (selectedSaleForWhatsApp.InstallmentContractId.HasValue && c.Id == selectedSaleForWhatsApp.InstallmentContractId.Value));
+            }
+
             whatsAppMessageText = WhatsAppInvoiceHelper.BuildInvoiceMessage(
                 selectedSaleForWhatsApp,
                 StoreState.StoreName,
                 StoreState.Settings?.Phone,
-                StoreState.Settings?.InvoiceFooterMessage);
+                StoreState.Settings?.InvoiceFooterMessage,
+                contract);
         }
     }
 
@@ -1298,6 +1313,7 @@
             alertIsError = false;
             await LoadDataAsync();
             CloudSync.RecordLocalChange();
+            _ = Task.Run(async () => await CloudSync.SyncCustomersOnlyAsync());
         }
         else
         {

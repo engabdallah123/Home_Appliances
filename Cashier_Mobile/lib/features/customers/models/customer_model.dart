@@ -2,8 +2,11 @@ import '../../debts/models/debt_model.dart';
 import '../../sales/models/sale_model.dart';
 
 class CustomerModel {
+  final String? id;
   final String name;
   final String? phone;
+  final String? email;
+  final String? address;
   final double totalSpent;
   final double totalDebt;
   final int invoicesCount;
@@ -11,8 +14,11 @@ class CustomerModel {
   final bool hasDebt;
 
   CustomerModel({
+    this.id,
     required this.name,
     this.phone,
+    this.email,
+    this.address,
     required this.totalSpent,
     required this.totalDebt,
     required this.invoicesCount,
@@ -20,10 +26,15 @@ class CustomerModel {
     required this.hasDebt,
   });
 
+  double get balance => totalDebt;
+
   factory CustomerModel.fromJson(Map<String, dynamic> json) {
     return CustomerModel(
+      id: json['id']?.toString(),
       name: json['name']?.toString() ?? 'عميل عام',
       phone: json['phone']?.toString(),
+      email: json['email']?.toString(),
+      address: json['address']?.toString(),
       totalSpent: (json['totalSpent'] as num?)?.toDouble() ?? 0.0,
       totalDebt: (json['totalDebt'] as num?)?.toDouble() ?? 0.0,
       invoicesCount: (json['invoicesCount'] as num?)?.toInt() ?? 0,

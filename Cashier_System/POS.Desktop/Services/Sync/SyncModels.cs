@@ -291,7 +291,7 @@ namespace POS.Desktop.Services.Sync
         DateTime ServerTime,
         bool HasPendingSales = false,
         bool HasPendingProducts = false,
-        bool HasPendingBrands = false);
+        bool HasPendingBrands = false, bool HasPendingCustomers = false);
 
     public record CloudSaleItemSyncDto(
         Guid Id,
@@ -461,4 +461,24 @@ namespace POS.Desktop.Services.Sync
         public string Source { get; set; } = "Mobile"; // "Mobile" or "Local"
         public string Status { get; set; } = "Pending";
     }
+
+    public record CustomerSyncDto(
+        Guid Id,
+        string Name,
+        string Phone,
+        string? Email,
+        string? Address,
+        decimal Balance,
+        bool IsActive,
+        DateTime CreatedAt);
+
+    public record PushCustomersRequest(List<CustomerSyncDto> Customers);
+
+    public record PendingCloudCustomerDto(
+        Guid Id,
+        string Name,
+        string Phone,
+        string? Email,
+        string? Address,
+        DateTime CreatedAt);
 }

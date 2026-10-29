@@ -751,7 +751,7 @@ namespace POS.CloudAPI.DTOs
         DateTime ServerTime,
         bool HasPendingSales = false,
         bool HasPendingProducts = false,
-        bool HasPendingBrands = false);
+        bool HasPendingBrands = false, bool HasPendingCustomers = false);
 
     // Sales Push DTOs
     public record PushSaleItemDto(
@@ -865,7 +865,36 @@ namespace POS.CloudAPI.DTOs
         decimal TotalDebt,
         int InvoicesCount,
         DateTime? LastSaleDate,
-        bool HasDebt);
+        bool HasDebt,
+        Guid? Id = null,
+        string? Email = null,
+        string? Address = null);
+
+    public record CreateCloudCustomerRequest(
+        string Name,
+        string Phone,
+        string? Email = null,
+        string? Address = null);
+
+    public record CustomerSyncDto(
+        Guid Id,
+        string Name,
+        string Phone,
+        string? Email,
+        string? Address,
+        decimal Balance,
+        bool IsActive,
+        DateTime CreatedAt);
+
+    public record PushCustomersRequest(List<CustomerSyncDto> Customers);
+
+    public record PendingCloudCustomerDto(
+        Guid Id,
+        string Name,
+        string Phone,
+        string? Email,
+        string? Address,
+        DateTime CreatedAt);
 
     public record CloudCustomerDossierDto(
         string Name,

@@ -159,9 +159,36 @@
                             <td>@sale.SaleDate.ToLocalTime().ToString("dd/MM/yyyy hh:mm tt", ArabicCulture)</td>
                             <td>@(string.IsNullOrWhiteSpace(sale.CashierName) ? "مستخدم كاشير" : sale.CashierName)</td>
                             <td>
-                                <span class="badge @(sale.PaymentMethod == "Cash" ? "badge-green" : (sale.PaymentMethod == "Credit" || sale.PaymentMethod == "آجل") ? "badge-amber" : (sale.PaymentMethod == "Installment" || sale.PaymentMethod == "تقسيط" || sale.IsInstallment) ? "badge-indigo" : "badge-secondary")">
-                                    @(sale.PaymentMethod == "Cash" ? "نقداً (كاش)" : (sale.PaymentMethod == "Credit" || sale.PaymentMethod == "آجل") ? "آجل" : (sale.PaymentMethod == "Installment" || sale.PaymentMethod == "تقسيط" || sale.IsInstallment) ? "تقسيط" : (sale.PaymentMethod == "Visa" || sale.PaymentMethod == "Card") ? "فيزا" : sale.PaymentMethod)
-                                </span>
+                                @if (sale.PaymentMethod == "Cash")
+                                {
+                                    <span class="badge badge-green">
+                                        <i class="fa-solid fa-money-bill-wave me-1"></i> نقداً (كاش)
+                                    </span>
+                                }
+                                else if (sale.PaymentMethod == "Visa" || sale.PaymentMethod == "Card" || sale.PaymentMethod == "فيزا" || sale.PaymentMethod == "بطاقة")
+                                {
+                                    <span class="badge badge-blue">
+                                        <i class="fa-solid fa-credit-card me-1"></i> بطاقة (فيزا)
+                                    </span>
+                                }
+                                else if (sale.PaymentMethod == "Installment" || sale.PaymentMethod == "تقسيط" || sale.IsInstallment)
+                                {
+                                    <span class="badge badge-indigo">
+                                        <i class="fa-solid fa-file-invoice-dollar me-1"></i> تقسيط
+                                    </span>
+                                }
+                                else if (sale.PaymentMethod == "Credit" || sale.PaymentMethod == "آجل")
+                                {
+                                    <span class="badge badge-amber">
+                                        <i class="fa-solid fa-clock-rotate-left me-1"></i> آجل
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">
+                                        @sale.PaymentMethod
+                                    </span>
+                                }
                             </td>
                             <td style="color: var(--accent-amber);">@sale.DiscountAmount.ToString("N2") ج.م</td>
                             <td>@sale.TaxAmount.ToString("N2") ج.م</td>
@@ -248,9 +275,36 @@
                     }
                     <div>
                         <span style="color: var(--text-secondary);">الدفع:</span> 
-                        <span class="badge @(detailedSaleInvoice.PaymentMethod == "Cash" ? "badge-green" : (detailedSaleInvoice.PaymentMethod == "Credit" || detailedSaleInvoice.PaymentMethod == "آجل") ? "badge-amber" : (detailedSaleInvoice.PaymentMethod == "Installment" || detailedSaleInvoice.PaymentMethod == "تقسيط" || detailedSaleInvoice.IsInstallment) ? "badge-indigo" : "badge-secondary")">
-                            @(detailedSaleInvoice.PaymentMethod == "Cash" ? "نقداً (كاش)" : (detailedSaleInvoice.PaymentMethod == "Credit" || detailedSaleInvoice.PaymentMethod == "آجل") ? "آجل" : (detailedSaleInvoice.PaymentMethod == "Installment" || detailedSaleInvoice.PaymentMethod == "تقسيط" || detailedSaleInvoice.IsInstallment) ? "تقسيط" : (detailedSaleInvoice.PaymentMethod == "Visa" || detailedSaleInvoice.PaymentMethod == "Card") ? "فيزا" : detailedSaleInvoice.PaymentMethod)
-                        </span>
+                        @if (detailedSaleInvoice.PaymentMethod == "Cash")
+                        {
+                            <span class="badge badge-green">
+                                <i class="fa-solid fa-money-bill-wave me-1"></i> نقداً (كاش)
+                            </span>
+                        }
+                        else if (detailedSaleInvoice.PaymentMethod == "Visa" || detailedSaleInvoice.PaymentMethod == "Card" || detailedSaleInvoice.PaymentMethod == "فيزا" || detailedSaleInvoice.PaymentMethod == "بطاقة")
+                        {
+                            <span class="badge badge-blue">
+                                <i class="fa-solid fa-credit-card me-1"></i> بطاقة (فيزا)
+                            </span>
+                        }
+                        else if (detailedSaleInvoice.PaymentMethod == "Installment" || detailedSaleInvoice.PaymentMethod == "تقسيط" || detailedSaleInvoice.IsInstallment)
+                        {
+                            <span class="badge badge-indigo">
+                                <i class="fa-solid fa-file-invoice-dollar me-1"></i> تقسيط
+                            </span>
+                        }
+                        else if (detailedSaleInvoice.PaymentMethod == "Credit" || detailedSaleInvoice.PaymentMethod == "آجل")
+                        {
+                            <span class="badge badge-amber">
+                                <i class="fa-solid fa-clock-rotate-left me-1"></i> آجل
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-secondary">
+                                @detailedSaleInvoice.PaymentMethod
+                            </span>
+                        }
                     </div>
                     <div>
                         <span style="color: var(--text-secondary);">إجمالي القطع:</span> 

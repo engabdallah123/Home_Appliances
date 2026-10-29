@@ -62,8 +62,9 @@ namespace POS.CloudAPI.Controllers
             bool hasPendingSales = await _db.Sales.AnyAsync(s => s.TenantId == tenant.Id && s.SyncStatus == SyncStatus.PendingSync);
             bool hasPendingProducts = await _db.Products.AnyAsync(p => p.TenantId == tenant.Id && p.SyncStatus == SyncStatus.PendingSync);
             bool hasPendingBrands = await _db.Brands.AnyAsync(b => b.TenantId == tenant.Id && b.SyncStatus == SyncStatus.PendingSync);
+            bool hasPendingCustomers = await _db.Customers.AnyAsync(c => c.TenantId == tenant.Id && c.SyncStatus == SyncStatus.PendingSync);
 
-            bool hasPending = hasPendingPurchases || hasPendingSuppliers || hasPendingDebts || hasPendingNotificationActions || hasPendingCategories || hasPendingSales || hasPendingProducts || hasPendingBrands;
+            bool hasPending = hasPendingPurchases || hasPendingSuppliers || hasPendingDebts || hasPendingNotificationActions || hasPendingCategories || hasPendingSales || hasPendingProducts || hasPendingBrands || hasPendingCustomers;
 
             return Ok(new CloudSyncStatusDto(
                 HasPending: hasPending,
@@ -75,7 +76,8 @@ namespace POS.CloudAPI.Controllers
                 ServerTime: DateTime.UtcNow,
                 HasPendingSales: hasPendingSales,
                 HasPendingProducts: hasPendingProducts,
-                HasPendingBrands: hasPendingBrands
+                HasPendingBrands: hasPendingBrands,
+                HasPendingCustomers: hasPendingCustomers
             ));
         }
 
@@ -1124,6 +1126,109 @@ namespace POS.CloudAPI.Controllers
 
             await _db.SaveChangesAsync();
             return Ok(new { success = true, count = syncedCount });
+        }
+
+        // ==================== CUSTOMERS SYNC ====================
+
+        [HttpPost("customers/push")]
+        public async Task<IActionResult> PushCustomers([FromBody] PushCustomersRequest req)
+        {
+            var tenant = await AuthenticateSyncClientAsync();
+            if (tenant == null) return Unauthorized();
+
+            if (req.Customers == null || !req.Customers.Any())
+                return Ok(new { success = true, count = 0 });
+
+            int syncedCount = 0;
+            var existingCustomers = await _db.Customers.Where(c => c.TenantId == tenant.Id).ToListAsync();
+            var byId = existingCustomers.ToDictionary(c => c.Id);
+            var byPhone = existingCustomers.Where(c => !string.IsNullOrWhiteSpace(c.Phone)).ToDictionary(c => c.Phone.Trim());
+
+            foreach (var c in req.Customers)
+            {
+                if (string.IsNullOrWhiteSpace(c.Name) || string.IsNullOrWhiteSpace(c.Phone)) continue;
+
+                CloudCustomer? existing = null;
+                if (byId.TryGetValue(c.Id, out var matchId))
+                {
+                    existing = matchId;
+                }
+                else if (byPhone.TryGetValue(c.Phone.Trim(), out var matchPhone))
+                {
+                    existing = matchPhone;
+                }
+
+                if (existing != null)
+                {
+                    existing.Name = c.Name.Trim();
+                    existing.Phone = c.Phone.Trim();
+                    existing.Email = c.Email?.Trim() ?? existing.Email;
+                    existing.Address = c.Address?.Trim() ?? existing.Address;
+                    existing.Balance = c.Balance;
+                    existing.IsActive = c.IsActive;
+                    existing.SyncStatus = SyncStatus.Synced;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    _db.Customers.Add(new CloudCustomer
+                    {
+                        Id = c.Id != Guid.Empty ? c.Id : Guid.NewGuid(),
+                        TenantId = tenant.Id,
+                        Name = c.Name.Trim(),
+                        Phone = c.Phone.Trim(),
+                        Email = c.Email?.Trim(),
+                        Address = c.Address?.Trim(),
+                        Balance = c.Balance,
+                        IsActive = c.IsActive,
+                        SyncStatus = SyncStatus.Synced,
+                        CreatedAt = c.CreatedAt != default ? c.CreatedAt : DateTime.UtcNow
+                    });
+                }
+                syncedCount++;
+            }
+
+            await _db.SaveChangesAsync();
+            return Ok(new { success = true, count = syncedCount });
+        }
+
+        [HttpGet("customers/pending")]
+        public async Task<IActionResult> GetPendingCustomers()
+        {
+            var tenant = await AuthenticateSyncClientAsync();
+            if (tenant == null) return Unauthorized();
+
+            var pending = await _db.Customers
+                .AsNoTracking()
+                .Where(c => c.TenantId == tenant.Id && c.SyncStatus == SyncStatus.PendingSync)
+                .OrderBy(c => c.CreatedAt)
+                .Select(c => new PendingCloudCustomerDto(
+                    c.Id,
+                    c.Name,
+                    c.Phone,
+                    c.Email,
+                    c.Address,
+                    c.CreatedAt))
+                .ToListAsync();
+
+            return Ok(pending);
+        }
+
+        [HttpPost("customers/{id}/acknowledge")]
+        public async Task<IActionResult> AcknowledgeCustomer(Guid id)
+        {
+            var tenant = await AuthenticateSyncClientAsync();
+            if (tenant == null) return Unauthorized();
+
+            var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TenantId == tenant.Id && c.Id == id);
+            if (customer != null)
+            {
+                customer.SyncStatus = SyncStatus.Synced;
+                customer.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
+
+            return Ok(new { success = true });
         }
 
         // ==================== 5d. STORE SETTINGS & NAME PUSH ====================

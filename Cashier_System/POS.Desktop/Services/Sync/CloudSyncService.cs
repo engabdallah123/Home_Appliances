@@ -27,6 +27,7 @@ namespace POS.Desktop.Services.Sync
         private readonly HashSet<Guid> _pushedSalesReturnIds = new();
         private readonly HashSet<Guid> _pushedPurchaseReturnIds = new();
         private DateTime _lastReturnsPush = DateTime.MinValue;
+        private DateTime _lastCustomersPush = DateTime.MinValue;
         private DateTime _lastNotifyStateUtc = DateTime.MinValue;
         private readonly object _notifyLock = new();
 
@@ -382,14 +383,16 @@ namespace POS.Desktop.Services.Sync
 
                 if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
 
-                // 2. Categories & Brands
+                // 2. Categories, Brands & Customers
                 int catsCount = 0;
                 int brandsCount = 0;
+                int custsCount = 0;
                 await RunStageAsync("pull_categories_brands", async (ct) =>
                 {
                     catsCount = await PullPendingCategoriesFromCloudAsync();
                     brandsCount = await PullPendingBrandsFromCloudAsync();
-                    return $"تم استيراد {catsCount} أقسام و {brandsCount} ماركات";
+                    custsCount = await PullPendingCustomersFromCloudAsync();
+                    return $"تم استيراد {catsCount} أقسام، {brandsCount} ماركات، و {custsCount} عملاء";
                 });
 
                 if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
@@ -473,12 +476,13 @@ namespace POS.Desktop.Services.Sync
 
                 if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
 
-                // 11. Push Suppliers, Brands, Debts
+                // 11. Push Suppliers, Brands, Customers, Debts
                 await RunStageAsync("push_suppliers_brands", async (ct) =>
                 {
                     await PushSuppliersToCloudAsync();
                     await PushBrandsToCloudAsync();
-                    return "تمت مزامنة الموردين والماركات والديون";
+                    await PushCustomersToCloudAsync();
+                    return "تمت مزامنة الموردين والماركات والعملاء والديون";
                 });
 
                 if (_syncCts.IsCancellationRequested) throw new OperationCanceledException();
@@ -1720,6 +1724,87 @@ namespace POS.Desktop.Services.Sync
             catch { }
         }
 
+        private async Task PushCustomersToCloudAsync()
+        {
+            try
+            {
+                var localCustomers = await _posApi.GetCustomersAsync();
+                if (localCustomers == null || !localCustomers.Any()) return;
+
+                var customersToPush = localCustomers.Select(c => new CustomerSyncDto(
+                    Id: c.Id,
+                    Name: c.Name,
+                    Phone: c.Phone,
+                    Email: c.Email,
+                    Address: c.Address,
+                    Balance: c.Balance,
+                    IsActive: true,
+                    CreatedAt: DateTime.UtcNow
+                )).ToList();
+
+                var response = await _cloudHttp.PostAsJsonAsync("api/sync/customers/push", new PushCustomersRequest(customersToPush));
+                if (response.IsSuccessStatusCode)
+                {
+                    _lastCustomersPush = DateTime.UtcNow;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CloudSync] Error pushing customers: {ex.Message}");
+            }
+        }
+
+        private async Task<int> PullPendingCustomersFromCloudAsync()
+        {
+            int importedCount = 0;
+            try
+            {
+                var pendingCustomers = await _cloudHttp.GetFromJsonAsync<List<PendingCloudCustomerDto>>("api/sync/customers/pending");
+                if (pendingCustomers == null || !pendingCustomers.Any()) return 0;
+
+                var existingCustomers = await _posApi.GetCustomersAsync() ?? new List<CustomerDto>();
+                var existingPhoneSet = new HashSet<string>(existingCustomers.Where(c => !string.IsNullOrWhiteSpace(c.Phone)).Select(c => c.Phone.Trim()), StringComparer.OrdinalIgnoreCase);
+                var existingNameSet = new HashSet<string>(existingCustomers.Where(c => !string.IsNullOrWhiteSpace(c.Name)).Select(c => c.Name.Trim()), StringComparer.OrdinalIgnoreCase);
+
+                foreach (var cust in pendingCustomers)
+                {
+                    bool exists = (!string.IsNullOrWhiteSpace(cust.Phone) && existingPhoneSet.Contains(cust.Phone.Trim())) ||
+                                  (!string.IsNullOrWhiteSpace(cust.Name) && existingNameSet.Contains(cust.Name.Trim()));
+
+                    if (!exists)
+                    {
+                        var req = new CreateCustomerRequest(
+                            Name: cust.Name.Trim(),
+                            Phone: cust.Phone.Trim(),
+                            Email: cust.Email?.Trim(),
+                            Address: cust.Address?.Trim()
+                        );
+                        var (createdId, err) = await _posApi.CreateCustomerAsync(req);
+                        if (createdId.HasValue)
+                        {
+                            existingNameSet.Add(cust.Name.Trim());
+                            if (!string.IsNullOrWhiteSpace(cust.Phone))
+                                existingPhoneSet.Add(cust.Phone.Trim());
+                            importedCount++;
+                        }
+                    }
+
+                    // Acknowledge sync
+                    await _cloudHttp.PostAsync($"api/sync/customers/{cust.Id}/acknowledge", null);
+                }
+
+                if (importedCount > 0)
+                {
+                    NotifyDataImported();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CloudSync] Error in PullPendingCustomersFromCloudAsync: {ex.Message}");
+            }
+            return importedCount;
+        }
+
         private async Task PushStoreSettingsToCloudAsync()
         {
             try
@@ -2549,6 +2634,21 @@ namespace POS.Desktop.Services.Sync
             {
                 await PushOffersToCloudAsync();
                 NotifyStateChanged();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> SyncCustomersOnlyAsync()
+        {
+            try
+            {
+                await PullPendingCustomersFromCloudAsync();
+                await PushCustomersToCloudAsync();
+                NotifyStateChanged(force: true);
                 return true;
             }
             catch

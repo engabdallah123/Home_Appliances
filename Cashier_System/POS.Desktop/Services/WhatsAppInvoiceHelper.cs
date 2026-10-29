@@ -41,7 +41,12 @@ namespace POS.Desktop.Services
         /// <summary>
         /// Constructs a formatted Arabic invoice receipt message optimized for WhatsApp messaging.
         /// </summary>
-        public static string BuildInvoiceMessage(SaleDto sale, string? storeName = null, string? storePhone = null, string? footerMsg = null)
+        public static string BuildInvoiceMessage(
+            SaleDto sale,
+            string? storeName = null,
+            string? storePhone = null,
+            string? footerMsg = null,
+            InstallmentContractDto? contract = null)
         {
             var sb = new StringBuilder();
             var sName = string.IsNullOrWhiteSpace(storeName) ? "نظام المبيعات والأجهزة" : storeName.Trim();
@@ -55,13 +60,18 @@ namespace POS.Desktop.Services
             {
                 sb.AppendLine($"*العميل:* {sale.CustomerName}");
             }
+            if (!string.IsNullOrWhiteSpace(sale.RecipientPhone) || !string.IsNullOrWhiteSpace(contract?.CustomerPhone))
+            {
+                var ph = !string.IsNullOrWhiteSpace(sale.RecipientPhone) ? sale.RecipientPhone : contract?.CustomerPhone;
+                sb.AppendLine($"*هاتف العميل:* {ph}");
+            }
             if (!string.IsNullOrWhiteSpace(sale.CashierName))
             {
                 sb.AppendLine($"*الكاشير:* {sale.CashierName}");
             }
 
             sb.AppendLine("────────────────");
-            sb.AppendLine("*تفاصيل الأصناف:*");
+            sb.AppendLine("*تفاصيل الأصناف المطلوبة:*");
 
             if (sale.Items != null && sale.Items.Count > 0)
             {
@@ -82,15 +92,18 @@ namespace POS.Desktop.Services
             }
 
             sb.AppendLine("────────────────");
-            sb.AppendLine($"*المجموع:* {sale.SubTotal:N2} ج.م");
-            
+            if (sale.SubTotal > 0)
+            {
+                sb.AppendLine($"*المجموع:* {sale.SubTotal:N2} ج.م");
+            }
             if (sale.DiscountAmount > 0)
             {
                 sb.AppendLine($"*الخصم:* -{sale.DiscountAmount:N2} ج.م");
             }
-            if (sale.DeliveryFee > 0)
+            if (sale.IsDelivery || sale.DeliveryFee > 0)
             {
-                sb.AppendLine($"*خدمة التوصيل:* +{sale.DeliveryFee:N2} ج.م");
+                sb.AppendLine($"*خدمة التوصيل:* {(sale.DeliveryFee > 0 ? $"+{sale.DeliveryFee:N2} ج.م" : "مشترك (مجاناً)")}");
+                sb.AppendLine($"*تكلفة التوصيل:* {sale.DeliveryFee:N2} ج.م");
             }
             if (sale.TaxAmount > 0)
             {
@@ -98,13 +111,82 @@ namespace POS.Desktop.Services
             }    
             sb.AppendLine($"*الإجمالي النهائي:* *{sale.TotalAmount:N2} ج.م*");
             sb.AppendLine($"*المدفوع:* {sale.PaidAmount:N2} ج.م");
-            if (sale.RemainingAmount > 0)
+
+            if (sale.RemainingAmount > 0 && !sale.IsInstallment)
             {
                 sb.AppendLine($"*المتبقي (مديونية):* *{sale.RemainingAmount:N2} ج.م*");
             }
-            if (sale.IsInstallment)
+
+            // Delivery Details
+            if (sale.IsDelivery)
             {
-                sb.AppendLine("*نظام الفاتورة:* تقسيط شهري");
+                sb.AppendLine("────────────────");
+                sb.AppendLine("*تفاصيل التوصيل والتركيب للأجهزة:*");
+                sb.AppendLine("• حالة التوصيل: مشترك في خدمة التوصيل");
+                sb.AppendLine($"• تكلفة التوصيل: {sale.DeliveryFee:N2} ج.م");
+                if (!string.IsNullOrWhiteSpace(sale.DeliveryAddress))
+                    sb.AppendLine($"• عنوان التوصيل: {sale.DeliveryAddress.Trim()}");
+                if (!string.IsNullOrWhiteSpace(sale.DeliveryFloor))
+                    sb.AppendLine($"• الدور / الشقة: {sale.DeliveryFloor.Trim()}");
+                if (!string.IsNullOrWhiteSpace(sale.RecipientName))
+                    sb.AppendLine($"• المستلم: {sale.RecipientName.Trim()}");
+                if (!string.IsNullOrWhiteSpace(sale.RecipientPhone))
+                    sb.AppendLine($"• هاتف المستلم: {sale.RecipientPhone.Trim()}");
+            }
+
+            // Installment Details
+            if (sale.IsInstallment || contract != null)
+            {
+                sb.AppendLine("────────────────");
+                sb.AppendLine("*تفاصيل نظام التقسيط الشهري:*");
+                var down = contract != null ? contract.DownPayment : sale.PaidAmount;
+                var rem = contract != null ? contract.RemainingBalance : sale.RemainingAmount;
+                var months = contract != null && contract.NumberOfMonths > 0 ? contract.NumberOfMonths : 12;
+                var monthly = contract != null && contract.MonthlyInstallmentAmount > 0 
+                    ? contract.MonthlyInstallmentAmount 
+                    : (rem / (months > 0 ? months : 12));
+
+                sb.AppendLine($"• المقدم المدفوع: {down:N2} ج.م");
+                sb.AppendLine($"• متبقي إجمالي الأقساط: {rem:N2} ج.م");
+                sb.AppendLine($"• مدة التقسيط: {months} شهر");
+                sb.AppendLine($"• قيمة القسط الشهري: {monthly:N2} ج.م / شهرياً");
+
+                var guarantorName = contract?.GuarantorName;
+                var guarantorPhone = contract?.GuarantorPhone;
+                if (!string.IsNullOrWhiteSpace(guarantorName))
+                {
+                    sb.AppendLine($"• الضامن: {guarantorName.Trim()} {(!string.IsNullOrWhiteSpace(guarantorPhone) ? $"({guarantorPhone.Trim()})" : "")}");
+                }
+            }
+            else if (sale.IsReserved)
+            {
+                sb.AppendLine("────────────────");
+                sb.AppendLine("*تفاصيل الحجز المسبق (تسليم مؤجل):*");
+                sb.AppendLine($"• المدفوع (عربون): {sale.PaidAmount:N2} ج.م");
+                sb.AppendLine($"• المتبقي عند الاستلام: {sale.RemainingAmount:N2} ج.م");
+                if (sale.TargetDeliveryDate.HasValue)
+                {
+                    sb.AppendLine($"• تاريخ التسليم المتوقع: {sale.TargetDeliveryDate.Value:yyyy/MM/dd}");
+                }
+            }
+            else if (sale.PaymentMethod == "Credit" || (sale.RemainingAmount > 0 && !sale.IsInstallment))
+            {
+                sb.AppendLine("────────────────");
+                sb.AppendLine("*طريقة الدفع:* آجل (حساب مديونية)");
+                sb.AppendLine($"• المتبقي بذمة العميل: {sale.RemainingAmount:N2} ج.م");
+            }
+            else
+            {
+                sb.AppendLine("────────────────");
+                var methodAr = sale.PaymentMethod switch
+                {
+                    "Cash" => "نقداً",
+                    "Card" or "Visa" => "بطاقة بنكية",
+                    "Credit" => "آجل (دين)",
+                    "Installment" => "تقسيط شهري",
+                    _ => sale.PaymentMethod
+                };
+                sb.AppendLine($"*طريقة الدفع:* {methodAr}");
             }
 
             sb.AppendLine("════════════════");

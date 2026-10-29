@@ -13,6 +13,7 @@ namespace POS.CloudAPI.Database
 
         public DbSet<Tenant> Tenants => Set<Tenant>();
         public DbSet<CloudUser> Users => Set<CloudUser>();
+        public DbSet<CloudCustomer> Customers => Set<CloudCustomer>();
         public DbSet<CloudSupplier> Suppliers => Set<CloudSupplier>();
         public DbSet<CloudProduct> Products => Set<CloudProduct>();
         public DbSet<CloudCategory> Categories => Set<CloudCategory>();
@@ -45,6 +46,13 @@ namespace POS.CloudAPI.Database
             modelBuilder.Entity<CloudUser>(b =>
             {
                 b.HasIndex(u => new { u.TenantId, u.Username }).IsUnique();
+            });
+
+            modelBuilder.Entity<CloudCustomer>(b =>
+            {
+                b.HasIndex(c => new { c.TenantId, c.Name });
+                b.HasIndex(c => new { c.TenantId, c.Phone });
+                b.HasIndex(c => new { c.TenantId, c.SyncStatus });
             });
 
             modelBuilder.Entity<CloudSupplier>(b =>
@@ -269,6 +277,27 @@ BEGIN
         [UpdatedAt] DATETIME2 NULL
     );
     CREATE INDEX [IX_Brands_TenantId_Name] ON [Brands] ([TenantId], [Name]);
+END
+
+-- Customers table
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Customers')
+BEGIN
+    CREATE TABLE [Customers] (
+        [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+        [TenantId] UNIQUEIDENTIFIER NOT NULL,
+        [Name] NVARCHAR(150) NOT NULL,
+        [Phone] NVARCHAR(50) NOT NULL,
+        [Email] NVARCHAR(100) NULL,
+        [Address] NVARCHAR(250) NULL,
+        [Balance] DECIMAL(18,2) NOT NULL CONSTRAINT DF_Customers_Balance DEFAULT 0,
+        [IsActive] BIT NOT NULL CONSTRAINT DF_Customers_IsActive DEFAULT 1,
+        [SyncStatus] INT NOT NULL CONSTRAINT DF_Customers_SyncStatus DEFAULT 2,
+        [CreatedAt] DATETIME2 NOT NULL CONSTRAINT DF_Customers_CreatedAt DEFAULT GETUTCDATE(),
+        [UpdatedAt] DATETIME2 NULL
+    );
+    CREATE INDEX [IX_Customers_TenantId_Name] ON [Customers] ([TenantId], [Name]);
+    CREATE INDEX [IX_Customers_TenantId_Phone] ON [Customers] ([TenantId], [Phone]);
+    CREATE INDEX [IX_Customers_TenantId_SyncStatus] ON [Customers] ([TenantId], [SyncStatus]);
 END
 
 -- Sales and SaleItems tables

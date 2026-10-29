@@ -1356,6 +1356,12 @@ body {
     border: 1px solid rgba(99, 102, 241, 0.3);
 }
 
+.badge-blue, .badge-info, .badge-cyan, .badge-sky, .badge-card, .badge-visa {
+    background-color: rgba(56, 189, 248, 0.15);
+    color: var(--accent-blue);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
 .badge-amber, .badge-warning {
     background-color: rgba(245, 158, 11, 0.18);
     color: #f59e0b;

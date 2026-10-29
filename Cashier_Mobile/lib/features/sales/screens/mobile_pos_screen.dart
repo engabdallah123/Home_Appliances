@@ -11,6 +11,8 @@ import '../models/sale_model.dart';
 import '../providers/sales_provider.dart';
 import 'sales_list_screen.dart';
 import '../../../core/services/whatsapp_helper.dart';
+import '../../customers/models/customer_model.dart';
+import '../../customers/providers/customers_provider.dart';
 
 class MobilePosScreen extends StatefulWidget {
   const MobilePosScreen({super.key});
@@ -30,6 +32,10 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
       final prodProv = Provider.of<ProductsProvider>(context, listen: false);
       if (prodProv.products.isEmpty) {
         prodProv.fetchProducts();
+      }
+      final custProv = Provider.of<CustomersProvider>(context, listen: false);
+      if (custProv.customers.isEmpty) {
+        custProv.fetchCustomers();
       }
     });
   }
@@ -997,12 +1003,30 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
     SalesProvider salesProv,
     bool isDark,
   ) async {
+    final custProv = Provider.of<CustomersProvider>(context, listen: false);
+    if (custProv.customers.isEmpty) {
+      custProv.fetchCustomers();
+    }
+
     final nameCtrl = TextEditingController(text: salesProv.customerName ?? '');
     final phoneCtrl = TextEditingController(text: salesProv.customerPhone ?? '');
     final addressCtrl = TextEditingController(text: salesProv.deliveryAddress ?? '');
     final floorCtrl = TextEditingController(text: salesProv.deliveryFloor ?? '');
     final feeCtrl = TextEditingController(text: salesProv.deliveryFee > 0 ? salesProv.deliveryFee.toStringAsFixed(0) : '');
     bool isDelivery = salesProv.isDelivery;
+    String? selectedCustomerId = salesProv.customerId;
+
+    // Search existing customer
+    final searchCtrl = TextEditingController();
+    String searchQuery = '';
+
+    // New customer fields
+    bool isAddingNewCustomer = false;
+    final newNameCtrl = TextEditingController();
+    final newPhoneCtrl = TextEditingController();
+    final newAddressCtrl = TextEditingController();
+    final newEmailCtrl = TextEditingController();
+    bool isSavingNewCustomer = false;
 
     await showModalBottomSheet(
       context: context,
@@ -1014,6 +1038,16 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
       builder: (sheetCtx) {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
+            final allCustomers = custProv.customers;
+            final filteredCustomers = searchQuery.trim().isEmpty
+                ? (allCustomers.take(5).toList())
+                : allCustomers.where((c) {
+                    final q = searchQuery.trim().toLowerCase();
+                    final nameMatch = c.name.toLowerCase().contains(q);
+                    final phoneMatch = (c.phone ?? '').contains(q);
+                    return nameMatch || phoneMatch;
+                  }).take(8).toList();
+
             return Padding(
               padding: EdgeInsets.only(
                 left: 16,
@@ -1037,20 +1071,361 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      "بيانات العميل والتوصيل",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: AppColors.getTextPrimary(isDark),
-                      ),
+                    Row(
+                      children: [
+                        const Icon(Icons.people_alt_rounded, color: Color(0xFF4F46E5), size: 22),
+                        const SizedBox(width: 8),
+                        Text(
+                          "بيانات العميل والتوصيل",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: AppColors.getTextPrimary(isDark),
+                          ),
+                        ),
+                        const Spacer(),
+                        if (nameCtrl.text.isNotEmpty)
+                          TextButton.icon(
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.redAccent,
+                              padding: EdgeInsets.zero,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            icon: const Icon(Icons.clear_rounded, size: 16),
+                            label: const Text("عميل نقدي عام", style: TextStyle(fontSize: 11.5)),
+                            onPressed: () {
+                              setSheetState(() {
+                                selectedCustomerId = null;
+                                nameCtrl.clear();
+                                phoneCtrl.clear();
+                              });
+                            },
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 14),
+
+                    // SECTION 1: SEARCH & SELECT EXISTING CUSTOMER
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.getBorder(isDark)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.search_rounded, size: 18, color: Color(0xFF4F46E5)),
+                              const SizedBox(width: 6),
+                              Text(
+                                "البحث في العملاء المسجلين",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: AppColors.getTextPrimary(isDark),
+                                ),
+                              ),
+                              const Spacer(),
+                              TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  visualDensity: VisualDensity.compact,
+                                  foregroundColor: const Color(0xFF10B981),
+                                ),
+                                icon: Icon(
+                                  isAddingNewCustomer ? Icons.expand_less_rounded : Icons.person_add_rounded,
+                                  size: 16,
+                                ),
+                                label: Text(
+                                  isAddingNewCustomer ? "إلغاء الإضافة" : "+ عميل جديد",
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                                onPressed: () {
+                                  setSheetState(() {
+                                    isAddingNewCustomer = !isAddingNewCustomer;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Search TextField
+                          TextField(
+                            controller: searchCtrl,
+                            style: TextStyle(fontSize: 13, color: AppColors.getTextPrimary(isDark)),
+                            decoration: InputDecoration(
+                              hintText: "ابحث بالاسم أو رقم الهاتف...",
+                              hintStyle: TextStyle(fontSize: 12, color: AppColors.getTextMuted(isDark)),
+                              prefixIcon: const Icon(Icons.search, size: 18),
+                              filled: true,
+                              fillColor: AppColors.getSurface(isDark),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: AppColors.getBorder(isDark)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: AppColors.getBorder(isDark)),
+                              ),
+                            ),
+                            onChanged: (val) {
+                              setSheetState(() {
+                                searchQuery = val;
+                              });
+                            },
+                          ),
+
+                          // Results List if any
+                          if (filteredCustomers.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 140),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: filteredCustomers.length,
+                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                itemBuilder: (ctx, idx) {
+                                  final cust = filteredCustomers[idx];
+                                  final isSelected = selectedCustomerId != null &&
+                                      selectedCustomerId == cust.id.toString();
+                                  return InkWell(
+                                    onTap: () {
+                                      setSheetState(() {
+                                        selectedCustomerId = cust.id.toString();
+                                        nameCtrl.text = cust.name;
+                                        phoneCtrl.text = cust.phone ?? '';
+                                        if (cust.address != null &&
+                                            cust.address!.isNotEmpty &&
+                                            addressCtrl.text.isEmpty) {
+                                          addressCtrl.text = cust.address!;
+                                        }
+                                        searchCtrl.clear();
+                                        searchQuery = '';
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? const Color(0xFF4F46E5).withOpacity(0.12)
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            isSelected ? Icons.check_circle_rounded : Icons.person_outline,
+                                            size: 16,
+                                            color: isSelected ? const Color(0xFF4F46E5) : Colors.grey,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  cust.name,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12.5,
+                                                    color: AppColors.getTextPrimary(isDark),
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                if (cust.phone != null && cust.phone!.isNotEmpty)
+                                                  Text(
+                                                    cust.phone!,
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppColors.getTextMuted(isDark),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          if (cust.balance != 0)
+                                            Text(
+                                              "${cust.balance > 0 ? '+' : ''}${cust.balance.toStringAsFixed(0)} ج.م",
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: cust.balance > 0 ? Colors.redAccent : Colors.green,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+
+                          // ADD NEW CUSTOMER EXPANDED FORM
+                          if (isAddingNewCustomer) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.getSurface(isDark),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.person_add_rounded, size: 16, color: Color(0xFF10B981)),
+                                      const SizedBox(width: 6),
+                                      const Text(
+                                        "تسجيل عميل جديد (يسجل في الديسكتوب)",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                          color: Color(0xFF10B981),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TextField(
+                                    controller: newNameCtrl,
+                                    decoration: const InputDecoration(
+                                      labelText: "اسم العميل *",
+                                      isDense: true,
+                                      prefixIcon: Icon(Icons.person, size: 16),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: newPhoneCtrl,
+                                    keyboardType: TextInputType.phone,
+                                    decoration: const InputDecoration(
+                                      labelText: "رقم الهاتف",
+                                      isDense: true,
+                                      prefixIcon: Icon(Icons.phone, size: 16),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: newAddressCtrl,
+                                    decoration: const InputDecoration(
+                                      labelText: "العنوان",
+                                      isDense: true,
+                                      prefixIcon: Icon(Icons.location_on, size: 16),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF10B981),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      icon: isSavingNewCustomer
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                            )
+                                          : const Icon(Icons.save_rounded, size: 16),
+                                      label: Text(
+                                        isSavingNewCustomer ? "جاري الحفظ والمزامنة..." : "حفظ واختيار هذا العميل",
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                                      ),
+                                      onPressed: isSavingNewCustomer
+                                          ? null
+                                          : () async {
+                                              final name = newNameCtrl.text.trim();
+                                              if (name.isEmpty) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text("يرجى إدخال اسم العميل"),
+                                                    backgroundColor: Colors.redAccent,
+                                                  ),
+                                                );
+                                                return;
+                                              }
+                                              setSheetState(() => isSavingNewCustomer = true);
+                                              final added = await custProv.addCustomer(
+                                                name: name,
+                                                phone: newPhoneCtrl.text.trim().isEmpty ? null : newPhoneCtrl.text.trim(),
+                                                address: newAddressCtrl.text.trim().isEmpty ? null : newAddressCtrl.text.trim(),
+                                                email: newEmailCtrl.text.trim().isEmpty ? null : newEmailCtrl.text.trim(),
+                                              );
+                                              setSheetState(() => isSavingNewCustomer = false);
+                                              if (added != null) {
+                                                setSheetState(() {
+                                                  selectedCustomerId = added.id.toString();
+                                                  nameCtrl.text = added.name;
+                                                  phoneCtrl.text = added.phone ?? '';
+                                                  if (added.address != null && added.address!.isNotEmpty) {
+                                                    addressCtrl.text = added.address!;
+                                                  }
+                                                  isAddingNewCustomer = false;
+                                                });
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text("تم تسجيل العميل (${added.name}) بنجاح وسيتزامن مع الديسكتوب!"),
+                                                      backgroundColor: const Color(0xFF10B981),
+                                                      behavior: SnackBarBehavior.floating,
+                                                    ),
+                                                  );
+                                                }
+                                              } else {
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(custProv.errorMessage ?? "تعذر إضافة العميل"),
+                                                      backgroundColor: Colors.redAccent,
+                                                    ),
+                                                  );
+                                                }
+                                              }
+                                            },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // SELECTED CUSTOMER SUMMARY / MANUAL ENTRY
+                    Text(
+                      "العميل المحدد للفاتورة:",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12.5,
+                        color: AppColors.getTextMuted(isDark),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     TextField(
                       controller: nameCtrl,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: "اسم العميل",
-                        prefixIcon: Icon(Icons.person_outline),
+                        prefixIcon: const Icon(Icons.person_outline),
+                        suffixIcon: selectedCustomerId != null
+                            ? const Tooltip(
+                                message: "عميل مسجل في قاعدة البيانات",
+                                child: Icon(Icons.verified_user_rounded, color: Color(0xFF10B981), size: 18),
+                              )
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -1058,15 +1433,17 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
                       controller: phoneCtrl,
                       keyboardType: TextInputType.phone,
                       decoration: const InputDecoration(
-                        labelText: "رقم هاتف العميل",
+                        labelText: "رقم هاتف العميل (لإرسال الفاتورة عبر واتساب)",
                         prefixIcon: Icon(Icons.phone_outlined),
                       ),
                     ),
                     const SizedBox(height: 14),
+
+                    // DELIVERY SECTION
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text("خدمة توصيل وتركيب للأجهزة المنزلية"),
-                      subtitle: const Text("توصيل الثلاجة/الغسالة لعنوان العميل"),
+                      subtitle: const Text("توصيل الجهاز لعنوان العميل"),
                       value: isDelivery,
                       onChanged: (val) {
                         setSheetState(() => isDelivery = val);
@@ -1119,6 +1496,7 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
                           salesProv.setCustomer(
                             name: nameCtrl.text,
                             phone: phoneCtrl.text,
+                            id: selectedCustomerId,
                           );
                           salesProv.setDelivery(
                             enabled: isDelivery,
@@ -1128,7 +1506,7 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
                           );
                           Navigator.pop(sheetCtx);
                         },
-                        child: const Text("حفظ البيانات", style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: const Text("حفظ وتطبيق البيانات", style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],
@@ -1262,6 +1640,32 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
       if (confirmed != true) return;
     }
 
+    // Snapshot cart items and transaction options BEFORE submitting sale clears the cart
+    final cartItemsSnapshot = salesProv.cartItems.map((i) => {
+      'productName': i.productName,
+      'name': i.productName,
+      'quantity': i.quantity,
+      'unitPrice': i.unitPrice,
+      'price': i.unitPrice,
+      'total': i.total,
+      'serialNumber': i.serialNumber,
+      'brandName': i.brandName,
+      'modelNumber': i.modelNumber,
+      'warrantyPeriodMonths': i.warrantyPeriodMonths,
+    }).toList();
+
+    final isInstallmentSnapshot = salesProv.isInstallment;
+    final numberOfMonthsSnapshot = salesProv.numberOfMonths;
+    final monthlyInstallmentSnapshot = salesProv.monthlyInstallmentAmount;
+    final guarantorNameSnapshot = salesProv.guarantorName;
+    final guarantorPhoneSnapshot = salesProv.guarantorPhone;
+    final isDeliverySnapshot = salesProv.isDelivery;
+    final deliveryAddressSnapshot = salesProv.deliveryAddress;
+    final deliveryFloorSnapshot = salesProv.deliveryFloor;
+    final deliveryFeeSnapshot = salesProv.deliveryFee;
+    final isReservedSnapshot = salesProv.isReserved;
+    final targetDeliveryDateSnapshot = salesProv.targetDeliveryDate;
+
     final created = await salesProv.submitSale();
     if (!context.mounted) return;
 
@@ -1313,11 +1717,11 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
                     color: const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
-                      const Icon(Icons.sync_rounded, color: Color(0xFF10B981), size: 20),
-                      const SizedBox(width: 8),
-                      const Expanded(
+                      Icon(Icons.sync_rounded, color: Color(0xFF10B981), size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
                         child: Text(
                           "الفاتورة جاهزة للمزامنة التلقائية مع كاشير الديسكتوب فوراً.",
                           style: TextStyle(color: Colors.white70, fontSize: 11.5),
@@ -1357,6 +1761,18 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
                     paidAmount: created.paidAmount,
                     remainingAmount: created.remainingAmount,
                     paymentMethod: created.paymentMethod,
+                    items: cartItemsSnapshot,
+                    isInstallment: isInstallmentSnapshot,
+                    numberOfMonths: numberOfMonthsSnapshot,
+                    monthlyInstallmentAmount: monthlyInstallmentSnapshot,
+                    guarantorName: guarantorNameSnapshot,
+                    guarantorPhone: guarantorPhoneSnapshot,
+                    isDelivery: isDeliverySnapshot,
+                    deliveryAddress: deliveryAddressSnapshot,
+                    deliveryFloor: deliveryFloorSnapshot,
+                    deliveryFee: deliveryFeeSnapshot,
+                    isReserved: isReservedSnapshot,
+                    targetDeliveryDate: targetDeliveryDateSnapshot,
                   );
                   WhatsAppHelper.openWhatsApp(
                     phone: created.customerPhone,

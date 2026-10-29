@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
@@ -68,6 +69,13 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
             onPressed: () => customersProv.fetchCustomers(refresh: true, search: _searchCtrl.text),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF4F46E5),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.person_add_rounded),
+        label: const Text("إضافة عميل جديد", style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: () => _showAddCustomerDialog(context, customersProv, isDark),
       ),
       body: Column(
         children: [
@@ -700,6 +708,13 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
                         paidAmount: s.paidAmount,
                         remainingAmount: s.remainingAmount,
                         paymentMethod: s.paymentMethod,
+                        isInstallment: s.isInstallment,
+                        numberOfMonths: s.numberOfMonths,
+                        monthlyInstallmentAmount: s.calculatedMonthlyAmount,
+                        guarantorName: s.guarantorName,
+                        guarantorPhone: s.guarantorPhone,
+                        isDelivery: s.isDelivery,
+                        isReserved: s.isReserved,
                       );
                       WhatsAppHelper.openWhatsApp(phone: s.customerPhone ?? customer.phone, message: msg);
                     },
@@ -815,6 +830,13 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
                         paidAmount: selectedSale!.paidAmount,
                         remainingAmount: selectedSale!.remainingAmount,
                         paymentMethod: selectedSale!.paymentMethod,
+                        isInstallment: selectedSale!.isInstallment,
+                        numberOfMonths: selectedSale!.numberOfMonths,
+                        monthlyInstallmentAmount: selectedSale!.calculatedMonthlyAmount,
+                        guarantorName: selectedSale!.guarantorName,
+                        guarantorPhone: selectedSale!.guarantorPhone,
+                        isDelivery: selectedSale!.isDelivery,
+                        isReserved: selectedSale!.isReserved,
                       )
                     : "لا توجد فواتير مبيعات سابقة لهذا العميل.";
 
@@ -1006,5 +1028,138 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
       },
     );
   }
-}
 
+  Future<void> _showAddCustomerDialog(
+    BuildContext context,
+    CustomersProvider customersProv,
+    bool isDark,
+  ) async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    bool isSaving = false;
+
+    await showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.getSurface(isDark),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.person_add_rounded, color: Color(0xFF4F46E5)),
+                  SizedBox(width: 8),
+                  Text("إضافة عميل جديد", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "اسم العميل *",
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: "رقم الهاتف",
+                        prefixIcon: Icon(Icons.phone_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: addressCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "العنوان",
+                        prefixIcon: Icon(Icons.location_on_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: "البريد الإلكتروني (اختياري)",
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text("إلغاء"),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Icon(Icons.check_rounded, size: 18),
+                  label: Text(isSaving ? "جاري الحفظ..." : "حفظ وتسجيل"),
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final name = nameCtrl.text.trim();
+                          if (name.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("يرجى كتابة اسم العميل")),
+                            );
+                            return;
+                          }
+                          setDialogState(() => isSaving = true);
+                          final created = await customersProv.addCustomer(
+                            name: name,
+                            phone: phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
+                            address: addressCtrl.text.trim().isEmpty ? null : addressCtrl.text.trim(),
+                            email: emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
+                          );
+                          setDialogState(() => isSaving = false);
+                          if (created != null) {
+                            Navigator.pop(dialogCtx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text("تم إضافة العميل (${created.name}) بنجاح وسيتزامن مع الديسكتوب!"),
+                                  backgroundColor: const Color(0xFF10B981),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          } else {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(customersProv.errorMessage ?? "فشل إضافة العميل"),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}

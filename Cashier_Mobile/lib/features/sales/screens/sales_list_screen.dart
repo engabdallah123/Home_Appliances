@@ -284,7 +284,24 @@ class _SalesListScreenState extends State<SalesListScreen> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 InkWell(
-                  onTap: () {
+                  onTap: () async {
+                    SaleDetailModel? details;
+                    try {
+                      details = await salesProv.fetchSaleDetails(sale.id);
+                    } catch (_) {}
+
+                    final items = details?.items.map((i) => {
+                      'productName': i.productName,
+                      'name': i.productName,
+                      'quantity': i.quantity,
+                      'unitPrice': i.unitPrice,
+                      'price': i.unitPrice,
+                      'total': i.total,
+                      'serialNumber': i.serialNumber,
+                      'brandName': i.brandName,
+                      'modelNumber': i.modelNumber,
+                    }).toList();
+
                     final msg = WhatsAppHelper.buildInvoiceReceiptMessage(
                       invoiceNumber: sale.invoiceNumber,
                       customerName: sale.customerName,
@@ -294,6 +311,16 @@ class _SalesListScreenState extends State<SalesListScreen> {
                       paidAmount: sale.paidAmount,
                       remainingAmount: sale.remainingAmount,
                       paymentMethod: sale.paymentMethod,
+                      items: items,
+                      isInstallment: details?.isInstallment ?? sale.isInstallment,
+                      numberOfMonths: details?.numberOfMonths ?? sale.numberOfMonths,
+                      monthlyInstallmentAmount: details?.monthlyInstallmentAmount ?? sale.calculatedMonthlyAmount,
+                      guarantorName: details?.guarantorName ?? sale.guarantorName,
+                      guarantorPhone: details?.guarantorPhone ?? sale.guarantorPhone,
+                      isDelivery: details?.isDelivery ?? sale.isDelivery,
+                      deliveryAddress: details?.deliveryAddress,
+                      deliveryFee: details?.deliveryFee ?? 0,
+                      isReserved: details?.isReserved ?? sale.isReserved,
                     );
                     WhatsAppHelper.openWhatsApp(
                       phone: sale.customerPhone,

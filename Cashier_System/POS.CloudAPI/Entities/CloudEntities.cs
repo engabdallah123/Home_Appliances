@@ -97,6 +97,36 @@ namespace POS.CloudAPI.Entities
         public DateTime? UpdatedAt { get; set; }
     }
 
+    public class CloudCustomer
+    {
+        [Key]
+        public Guid Id { get; set; } = Guid.NewGuid();
+
+        public Guid TenantId { get; set; }
+
+        [Required, MaxLength(150)]
+        public string Name { get; set; } = default!;
+
+        [Required, MaxLength(50)]
+        public string Phone { get; set; } = default!;
+
+        [MaxLength(100)]
+        public string? Email { get; set; }
+
+        [MaxLength(250)]
+        public string? Address { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal Balance { get; set; }
+
+        public bool IsActive { get; set; } = true;
+
+        public SyncStatus SyncStatus { get; set; } = SyncStatus.Synced;
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAt { get; set; }
+    }
+
     public class CloudProduct
     {
         [Key]

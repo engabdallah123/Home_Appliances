@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../../../core/constants/api_endpoints.dart';
 import '../../../core/network/api_client.dart';
@@ -43,9 +42,8 @@ class CustomersProvider extends ChangeNotifier {
 
       final response = await _apiClient.get("${ApiEndpoints.customers}$queryParam");
 
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-        _customers = data.map((item) => CustomerModel.fromJson(item)).toList();
+      if (response != null && response is List) {
+        _customers = response.map((item) => CustomerModel.fromJson(item as Map<String, dynamic>)).toList();
       } else {
         // Fallback: Aggregate from Cloud Sales & Debts
         await _aggregateCustomersFromSalesAndDebts(search);
@@ -63,15 +61,46 @@ class CustomersProvider extends ChangeNotifier {
     }
   }
 
+  /// Adds a new customer from Mobile, saving it to Cloud API so it syncs down to Desktop
+  Future<CustomerModel?> addCustomer({
+    required String name,
+    String? phone,
+    String? email,
+    String? address,
+  }) async {
+    try {
+      final body = {
+        'name': name.trim(),
+        'phone': phone?.trim() ?? '',
+        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+        if (address != null && address.trim().isNotEmpty) 'address': address.trim(),
+      };
+
+      final res = await _apiClient.post(ApiEndpoints.customers, body: body);
+
+      if (res != null && res is Map<String, dynamic>) {
+        final newCust = CustomerModel.fromJson(res);
+        // Remove old entry with same phone if any
+        _customers.removeWhere((c) => c.phone == newCust.phone || c.name.toLowerCase() == newCust.name.toLowerCase());
+        _customers.insert(0, newCust);
+        notifyListeners();
+        return newCust;
+      }
+      return null;
+    } catch (e) {
+      debugPrint("Error adding customer: $e");
+      rethrow;
+    }
+  }
+
   /// Graceful aggregation fallback if dedicated customer endpoint is unavailable
   Future<void> _aggregateCustomersFromSalesAndDebts(String? search) async {
     final Map<String, (String name, String? phone, double spent, double debt, int count, DateTime? lastDate)> map = {};
 
     try {
       final salesRes = await _apiClient.get("${ApiEndpoints.sales}?pageSize=100");
-      if (salesRes.statusCode == 200) {
-        final List salesData = jsonDecode(salesRes.body);
-        for (final item in salesData) {
+      if (salesRes != null && salesRes is List) {
+        for (final item in salesRes) {
           final cName = item['customerName']?.toString();
           if (cName == null || cName.trim().isEmpty || cName == "Walk-in Customer") continue;
 
@@ -93,9 +122,8 @@ class CustomersProvider extends ChangeNotifier {
 
     try {
       final debtsRes = await _apiClient.get("${ApiEndpoints.debts}?type=Customer&pageSize=100");
-      if (debtsRes.statusCode == 200) {
-        final List debtsData = jsonDecode(debtsRes.body);
-        for (final item in debtsData) {
+      if (debtsRes != null && debtsRes is List) {
+        for (final item in debtsRes) {
           final eName = item['entityName']?.toString() ?? 'عميل';
           final ePhone = item['phone']?.toString();
           final remaining = (item['remainingAmount'] as num?)?.toDouble() ?? 0.0;
@@ -149,9 +177,8 @@ class CustomersProvider extends ChangeNotifier {
       final url = "${ApiEndpoints.customerDossier}?name=$nameParam&phone=$phoneParam";
 
       final response = await _apiClient.get(url);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _currentDossier = CustomerDossierModel.fromJson(data);
+      if (response != null && response is Map<String, dynamic>) {
+        _currentDossier = CustomerDossierModel.fromJson(response);
       } else {
         // Fallback: Fetch sales & debts and filter locally
         await _buildDossierLocally(name, phone);
@@ -175,10 +202,9 @@ class CustomersProvider extends ChangeNotifier {
 
     try {
       final salesRes = await _apiClient.get("${ApiEndpoints.sales}?search=${Uri.encodeComponent(name)}&pageSize=50");
-      if (salesRes.statusCode == 200) {
-        final List data = jsonDecode(salesRes.body);
-        matchedSales = data
-            .map((s) => SaleSummaryModel.fromJson(s))
+      if (salesRes != null && salesRes is List) {
+        matchedSales = salesRes
+            .map((s) => SaleSummaryModel.fromJson(s as Map<String, dynamic>))
             .where((s) => (s.customerName != null && s.customerName!.trim() == name.trim()) ||
                           (phone != null && s.customerPhone != null && s.customerPhone!.trim() == phone.trim()))
             .toList();
@@ -187,10 +213,9 @@ class CustomersProvider extends ChangeNotifier {
 
     try {
       final debtsRes = await _apiClient.get("${ApiEndpoints.debts}?type=Customer&search=${Uri.encodeComponent(name)}&pageSize=50");
-      if (debtsRes.statusCode == 200) {
-        final List data = jsonDecode(debtsRes.body);
-        matchedDebts = data
-            .map((d) => DebtItemModel.fromJson(d))
+      if (debtsRes != null && debtsRes is List) {
+        matchedDebts = debtsRes
+            .map((d) => DebtItemModel.fromJson(d as Map<String, dynamic>))
             .where((d) => d.entityName.trim() == name.trim() ||
                           (phone != null && d.phone != null && d.phone!.trim() == phone.trim()))
             .toList();
@@ -210,4 +235,3 @@ class CustomersProvider extends ChangeNotifier {
     );
   }
 }
-

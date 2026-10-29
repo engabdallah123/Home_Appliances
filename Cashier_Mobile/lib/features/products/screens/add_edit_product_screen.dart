@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
@@ -769,14 +769,14 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                     controller: _stockCtrl,
                     label: "الرصيد الافتتاحي في المخزن ($unitName)",
                     hint: "0",
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    prefixIcon: Icons.warehouse_rounded,
+                  ),
+                ],
               ],
             );
           },
-        )
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            prefixIcon: Icons.warehouse_rounded,
-          ),
-        ],
+        ),
       ],
     );
   }
