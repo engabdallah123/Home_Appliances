@@ -70,20 +70,77 @@
             </button>
         </div>
 
-        <!-- Categories Bar & Low Stock Indicator -->
-        <div class="category-bar">
-            <button class="cat-btn @(selectedCategoryId == null ? "active" : "")" @onclick="() => FilterByCategory(null)">
-                جميع التصنيفات
+<style>
+    .pos-category-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 1rem;
+        border-radius: 0.55rem;
+        background: var(--bg-card) !important;
+        border: 1.5px solid var(--border-color);
+        color: var(--text-primary) !important;
+        cursor: pointer;
+        transition: border-color 0.15s ease;
+    }
+    .pos-category-btn.has-category {
+        border-color: var(--accent-indigo) !important;
+        background: rgba(99, 102, 241, 0.08) !important;
+    }
+    .pos-category-btn:hover {
+        background: var(--bg-card) !important;
+        color: var(--text-primary) !important;
+        border-color: var(--accent-indigo) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+    .pos-category-btn.has-category:hover {
+        background: rgba(99, 102, 241, 0.12) !important;
+        color: var(--text-primary) !important;
+    }
+    .pos-clear-filter-btn {
+        color: var(--accent-red) !important;
+        font-size: 0.78rem;
+        font-weight: 700;
+        padding: 0.45rem 0.75rem;
+        border-radius: 0.55rem;
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        background: rgba(239, 68, 68, 0.08) !important;
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+    .pos-clear-filter-btn:hover {
+        background: rgba(239, 68, 68, 0.18) !important;
+        color: var(--accent-red) !important;
+    }
+</style>
+
+        <!-- Categories Action Bar & Low Stock Indicator -->
+        <div class="category-bar" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <!-- Category Picker Button (Hover-Safe, No disappearing) -->
+            <button type="button" 
+                    class="pos-category-btn @(selectedCategoryId != null ? "has-category" : "")" 
+                    @onclick="OpenCategoriesModal" 
+                    title="فتح كارد اختيار وتصفية التصنيفات">
+                <i class="fa-solid fa-layer-group" style="color: var(--accent-indigo); font-size: 0.95rem;"></i>
+                <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">
+                    @(selectedCategoryName != null ? $"التصنيف: {selectedCategoryName}" : "تصفية بالتصنيفات")
+                </span>
+                <i class="fa-solid fa-chevron-down" style="font-size: 0.72rem; color: var(--text-secondary); margin-right: 0.2rem;"></i>
             </button>
-            @foreach (var cat in categories)
+
+            @if (selectedCategoryId != null)
             {
-                <button class="cat-btn @(selectedCategoryId == cat.Id ? "active" : "")" @onclick="() => FilterByCategory(cat.Id)">
-                    @cat.NameAr
+                <button type="button" 
+                        class="pos-clear-filter-btn" 
+                        @onclick="() => FilterByCategory(null)" 
+                        title="إلغاء الفلترة وعرض كافة المنتجات">
+                    <i class="fa-solid fa-xmark me-1"></i> عرض الكل
                 </button>
             }
+
             @if (LowStockCount > 0)
             {
-                <button class="cat-btn cat-btn-warning" @onclick="OpenLowStockModal" title="عرض كافة الأصناف التي وصلت لحد الطلب أو نفذت">
+                <button type="button" class="cat-btn cat-btn-warning" @onclick="OpenLowStockModal" title="عرض كافة الأصناف التي وصلت لحد الطلب أو نفذت">
                     <i class="fa-solid fa-triangle-exclamation me-1"></i>
                     <span>النواقص (@LowStockCount)</span>
                 </button>
@@ -171,6 +228,27 @@
 
     <!-- Right Panel: Cart & Actions -->
     <div class="cart-panel">
+        @if (lastCreatedSaleId.HasValue)
+        {
+            <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 0.5rem 0.75rem; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; animation: fadeIn 0.2s ease;">
+                <div>
+                    <span style="color: var(--accent-emerald); font-weight: 700; display: block;">
+                        <i class="fa-solid fa-circle-check me-1"></i> تم حفظ الفاتورة بنجاح @(!string.IsNullOrEmpty(lastCreatedInvoiceNumber) ? $"#{lastCreatedInvoiceNumber}" : "")
+                    </span>
+                </div>
+                <div style="display: flex; gap: 0.35rem; align-items: center;">
+                    <button type="button" class="btn btn-emerald" style="padding: 0.2rem 0.55rem; font-size: 0.75rem; background: #059669; border-color: #059669; color: #fff;" @onclick="() => OpenWhatsAppForRecentSale(lastCreatedSaleId.Value)" title="إرسال الفاتورة عبر واتساب">
+                        <i class="fa-brands fa-whatsapp"></i> واتساب
+                    </button>
+                    <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.45rem; font-size: 0.75rem;" @onclick="() => Printer.PrintInvoiceAsync(lastCreatedSaleId.Value)" title="إعادة الطباعة">
+                        <i class="fa-solid fa-print"></i>
+                    </button>
+                    <button type="button" class="btn btn-secondary" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" @onclick="() => lastCreatedSaleId = null">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+        }
         <div class="cart-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.65rem; margin-bottom: 0.75rem;">
             <div>
                 <h3 style="font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; margin: 0;">
@@ -709,6 +787,27 @@
                 }
             </div>
 
+            <!-- WhatsApp Invoice Option -->
+            <div style="padding: 0.65rem 1.25rem; background: var(--bg-secondary); border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0; font-weight: 700; font-size: 0.88rem; color: #10b981;">
+                    <input type="checkbox" @bind="sendWhatsAppInvoice" style="width: 18px; height: 18px; accent-color: #10b981; cursor: pointer;" />
+                    <i class="fa-brands fa-whatsapp fa-lg"></i>
+                    <span>إرسال الفاتورة عبر واتساب للعميل</span>
+                </label>
+
+                @if (sendWhatsAppInvoice)
+                {
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-solid fa-phone me-1"></i> رقم الواتساب:</span>
+                        <input type="text" class="form-control"
+                               @bind="whatsAppCustomerPhone"
+                               placeholder="مثال: 01012345678"
+                               dir="ltr"
+                               style="height: 32px; font-size: 0.88rem; font-weight: 700; text-align: left; width: 170px;" />
+                    </div>
+                }
+            </div>
+
             <div class="modal-footer" style="padding: 0.65rem 1.25rem; border-top: 1px solid var(--border-color); display: flex; gap: 0.75rem;">
                 <button class="btn btn-secondary" style="flex: 1; padding: 0.6rem;" @onclick="ClosePaymentModal">إلغاء [Esc]</button>
                 <button id="payment-submit-btn" class="btn btn-success" style="flex: 2; padding: 0.6rem; font-weight: 700; font-size: 0.95rem;" disabled="@isProcessingSale" @onclick="SubmitSale">
@@ -1012,6 +1111,83 @@
     </div>
 }
 
+<!-- Categories Selection Modal Card -->
+@if (showCategoriesModal)
+{
+    <div class="modal-overlay" @onclick="CloseCategoriesModal">
+        <div class="modal-card" style="width: 760px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title" style="color: var(--accent-indigo); display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <span>تصنيفات الأجهزة والمنتجات (@categories.Count تصنيف)</span>
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseCategoriesModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" style="overflow-y: auto; flex: 1; padding: 1rem 1.25rem;">
+                <!-- Search Box -->
+                <div class="search-box" style="margin-bottom: 1rem; width: 100%;">
+                    <i class="fa-solid fa-search"></i>
+                    <input @bind="categoryModalSearch" @bind:event="oninput" placeholder="ابحث باسم التصنيف (مثال: ثلاجات، غسالات، شاشات)..." />
+                </div>
+
+                <!-- Categories Grid Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem;">
+                    <!-- All Categories Option Card -->
+                    <div @onclick="() => SelectCategoryFromModal(null)"
+                         style="background: @(selectedCategoryId == null ? "rgba(99, 102, 241, 0.15)" : "var(--bg-secondary)"); border: 2px solid @(selectedCategoryId == null ? "var(--accent-indigo)" : "var(--border-color)"); border-radius: 0.75rem; padding: 0.85rem 0.75rem; text-align: center; cursor: pointer; transition: all 0.2s;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.35rem; color: var(--accent-indigo);">
+                            <i class="fa-solid fa-boxes-stacked"></i>
+                        </div>
+                        <div style="font-weight: 800; font-size: 0.92rem; color: var(--text-primary); margin-bottom: 0.2rem;">
+                            جميع التصنيفات
+                        </div>
+                        <span class="badge" style="background: rgba(99, 102, 241, 0.2); color: var(--accent-indigo); font-size: 0.72rem;">
+                            @products.Count(p => p.IsActive) منتج
+                        </span>
+                    </div>
+
+                    @foreach (var cat in FilteredModalCategories)
+                    {
+                        var isSelected = selectedCategoryId == cat.Id;
+                        var count = products.Count(p => p.IsActive && p.CategoryId == cat.Id);
+                        <div @onclick="() => SelectCategoryFromModal(cat.Id)"
+                             style="background: @(isSelected ? "rgba(99, 102, 241, 0.15)" : "var(--bg-secondary)"); border: 2px solid @(isSelected ? "var(--accent-indigo)" : "var(--border-color)"); border-radius: 0.75rem; padding: 0.85rem 0.75rem; text-align: center; cursor: pointer; transition: all 0.2s;"
+                             title="@cat.NameAr">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.35rem; color: @(isSelected ? "var(--accent-indigo)" : "var(--text-secondary)");">
+                                <i class="fa-solid fa-folder-open"></i>
+                            </div>
+                            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary); margin-bottom: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                @cat.NameAr
+                            </div>
+                            <span class="badge" style="background: var(--bg-primary); color: var(--text-secondary); font-size: 0.72rem; border: 1px solid var(--border-color);">
+                                @count منتج
+                            </span>
+                        </div>
+                    }
+                </div>
+
+                @if (!FilteredModalCategories.Any())
+                {
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                        <i class="fa-solid fa-folder-xmark fa-2x mb-2" style="opacity: 0.5;"></i>
+                        <p style="font-size: 0.9rem;">لا توجد تصنيفات مطابقة للبحث.</p>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 0.82rem; color: var(--text-secondary);">
+                    التصنيف المختار: <strong style="color: var(--accent-indigo);">@(selectedCategoryName ?? "جميع التصنيفات")</strong>
+                </div>
+                <button class="btn btn-secondary" @onclick="CloseCategoriesModal">إغلاق [Esc]</button>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Quick Low Stock & Out of Stock Modal -->
 @if (showLowStockModal)
 {
@@ -1114,6 +1290,33 @@
     }
 
     private List<PosAlertNotification> activeAlerts = new();
+    private bool showCategoriesModal = false;
+    private string categoryModalSearch = string.Empty;
+    private string? selectedCategoryName => selectedCategoryId == null
+        ? null
+        : categories.FirstOrDefault(c => c.Id == selectedCategoryId)?.NameAr;
+
+    private IEnumerable<CategoryDto> FilteredModalCategories => string.IsNullOrWhiteSpace(categoryModalSearch)
+        ? categories
+        : categories.Where(c => c.NameAr.Contains(categoryModalSearch, StringComparison.OrdinalIgnoreCase));
+
+    private void OpenCategoriesModal()
+    {
+        categoryModalSearch = string.Empty;
+        showCategoriesModal = true;
+    }
+
+    private void CloseCategoriesModal()
+    {
+        showCategoriesModal = false;
+    }
+
+    private void SelectCategoryFromModal(Guid? catId)
+    {
+        FilterByCategory(catId);
+        showCategoriesModal = false;
+    }
+
     private bool showLowStockModal = false;
     private string lowStockSearch = string.Empty;
 
@@ -1314,6 +1517,12 @@
     private decimal paidAmount = 0;
     private decimal discountPercentage = 0;
     private string? saleError;
+
+    // WhatsApp Invoice fields
+    private bool sendWhatsAppInvoice = false;
+    private string whatsAppCustomerPhone = string.Empty;
+    private Guid? lastCreatedSaleId;
+    private string? lastCreatedInvoiceNumber;
 
     // Delivery fields
     private bool isDelivery = false;
@@ -1569,6 +1778,22 @@
 
         paidAmount = Cart.GrandTotal;
         saleError = null;
+        if (!string.IsNullOrWhiteSpace(Cart.CustomerPhone))
+        {
+            whatsAppCustomerPhone = Cart.CustomerPhone;
+            sendWhatsAppInvoice = true;
+        }
+        else if (isDelivery && !string.IsNullOrWhiteSpace(recipientPhone))
+        {
+            whatsAppCustomerPhone = recipientPhone;
+            sendWhatsAppInvoice = true;
+        }
+        else
+        {
+            whatsAppCustomerPhone = string.Empty;
+            sendWhatsAppInvoice = false;
+        }
+
         showPaymentModal = true;
         _ = FocusPaymentInputAsync();
     }
@@ -2002,6 +2227,9 @@
             if (saleResult != null)
             {
                 var createdId = saleResult.SaleId;
+                lastCreatedSaleId = createdId;
+                var phoneToSend = whatsAppCustomerPhone;
+                var shouldSendWhatsApp = sendWhatsAppInvoice && !string.IsNullOrWhiteSpace(phoneToSend);
                 Cart.Clear();
                 ClosePaymentModal();
 
@@ -2016,6 +2244,10 @@
 
                 // Trigger instant cloud sync to push updated stock quantities for mobile alerts
                 CloudSync.RecordLocalChange();
+                if (shouldSendWhatsApp)
+                {
+                    _ = TriggerWhatsAppSendAfterSale(createdId, phoneToSend);
+                }
                 _ = Task.Run(async () =>
                 {
                     try { await CloudSync.SyncReservationsAndSalesOnlyAsync(); } catch { }
@@ -2110,6 +2342,9 @@
     {
         Cart.CustomerId = cust.Id;
         Cart.CustomerName = cust.Name;
+        Cart.CustomerPhone = cust.Phone;
+        whatsAppCustomerPhone = cust.Phone ?? string.Empty;
+        sendWhatsAppInvoice = !string.IsNullOrWhiteSpace(cust.Phone);
         CloseCustomerModal();
     }
 
@@ -2117,6 +2352,9 @@
     {
         Cart.CustomerId = null;
         Cart.CustomerName = "Walk-in Customer";
+        Cart.CustomerPhone = null;
+        whatsAppCustomerPhone = string.Empty;
+        sendWhatsAppInvoice = false;
         CloseCustomerModal();
     }
 
@@ -2144,6 +2382,9 @@
         {
             Cart.CustomerId = id.Value;
             Cart.CustomerName = newCustomerName;
+            Cart.CustomerPhone = newCustomerPhone;
+            whatsAppCustomerPhone = newCustomerPhone;
+            sendWhatsAppInvoice = true;
             CloseCustomerModal();
         }
         else
@@ -2244,6 +2485,68 @@
     {
         if (string.IsNullOrWhiteSpace(relativeOrUrl)) return string.Empty;
         return ApiClient.GetImageFullUrl(relativeOrUrl);
+    }
+
+    private async Task TriggerWhatsAppSendAfterSale(Guid saleId, string phone)
+    {
+        try
+        {
+            var sale = await ApiClient.GetSaleByIdAsync(saleId);
+            if (sale != null)
+            {
+                lastCreatedInvoiceNumber = sale.InvoiceNumber;
+
+                // 1. Fetch exact PDF bytes from backend and copy file to clipboard
+                try
+                {
+                    var pdfBytes = await Printer.GetInvoicePdfBytesAsync(saleId, isThermal: false);
+                    var filePath = WhatsAppInvoiceHelper.SaveInvoicePdf(pdfBytes, sale.InvoiceNumber);
+                    WhatsAppInvoiceHelper.CopyFileToClipboard(filePath);
+                }
+                catch (Exception pdfEx)
+                {
+                    Console.WriteLine($"Could not pre-cache PDF: {pdfEx.Message}");
+                }
+
+                // 2. Open WhatsApp chat with clean intro
+                WhatsAppInvoiceHelper.OpenWhatsAppChatForPdf(
+                    phone,
+                    sale.InvoiceNumber,
+                    StoreState.StoreName);
+
+                TriggerAlert(
+                    title: "📄 إرسال ملف الفاتورة عبر واتساب",
+                    message: $"تم فتح محادثة واتساب ونسخ ملف الفاتورة رقم <strong>{sale.InvoiceNumber}</strong> للحافظة تلقائياً. اضغط <strong>(Ctrl + V)</strong> داخل المحادثة لإرسال الملف فوراً.",
+                    alertType: "info",
+                    icon: "fa-whatsapp",
+                    dedupKey: $"wa_{saleId}");
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error triggering WhatsApp invoice send: {ex.Message}");
+        }
+    }
+
+    private async Task OpenWhatsAppForRecentSale(Guid saleId)
+    {
+        var targetPhone = !string.IsNullOrWhiteSpace(whatsAppCustomerPhone) ? whatsAppCustomerPhone : Cart.CustomerPhone;
+        if (string.IsNullOrWhiteSpace(targetPhone))
+        {
+            var s = await ApiClient.GetSaleByIdAsync(saleId);
+            if (s != null && s.CustomerId.HasValue)
+            {
+                var custs = await ApiClient.GetCustomersAsync();
+                var c = custs.FirstOrDefault(x => x.Id == s.CustomerId.Value);
+                if (c != null && !string.IsNullOrWhiteSpace(c.Phone))
+                {
+                    targetPhone = c.Phone;
+                }
+            }
+        }
+
+        await TriggerWhatsAppSendAfterSale(saleId, targetPhone ?? string.Empty);
     }
 
     public void Dispose()

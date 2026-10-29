@@ -279,14 +279,18 @@
                             </div>
                         </div>
 
-                        <!-- Single Unit for Appliances (قطعة) -->
-                        <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 0.6rem; padding: 0.65rem 0.85rem; display: flex; align-items: center; justify-content: space-between;">
-                            <div style="font-weight: 700; font-size: 0.82rem; color: var(--accent-indigo); display: flex; align-items: center; gap: 0.4rem;">
-                                <i class="fa-solid fa-tag"></i>
-                                <span>وحدة الصنف:</span>
-                                <strong style="color: var(--text-primary); font-size: 0.88rem;">قطعة</strong>
-                            </div>
-                            <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: var(--accent-indigo); font-size: 0.72rem;">أجهزة كهربائية ومنزلية</span>
+                        <!-- Unit Selection -->
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.82rem; font-weight: 700;">وحدة الصنف <span style="color: var(--accent-red);">*</span></label>
+                            <select class="form-select" @bind="unitIdString" style="padding: 0.45rem 0.7rem; font-size: 0.88rem;">
+                                @if (units != null)
+                                {
+                                    @foreach (var u in units)
+                                    {
+                                        <option value="@u.Id.ToString()">@u.NameAr</option>
+                                    }
+                                }
+                            </select>
                         </div>
 
                         <!-- Checkbox Status Flags -->
@@ -1147,10 +1151,12 @@
     private void OpenAddModal()
     {
         editingProductId = Guid.Empty;
+        var defaultUnit = units.FirstOrDefault(u => u.NameAr?.Trim() == "قطعة") ?? units.FirstOrDefault();
+        unitIdString = defaultUnit?.Id.ToString() ?? string.Empty;
         newProduct = new CreateProductFormModel
         {
-            BaseUnit = "قطعة",
-            ParentUnit = "قطعة",
+            BaseUnit = defaultUnit?.NameAr ?? "قطعة",
+            ParentUnit = defaultUnit?.NameAr ?? "قطعة",
             ConversionFactor = 1,
             ShelfLifeDays = 0,
             ExpiryAlertDays = 0,
@@ -1167,7 +1173,6 @@
         GenerateBarcode();
         categoryIdString = categories.FirstOrDefault()?.Id.ToString() ?? string.Empty;
         brandIdString = string.Empty;
-        unitIdString = units.FirstOrDefault()?.Id.ToString() ?? string.Empty;
         supplierIdString = string.Empty;
 
         selectedImageBytes = null;
@@ -1226,6 +1231,18 @@
         categoryIdString = prod.CategoryId.ToString();
         brandIdString = prod.BrandId?.ToString() ?? string.Empty;
         unitIdString = prod.UnitId.ToString();
+        if ((!Guid.TryParse(unitIdString, out var parsedUId) || parsedUId == Guid.Empty) || !units.Any(u => u.Id.ToString() == unitIdString))
+        {
+            var matched = units.FirstOrDefault(u => string.Equals(u.NameAr?.Trim(), prod.BaseUnit?.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (matched != null)
+            {
+                unitIdString = matched.Id.ToString();
+            }
+            else
+            {
+                unitIdString = units.FirstOrDefault()?.Id.ToString() ?? string.Empty;
+            }
+        }
         supplierIdString = prod.SupplierId?.ToString() ?? string.Empty;
 
         errorMessage = string.Empty;
@@ -1428,21 +1445,35 @@
         }
 
         Guid unitId = Guid.Empty;
-        if (!string.IsNullOrWhiteSpace(newProduct.BaseUnit))
+        UnitDto? selectedUnit = null;
+        if (Guid.TryParse(unitIdString, out var parsedUid) && parsedUid != Guid.Empty)
         {
-            var matched = units.FirstOrDefault(u => string.Equals(u.NameAr?.Trim(), newProduct.BaseUnit.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (matched != null)
+            selectedUnit = units.FirstOrDefault(u => u.Id == parsedUid);
+            if (selectedUnit != null)
             {
-                unitId = matched.Id;
+                unitId = selectedUnit.Id;
             }
         }
+
+        if (unitId == Guid.Empty && !string.IsNullOrWhiteSpace(newProduct.BaseUnit))
+        {
+            selectedUnit = units.FirstOrDefault(u => string.Equals(u.NameAr?.Trim(), newProduct.BaseUnit.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (selectedUnit != null)
+            {
+                unitId = selectedUnit.Id;
+            }
+        }
+
         if (unitId == Guid.Empty)
         {
-            unitId = units.FirstOrDefault()?.Id ?? (Guid.TryParse(unitIdString, out var uId) ? uId : Guid.Parse("00000000-0000-0000-0000-000000000001"));
+            selectedUnit = units.FirstOrDefault();
+            unitId = selectedUnit?.Id ?? Guid.Parse("00000000-0000-0000-0000-000000000001");
         }
 
         newProduct.CategoryId = categoryId;
         newProduct.UnitId = unitId;
+        newProduct.BaseUnit = selectedUnit?.NameAr ?? (!string.IsNullOrWhiteSpace(newProduct.BaseUnit) ? newProduct.BaseUnit : "قطعة");
+        newProduct.ParentUnit = selectedUnit?.NameAr ?? newProduct.BaseUnit;
         newProduct.SupplierId = Guid.TryParse(supplierIdString, out var supplierId) ? supplierId : null;
 
         newProduct.Description = PackagingUnitHelper.CleanDescription(newProduct.Description);

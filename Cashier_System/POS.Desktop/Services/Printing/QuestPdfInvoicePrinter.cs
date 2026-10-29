@@ -14,9 +14,14 @@ namespace POS.Desktop.Services.Printing
             _jsRuntime = jsRuntime;
         }
 
+        public async Task<byte[]> GetInvoicePdfBytesAsync(Guid saleId, bool isThermal = false)
+        {
+            return await _httpClient.GetByteArrayAsync($"api/sales/{saleId}/pdf?isThermal={isThermal}");
+        }
+
         public async Task PrintInvoiceAsync(Guid saleId, bool isThermal = false)
         {
-            var pdfBytes = await _httpClient.GetByteArrayAsync($"api/sales/{saleId}/pdf?isThermal={isThermal}");
+            var pdfBytes = await GetInvoicePdfBytesAsync(saleId, isThermal);
             var base64 = Convert.ToBase64String(pdfBytes);
             await _jsRuntime.InvokeVoidAsync("printPdfFromBase64", base64);
         }

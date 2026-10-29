@@ -797,7 +797,7 @@ namespace POS.Desktop.Services.Api
 
 
         // Sales History
-        public async Task<List<SaleDto>> GetSalesListAsync(DateTime? fromDate = null, DateTime? toDate = null, Guid? cashierId = null)
+        public async Task<List<SaleDto>> GetSalesListAsync(DateTime? fromDate = null, DateTime? toDate = null, Guid? cashierId = null, Guid? customerId = null)
         {
             try
             {
@@ -805,6 +805,7 @@ namespace POS.Desktop.Services.Api
                 if (fromDate.HasValue) queryParams.Add($"fromDate={fromDate.Value:yyyy-MM-ddTHH:mm:ss}");
                 if (toDate.HasValue) queryParams.Add($"toDate={toDate.Value:yyyy-MM-ddTHH:mm:ss}");
                 if (cashierId.HasValue && cashierId.Value != Guid.Empty) queryParams.Add($"cashierId={cashierId.Value}");
+                if (customerId.HasValue && customerId.Value != Guid.Empty) queryParams.Add($"customerId={customerId.Value}");
 
                 var url = "api/sales?" + string.Join("&", queryParams);
                 return await _http.GetFromJsonAsync<List<SaleDto>>(url) ?? new();

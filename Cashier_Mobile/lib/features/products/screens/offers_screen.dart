@@ -324,23 +324,29 @@ class _OffersScreenState extends State<OffersScreen> {
                   const SizedBox(height: 12),
                   Text("الأجهزة المشمولة في البكج:", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.getTextSecondary(isDark))),
                   const SizedBox(height: 6),
-                  ...items.map((item) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.check_circle_outline_rounded, size: 14, color: AppColors.success),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                "${item['nameAr'] ?? ''} ${item['brandName'] != null ? '(${item['brandName']})' : ''}",
-                                style: TextStyle(fontSize: 11.5, color: AppColors.getTextPrimary(isDark)),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                  ...items.map((item) {
+                    final pName = item['productName'] ?? item['nameAr'] ?? item['name'] ?? 'جهاز';
+                    final q = (item['quantity'] as num?)?.toDouble() ?? 1.0;
+                    final brand = item['brandName'] != null && item['brandName'].toString().isNotEmpty ? ' (${item['brandName']})' : '';
+                    final qtyText = q > 1 ? ' (${q.toInt()} قطعة)' : '';
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2.5),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle_outline_rounded, size: 15, color: AppColors.success),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              "$pName$brand$qtyText",
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.getTextPrimary(isDark)),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                        ),
-                      )),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
                 ],
               ],
             ),

@@ -191,33 +191,13 @@ class _SupportModalContentState extends State<_SupportModalContent> {
               ),
               const SizedBox(height: 16),
 
-              // Number 1
+              // Support Contact: 01062592321
               _buildContactCard(
                 isDark,
-                title: "الدعم الفني والخدمات (1)",
+                title: "الدعم الفني وخدمة العملاء",
                 number: "01062592321",
                 icon: Icons.phone_in_talk_rounded,
                 color: AppColors.primaryLight,
-              ),
-              const SizedBox(height: 10),
-
-              // Number 2
-              _buildContactCard(
-                isDark,
-                title: "خدمة العملاء والمبيعات (2)",
-                number: "01063301965",
-                icon: Icons.phone_forwarded_rounded,
-                color: AppColors.cyan,
-              ),
-              const SizedBox(height: 10),
-
-              // Number 3
-              _buildContactCard(
-                isDark,
-                title: "المتابعة الفنية والتطوير (3)",
-                number: "01095997875",
-                icon: Icons.laptop_chromebook_rounded,
-                color: Colors.amber,
               ),
               const SizedBox(height: 16),
 

@@ -275,6 +275,14 @@
                         <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>P</kbd></div>
                     </div>
 
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("customers")' title="انقر لفتح دليل وسجلات العملاء">
+                        <div class="shortcut-desc" style="font-size: 0.85rem;">
+                            <i class="fa-solid fa-users" style="color: var(--accent-indigo);"></i>
+                            <span>دليل وسجلات العملاء (Customers)</span>
+                        </div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>C</kbd></div>
+                    </div>
+
                     <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("installments")' title="انقر لفتح عقود وجداول التقسيط">
                         <div class="shortcut-desc" style="font-size: 0.85rem;">
                             <i class="fa-solid fa-file-invoice-dollar" style="color: var(--accent-emerald);"></i>
@@ -375,6 +383,14 @@
                         </div>
                         <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>R</kbd></div>
                     </div>
+
+                    <div class="shortcut-item" style="padding: 0.45rem 0.75rem; cursor: pointer;" @onclick='() => Nav.NavigateTo("returns/purchases")' title="انقر لفتح مرتجع مشتريات الموردين">
+                        <div class="shortcut-desc" style="font-size: 0.85rem;">
+                            <i class="fa-solid fa-truck-arrow-right" style="color: var(--accent-amber);"></i>
+                            <span>مرتجع مشتريات الموردين (Returns)</span>
+                        </div>
+                        <div class="shortcut-keys"><kbd>Alt</kbd><span class="shortcut-plus">+</span><kbd>T</kbd></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -402,13 +418,13 @@
         </div>
 
         <div class="home-support-grid">
-            <!-- Support 1: 01062592321 -->
+            <!-- Support: 01062592321 -->
             <div class="support-contact-item">
                 <div class="contact-icon-box">
                     <i class="fa-solid fa-headset"></i>
                 </div>
                 <div class="contact-details">
-                    <span class="contact-label" title="الدعم الفني والخدمات (1)">الدعم الفني والخدمات (1)</span>
+                    <span class="contact-label" title="الدعم الفني وخدمة العملاء">الدعم الفني وخدمة العملاء</span>
                     <span class="contact-number" dir="ltr">01062592321</span>
                 </div>
                 <div class="contact-actions">
@@ -418,46 +434,6 @@
                     </button>
                     <button type="button" class="btn-copy @(copiedNumber == "01062592321" ? "copied" : "")" @onclick='() => CopyToClipboard("01062592321")' title="@(copiedNumber == "01062592321" ? "تم النسخ!" : "نسخ الرقم")">
                         <i class="fa-solid @(copiedNumber == "01062592321" ? "fa-check text-green" : "fa-copy")"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Support 2: 01063301965 -->
-            <div class="support-contact-item">
-                <div class="contact-icon-box">
-                    <i class="fa-solid fa-phone-volume"></i>
-                </div>
-                <div class="contact-details">
-                    <span class="contact-label" title="خدمة العملاء والمبيعات (2)">خدمة العملاء والمبيعات (2)</span>
-                    <span class="contact-number" dir="ltr">01063301965</span>
-                </div>
-                <div class="contact-actions">
-                    <button type="button" class="btn-whatsapp" @onclick='() => OpenWhatsApp("01063301965")' title="محادثة واتساب فورية">
-                        <i class="fa-brands fa-whatsapp"></i>
-                        <span>واتساب</span>
-                    </button>
-                    <button type="button" class="btn-copy @(copiedNumber == "01063301965" ? "copied" : "")" @onclick='() => CopyToClipboard("01063301965")' title="@(copiedNumber == "01063301965" ? "تم النسخ!" : "نسخ الرقم")">
-                        <i class="fa-solid @(copiedNumber == "01063301965" ? "fa-check text-green" : "fa-copy")"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Support 3: 01095997875 -->
-            <div class="support-contact-item">
-                <div class="contact-icon-box">
-                    <i class="fa-solid fa-laptop-code"></i>
-                </div>
-                <div class="contact-details">
-                    <span class="contact-label" title="المتابعة الفنية والتطوير (3)">المتابعة الفنية والتطوير (3)</span>
-                    <span class="contact-number" dir="ltr">01095997875</span>
-                </div>
-                <div class="contact-actions">
-                    <button type="button" class="btn-whatsapp" @onclick='() => OpenWhatsApp("01095997875")' title="محادثة واتساب فورية">
-                        <i class="fa-brands fa-whatsapp"></i>
-                        <span>واتساب</span>
-                    </button>
-                    <button type="button" class="btn-copy @(copiedNumber == "01095997875" ? "copied" : "")" @onclick='() => CopyToClipboard("01095997875")' title="@(copiedNumber == "01095997875" ? "تم النسخ!" : "نسخ الرقم")">
-                        <i class="fa-solid @(copiedNumber == "01095997875" ? "fa-check text-green" : "fa-copy")"></i>
                     </button>
                 </div>
             </div>

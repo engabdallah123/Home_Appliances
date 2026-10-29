@@ -6,6 +6,7 @@ import '../models/sale_model.dart';
 import '../providers/sales_provider.dart';
 import 'installments_screen.dart';
 import 'reservations_screen.dart';
+import '../../../core/services/whatsapp_helper.dart';
 
 class SalesListScreen extends StatefulWidget {
   const SalesListScreen({super.key});
@@ -273,6 +274,50 @@ class _SalesListScreenState extends State<SalesListScreen> {
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: Color(0xFF10B981),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                InkWell(
+                  onTap: () {
+                    final msg = WhatsAppHelper.buildInvoiceReceiptMessage(
+                      invoiceNumber: sale.invoiceNumber,
+                      customerName: sale.customerName,
+                      customerPhone: sale.customerPhone,
+                      date: sale.saleDate,
+                      totalAmount: sale.totalAmount,
+                      paidAmount: sale.paidAmount,
+                      remainingAmount: sale.remainingAmount,
+                      paymentMethod: sale.paymentMethod,
+                    );
+                    WhatsAppHelper.openWhatsApp(
+                      phone: sale.customerPhone,
+                      message: msg,
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF059669).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF059669).withOpacity(0.35)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.send_rounded, size: 12, color: Color(0xFF10B981)),
+                        SizedBox(width: 4),
+                        Text(
+                          "إرسال واتساب",
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
+                        ),
+                      ],
                     ),
                   ),
                 ),

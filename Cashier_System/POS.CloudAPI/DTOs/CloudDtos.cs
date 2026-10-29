@@ -702,7 +702,12 @@ namespace POS.CloudAPI.DTOs
         int ReservationStatus = 0,
         decimal InterestPercentage = 0,
         string? GuarantorName = null,
-        string? GuarantorPhone = null);
+        string? GuarantorPhone = null)
+    {
+        public decimal MonthlyInstallmentAmount => IsInstallment && NumberOfMonths > 0 
+            ? Math.Round(TotalAmount / NumberOfMonths, 2) 
+            : 0;
+    }
 
     public record CloudSaleSyncDto(
         Guid Id,
@@ -851,5 +856,23 @@ namespace POS.CloudAPI.DTOs
         List<PushOfferItemDto>? Items);
 
     public record PushOffersRequest(List<PushOfferDto> Offers);
+
+    // Customer DTOs
+    public record CloudCustomerDto(
+        string Name,
+        string? Phone,
+        decimal TotalSpent,
+        decimal TotalDebt,
+        int InvoicesCount,
+        DateTime? LastSaleDate,
+        bool HasDebt);
+
+    public record CloudCustomerDossierDto(
+        string Name,
+        string? Phone,
+        decimal TotalSpent,
+        decimal TotalDebt,
+        List<CloudSaleDto> Sales,
+        List<CloudDebtDto> Debts);
 }
 

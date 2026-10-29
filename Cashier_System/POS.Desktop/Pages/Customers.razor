@@ -1,0 +1,1364 @@
+@page "/customers"
+@using Microsoft.AspNetCore.Authorization
+@using System.Globalization
+@using global::POS.Desktop.Services
+@using global::POS.Desktop.Services.Api
+@using global::POS.Desktop.Services.State
+@using global::POS.Desktop.Services.Sync
+@using global::POS.Desktop.Services.Printing
+@attribute [Authorize]
+@inject PosApiClient ApiClient
+@inject StoreStateContainer StoreState
+@inject IInvoicePrinterService Printer
+@inject ICloudSyncService CloudSync
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="customers-page">
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">
+                <i class="fa-solid fa-users text-indigo me-2"></i> دليل وسجلات العملاء
+            </h2>
+            <p class="page-subtitle">ملف متكامل لكل عميل: كشف الحساب، فواتير المبيعات، الأرصدة والديون، وعقود التقسيط مع إرسال الفواتير عبر واتساب</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="button" class="btn btn-secondary" style="font-size: 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem;" @onclick="() => LoadDataAsync()" title="تحديث القائمة">
+                <i class="fa-solid fa-arrows-rotate @(isLoading ? "fa-spin" : "") text-blue"></i>
+                <span>تحديث</span>
+            </button>
+            <button type="button" class="btn btn-primary" style="font-size: 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem;" @onclick="OpenAddCustomerModal">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>إضافة عميل جديد</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    @if (!string.IsNullOrEmpty(alertMessage))
+    {
+        <div style="background: @(alertIsError ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)"); border: 1px solid @(alertIsError ? "rgba(239, 68, 68, 0.35)" : "rgba(16, 185, 129, 0.35)"); color: @(alertIsError ? "#f87171" : "var(--accent-emerald)"); padding: 0.75rem 1.25rem; border-radius: 0.6rem; font-weight: 600; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; animation: fadeIn 0.2s ease;">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+                <i class="fa-solid @(alertIsError ? "fa-circle-exclamation" : "fa-circle-check")"></i>
+                <span>@alertMessage</span>
+            </div>
+            <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" @onclick="() => alertMessage = null">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+    }
+
+    <!-- KPI Summary Cards -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <!-- Total Customers -->
+        <div class="card" style="padding: 1.15rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color); border-right: 4px solid var(--accent-indigo);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                <span style="font-size: 0.82rem; color: var(--text-secondary); font-weight: 600;">إجمالي العملاء المسجلين</span>
+                <i class="fa-solid fa-users text-indigo" style="font-size: 1.2rem;"></i>
+            </div>
+            <div style="font-size: 1.6rem; font-weight: 900; color: var(--accent-indigo);">@customers.Count</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">عميل مسجل في قاعدة البيانات</div>
+        </div>
+
+        <!-- Total Outstanding Debts -->
+        <div class="card" style="padding: 1.15rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color); border-right: 4px solid var(--accent-red);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                <span style="font-size: 0.82rem; color: var(--text-secondary); font-weight: 600;">ديون الفواتير الآجلة (لنا)</span>
+                <i class="fa-solid fa-hand-holding-dollar text-red" style="font-size: 1.2rem;"></i>
+            </div>
+            <div style="font-size: 1.6rem; font-weight: 900; color: var(--accent-red);">@totalDebtsAmount.ToString("N2") <small style="font-size: 0.85rem;">ج.م</small></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">على @customersWithCreditDebtCount عميل</div>
+        </div>
+
+        <!-- Total Installment Balances -->
+        <div class="card" style="padding: 1.15rem; background: var(--bg-card); border-radius: 0.75rem; border: 1px solid var(--border-color); border-right: 4px solid var(--accent-amber);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                <span style="font-size: 0.82rem; color: var(--text-secondary); font-weight: 600;">أقساط وعقود جارية</span>
+                <i class="fa-solid fa-file-invoice-dollar text-amber" style="font-size: 1.2rem;"></i>
+            </div>
+            <div style="font-size: 1.6rem; font-weight: 900; color: var(--accent-amber);">@installmentContracts.Count <small style="font-size: 0.85rem;">عقد</small></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">متبقي: @totalInstallmentRemaining.ToString("N2") ج.م</div>
+        </div>
+    </div>
+
+    <!-- Filters & Search Toolbar -->
+    <div style="display: flex; gap: 0.75rem; margin-bottom: 1.25rem; align-items: center; flex-wrap: wrap;">
+        <!-- Search Box -->
+        <div class="search-box" style="max-width: 380px; flex: 1;">
+            <i class="fa-solid fa-search"></i>
+            <input @bind="searchQuery"
+                   @bind:event="oninput"
+                   @onkeyup="ApplyFilters"
+                   placeholder="ابحث باسم العميل أو رقم الهاتف أو العنوان..." />
+        </div>
+
+        <!-- Filter Chips -->
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+            <button type="button" class="btn @(filterDebtType == "all" ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem; font-weight: 700;" @onclick='() => SetFilterType("all")'>
+                الكل (@customers.Count)
+            </button>
+            <button type="button" class="btn @(filterDebtType == "debt" ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem; font-weight: 700;" @onclick='() => SetFilterType("debt")'>
+                <i class="fa-solid fa-hand-holding-dollar text-red me-1"></i> عليهم ديون (@customersWithDebtCount)
+            </button>
+            <button type="button" class="btn @(filterDebtType == "clear" ? "btn-primary" : "btn-secondary")" style="padding: 0.4rem 0.8rem; font-size: 0.82rem; font-weight: 700;" @onclick='() => SetFilterType("clear")'>
+                <i class="fa-solid fa-check text-emerald me-1"></i> خالص الحساب (@(customers.Count - customersWithDebtCount))
+            </button>
+        </div>
+    </div>
+
+    <!-- Customers List Table -->
+    <div class="table-container" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 0.75rem; overflow: hidden; box-shadow: var(--shadow-sm);">
+        @if (isLoading)
+        {
+            <div style="text-align: center; padding: 4rem 1rem;">
+                <i class="fa-solid fa-spinner fa-spin fa-2x text-indigo"></i>
+                <p style="margin-top: 0.75rem; color: var(--text-secondary); font-size: 0.95rem;">جاري تحميل بيانات وسجلات العملاء...</p>
+            </div>
+        }
+        else if (!filteredCustomers.Any())
+        {
+            <div style="text-align: center; padding: 4rem 1rem; color: var(--text-muted);">
+                <i class="fa-solid fa-user-slash fa-3x" style="opacity: 0.3; margin-bottom: 0.75rem;"></i>
+                <h4 style="color: var(--text-secondary); margin-bottom: 0.35rem;">لا يوجد عملاء مطابقين للبحث</h4>
+                <p style="font-size: 0.85rem;">يمكنك إضافة عميل جديد بالضغط على زر "إضافة عميل جديد" بالأعلى</p>
+            </div>
+        }
+        else
+        {
+            <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+                <thead>
+                    <tr style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); text-align: right;">
+                        <th style="padding: 0.75rem 1rem; width: 50px; text-align: center;">#</th>
+                        <th style="padding: 0.75rem 1rem; min-width: 220px;">العميل</th>
+                        <th style="padding: 0.75rem 1rem; min-width: 150px;">رقم الهاتف / واتساب</th>
+                        <th style="padding: 0.75rem 1rem; min-width: 160px;">العنوان</th>
+                        <th style="padding: 0.75rem 1rem; min-width: 160px; text-align: center;">إجمالي المديونية</th>
+                        <th style="padding: 0.75rem 1rem; min-width: 260px; text-align: center;">الإجراءات السريعة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        int index = (currentPage - 1) * pageSize + 1;
+                    }
+                    @foreach (var cust in PagedCustomers)
+                    {
+                        var creditDebt = GetCustomerCreditDebt(cust.Id);
+                        var instDebt = GetCustomerInstallmentDebt(cust.Id);
+                        var totalCustDebt = creditDebt + instDebt;
+                        var hasDebt = totalCustDebt > 0;
+                        <tr style="border-bottom: 1px solid var(--border-color-light); transition: background-color 0.15s ease;">
+                            <td style="padding: 0.75rem 1rem; text-align: center; color: var(--text-muted);">@(index++)</td>
+                            <td style="padding: 0.75rem 1rem;">
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(99, 102, 241, 0.12); color: var(--accent-indigo); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; flex-shrink: 0; border: 1px solid rgba(99, 102, 241, 0.25);">
+                                        @(string.IsNullOrWhiteSpace(cust.Name) ? "ع" : cust.Name.Trim()[0])
+                                    </div>
+                                    <div>
+                                        <div style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem; cursor: pointer;" @onclick="() => OpenCustomerDossier(cust)" title="فتح ملف وكشف حساب العميل">
+                                            @cust.Name
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(cust.Email))
+                                        {
+                                            <div style="font-size: 0.75rem; color: var(--text-muted);">@cust.Email</div>
+                                        }
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="padding: 0.75rem 1rem;">
+                                @if (!string.IsNullOrWhiteSpace(cust.Phone))
+                                {
+                                    <div style="display: flex; align-items: center; gap: 0.45rem;">
+                                        <span dir="ltr" style="font-weight: 700; color: var(--text-primary); font-family: monospace;">@cust.Phone</span>
+                                        <button type="button" class="btn-whatsapp-icon" style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; border-radius: 6px; padding: 0.2rem 0.45rem; cursor: pointer;" @onclick='() => WhatsAppInvoiceHelper.OpenDirectChat(cust.Phone)' title="فتح محادثة واتساب مع العميل">
+                                            <i class="fa-brands fa-whatsapp"></i>
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span style="color: var(--text-muted); font-size: 0.8rem;">-</span>
+                                }
+                            </td>
+                            <td style="padding: 0.75rem 1rem; color: var(--text-secondary); font-size: 0.82rem;">
+                                @(string.IsNullOrWhiteSpace(cust.Address) ? "غير محدد" : cust.Address)
+                            </td>
+                            <td style="padding: 0.75rem 1rem; text-align: center;">
+                                @if (hasDebt)
+                                {
+                                    <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 0.3rem;">
+                                        <!-- Total Combined Debt Badge -->
+                                        <span class="badge" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171; font-weight: 900; font-size: 0.88rem; padding: 0.3rem 0.65rem; border-radius: 6px; box-shadow: 0 1px 3px rgba(239,68,68,0.1);">
+                                            @totalCustDebt.ToString("N2") ج.م
+                                        </span>
+                                        <!-- Breakdown: Credit & Installment -->
+                                        <div style="font-size: 0.73rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; justify-content: center;">
+                                            <span style="color: @(creditDebt > 0 ? "#f87171" : "var(--text-muted)"); background: var(--bg-secondary); padding: 0.1rem 0.35rem; border-radius: 4px; border: 1px solid var(--border-color);" title="ديون الفواتير الآجلة">
+                                                آجل: @creditDebt.ToString("N2")
+                                            </span>
+                                            <span style="color: @(instDebt > 0 ? "var(--accent-amber)" : "var(--text-muted)"); background: var(--bg-secondary); padding: 0.1rem 0.35rem; border-radius: 4px; border: 1px solid var(--border-color);" title="متبقي عقود التقسيط">
+                                                قسط: @instDebt.ToString("N2")
+                                            </span>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="badge" style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--accent-emerald); font-weight: 700; font-size: 0.8rem; padding: 0.3rem 0.55rem; border-radius: 6px;">
+                                        خالص (0.00)
+                                    </span>
+                                }
+                            </td>
+                            <td style="padding: 0.75rem 1rem; text-align: center;">
+                                <div style="display: inline-flex; gap: 0.4rem; align-items: center; justify-content: center; flex-wrap: wrap;">
+                                    <!-- View Dossier / History -->
+                                    <button type="button" class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; font-weight: 700;" @onclick="() => OpenCustomerDossier(cust)" title="عرض كشف الحساب والعمليات">
+                                        <i class="fa-solid fa-folder-open text-indigo me-1"></i> كشف الحساب
+                                    </button>
+
+                                    <!-- Send Invoice WhatsApp -->
+                                    <button type="button" class="btn btn-emerald" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; font-weight: 700; background: #059669; border-color: #059669; color: #fff;" @onclick="() => OpenSendInvoiceWhatsAppModal(cust)" title="إرسال فاتورة مبيعات لهذا العميل عبر واتساب">
+                                        <i class="fa-brands fa-whatsapp me-1"></i> إرسال فاتورة
+                                    </button>
+
+                                    <!-- Quick Debt Pay (if has credit debt) -->
+                                    @if (creditDebt > 0)
+                                    {
+                                        <button type="button" class="btn btn-secondary" style="padding: 0.3rem 0.55rem; font-size: 0.78rem; font-weight: 700; color: #f87171;" @onclick="() => OpenQuickPayDebt(cust)" title="تحصيل وسداد مديونية الآجل للعميل">
+                                            <i class="fa-solid fa-hand-holding-dollar me-1"></i> سداد دين
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    @if (!isLoading && filteredCustomers.Any())
+    {
+        <Pagination CurrentPage="@currentPage" TotalItems="@filteredCustomers.Count" PageSize="@pageSize" OnPageChanged="@(p => { currentPage = p; })" OnPageSizeChanged="@(s => { pageSize = s; currentPage = 1; EnsureValidPage(); })" />
+    }
+</div>
+
+<!-- ========================================================================= -->
+<!-- CUSTOMER DOSSIER / FULL HISTORY MODAL -->
+<!-- ========================================================================= -->
+@if (selectedCustomerForDossier != null)
+{
+    <div class="modal-overlay" @onclick="CloseCustomerDossier" style="z-index: 1040;">
+        <div class="modal-card" style="width: 1050px; max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column;" @onclick:stopPropagation="true">
+            <!-- Modal Header -->
+            <div class="modal-header" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(16, 185, 129, 0.1)); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.85rem;">
+                    <div style="width: 44px; height: 44px; border-radius: 50%; background: var(--accent-indigo); color: #fff; font-size: 1.3rem; font-weight: 900; display: flex; align-items: center; justify-content: center;">
+                        @((string.IsNullOrWhiteSpace(selectedCustomerForDossier.Name) ? "ع" : selectedCustomerForDossier.Name.Trim())[0])
+                    </div>
+                    <div>
+                        <h3 class="modal-title" style="margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--text-primary);">
+                            ملف العميل: @selectedCustomerForDossier.Name
+                        </h3>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); display: flex; gap: 1rem; align-items: center; margin-top: 0.2rem;">
+                            @if (!string.IsNullOrWhiteSpace(selectedCustomerForDossier.Phone))
+                            {
+                                <span><i class="fa-solid fa-phone me-1"></i> <span dir="ltr">@selectedCustomerForDossier.Phone</span></span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(selectedCustomerForDossier.Address))
+                            {
+                                <span><i class="fa-solid fa-location-dot me-1"></i> @selectedCustomerForDossier.Address</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button type="button" class="btn btn-emerald" style="padding: 0.4rem 0.8rem; font-size: 0.82rem; font-weight: 700; background: #059669; border-color: #059669; color: #fff;" @onclick="() => OpenSendInvoiceWhatsAppModal(selectedCustomerForDossier)">
+                        <i class="fa-brands fa-whatsapp me-1"></i> إرسال فاتورة واتساب
+                    </button>
+                    <button type="button" class="btn btn-secondary" style="padding: 0.4rem 0.7rem;" @onclick="CloseCustomerDossier">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Financial Summary Bar inside Dossier -->
+            @{
+                var dossierCredit = GetCustomerCreditDebt(selectedCustomerForDossier.Id);
+                var dossierInst = GetCustomerInstallmentDebt(selectedCustomerForDossier.Id);
+                var dossierCustomerDebt = dossierCredit + dossierInst;
+                var customerSalesCount = customerSalesList.Count;
+                var customerTotalSpent = customerSalesList.Sum(s => s.TotalAmount);
+            }
+            <div style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 0.75rem 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
+                <div>
+                    <span style="font-size: 0.72rem; color: var(--text-secondary); display: block;">إجمالي المشتريات والعمليات</span>
+                    <strong style="color: var(--accent-indigo); font-size: 1.1rem;">@customerTotalSpent.ToString("N2") ج.م</strong>
+                    <span style="font-size: 0.72rem; color: var(--text-muted); display: block;">(@customerSalesCount فاتورة بيع)</span>
+                </div>
+                <div>
+                    <span style="font-size: 0.72rem; color: var(--text-secondary); display: block;">إجمالي المديونية الشاملة (لنا)</span>
+                    <strong style="color: @(dossierCustomerDebt > 0 ? "var(--accent-red)" : "var(--accent-emerald)"); font-size: 1.1rem;">
+                        @(dossierCustomerDebt > 0 ? $"{dossierCustomerDebt:N2} ج.م" : "خالص الحساب (0.00)")
+                    </strong>
+                    @if (dossierCustomerDebt > 0)
+                    {
+                        <div style="font-size: 0.73rem; font-weight: 700; display: flex; gap: 0.4rem; margin-top: 0.2rem;">
+                            <span style="color: @(dossierCredit > 0 ? "var(--accent-red)" : "var(--text-muted)");">آجل: @dossierCredit.ToString("N2") ج.م</span>
+                            <span style="color: var(--border-color);">|</span>
+                            <span style="color: @(dossierInst > 0 ? "var(--accent-amber)" : "var(--text-muted)");">قسط: @dossierInst.ToString("N2") ج.م</span>
+                        </div>
+                    }
+                </div>
+                <div>
+                    <span style="font-size: 0.72rem; color: var(--text-secondary); display: block;">عقود التقسيط المسجلة</span>
+                    <strong style="color: var(--accent-amber); font-size: 1.1rem;">@customerInstallmentsList.Count عقد</strong>
+                </div>
+            </div>
+
+            <!-- Tabs Navigation -->
+            <div style="display: flex; gap: 0.5rem; padding: 0.75rem 1.5rem; background: var(--bg-card); border-bottom: 1px solid var(--border-color);">
+                <button type="button" class="btn @(dossierActiveTab == "sales" ? "btn-primary" : "btn-secondary")" style="padding: 0.45rem 1rem; font-size: 0.85rem; font-weight: 700;" @onclick='() => dossierActiveTab = "sales"'>
+                    <i class="fa-solid fa-receipt me-1"></i> فواتير المبيعات (@customerSalesList.Count)
+                </button>
+                <button type="button" class="btn @(dossierActiveTab == "debts" ? "btn-primary" : "btn-secondary")" style="padding: 0.45rem 1rem; font-size: 0.85rem; font-weight: 700;" @onclick='() => dossierActiveTab = "debts"'>
+                    <i class="fa-solid fa-hand-holding-dollar me-1"></i> الديون والمديونيات (@customerDebtsList.Count)
+                </button>
+                <button type="button" class="btn @(dossierActiveTab == "installments" ? "btn-primary" : "btn-secondary")" style="padding: 0.45rem 1rem; font-size: 0.85rem; font-weight: 700;" @onclick='() => dossierActiveTab = "installments"'>
+                    <i class="fa-solid fa-file-invoice-dollar me-1"></i> عقود التقسيط (@customerInstallmentsList.Count)
+                </button>
+            </div>
+
+            <!-- Modal Body Content -->
+            <div class="modal-body" style="padding: 1.25rem 1.5rem; flex: 1; overflow-y: auto;">
+                @if (isLoadingDossier)
+                {
+                    <div style="text-align: center; padding: 3rem 0;">
+                        <i class="fa-solid fa-spinner fa-spin fa-2x text-indigo"></i>
+                        <p style="margin-top: 0.75rem; color: var(--text-secondary);">جاري تجميع كشف حساب العميل والعمليات...</p>
+                    </div>
+                }
+                else if (dossierActiveTab == "sales")
+                {
+                    <!-- SALES TAB -->
+                    @if (!customerSalesList.Any())
+                    {
+                        <div style="text-align: center; padding: 3rem 0; color: var(--text-muted);">
+                            <i class="fa-solid fa-receipt fa-2x" style="opacity: 0.4; margin-bottom: 0.5rem;"></i>
+                            <p>لا توجد فواتير مبيعات مسجلة لهذا العميل حتى الآن.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-container" style="border: 1px solid var(--border-color); border-radius: 0.5rem; overflow: hidden;">
+                            <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);">
+                                        <th style="padding: 0.6rem 0.85rem;">رقم الفاتورة</th>
+                                        <th style="padding: 0.6rem 0.85rem;">التاريخ</th>
+                                        <th style="padding: 0.6rem 0.85rem; text-align: left;">الإجمالي</th>
+                                        <th style="padding: 0.6rem 0.85rem; text-align: left;">المدفوع</th>
+                                        <th style="padding: 0.6rem 0.85rem; text-align: left;">المتبقي (دين)</th>
+                                        <th style="padding: 0.6rem 0.85rem; text-align: center;">طريقة الدفع</th>
+                                        <th style="padding: 0.6rem 0.85rem; text-align: center;">إجراءات الفاتورة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var s in customerSalesList)
+                                    {
+                                        <tr style="border-bottom: 1px solid var(--border-color-light);">
+                                            <td style="padding: 0.6rem 0.85rem;">
+                                                <code style="font-weight: 800; color: var(--accent-indigo);">@s.InvoiceNumber</code>
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; color: var(--text-secondary);">
+                                                @s.SaleDate.ToString("yyyy/MM/dd hh:mm tt")
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; text-align: left; font-weight: 700; color: var(--text-primary);">
+                                                @s.TotalAmount.ToString("N2") ج.م
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; text-align: left; color: var(--accent-emerald); font-weight: 700;">
+                                                @s.PaidAmount.ToString("N2") ج.م
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; text-align: left;">
+                                                @if (s.RemainingAmount > 0)
+                                                {
+                                                    <span style="color: #f87171; font-weight: 800;">@s.RemainingAmount.ToString("N2") ج.م</span>
+                                                }
+                                                else
+                                                {
+                                                    <span style="color: var(--accent-emerald);">خالص</span>
+                                                }
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; text-align: center;">
+                                                <span class="badge" style="font-size: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color);">
+                                                    @FormatPaymentMethod(s.PaymentMethod)
+                                                </span>
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; text-align: center;">
+                                                <div style="display: inline-flex; gap: 0.35rem; align-items: center;">
+                                                    <button type="button" class="btn btn-emerald" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; background: #059669; border-color: #059669; color: #fff;" @onclick="() => SendSingleSaleWhatsApp(s, selectedCustomerForDossier)" title="إرسال هذه الفاتورة عبر واتساب">
+                                                        <i class="fa-brands fa-whatsapp me-1"></i> إرسال واتساب
+                                                    </button>
+                                                    <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.45rem; font-size: 0.75rem;" @onclick="() => PrintSale(s.Id)" title="طباعة الفاتورة">
+                                                        <i class="fa-solid fa-print"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else if (dossierActiveTab == "debts")
+                {
+                    <!-- DEBTS TAB -->
+                    @if (!customerDebtsList.Any())
+                    {
+                        <div style="text-align: center; padding: 3rem 0; color: var(--accent-emerald);">
+                            <i class="fa-solid fa-circle-check fa-3x" style="margin-bottom: 0.75rem;"></i>
+                            <h4 style="margin-bottom: 0.25rem;">لا توجد أي ديون مستحقة على هذا العميل!</h4>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary);">كافة الفواتير مسددة بالكامل وخالص الحساب.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-container" style="border: 1px solid var(--border-color); border-radius: 0.5rem; overflow: hidden;">
+                            <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);">
+                                        <th style="padding: 0.6rem 0.85rem;">رقم الفاتورة</th>
+                                        <th style="padding: 0.6rem 0.85rem;">تاريخ الفاتورة</th>
+                                        <th style="padding: 0.6rem 0.85rem; text-align: left;">إجمالي الفاتورة</th>
+                                        <th style="padding: 0.6rem 0.85rem; text-align: left;">المدفوع سابقاً</th>
+                                        <th style="padding: 0.6rem 0.85rem; text-align: left;">المبلغ المتبقي (دين)</th>
+                                        <th style="padding: 0.6rem 0.85rem; text-align: center;">الإجراء</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var debt in customerDebtsList)
+                                    {
+                                        <tr style="border-bottom: 1px solid var(--border-color-light);">
+                                            <td style="padding: 0.6rem 0.85rem;">
+                                                <code style="font-weight: 800; color: var(--accent-indigo);">@debt.InvoiceNumber</code>
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; color: var(--text-secondary);">
+                                                @debt.SaleDate.ToString("yyyy/MM/dd")
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; text-align: left; font-weight: 700;">
+                                                @debt.TotalAmount.ToString("N2") ج.م
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; text-align: left; color: var(--accent-emerald);">
+                                                @debt.PaidAmount.ToString("N2") ج.م
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; text-align: left; font-weight: 900; color: #f87171;">
+                                                @debt.RemainingAmount.ToString("N2") ج.م
+                                            </td>
+                                            <td style="padding: 0.6rem 0.85rem; text-align: center;">
+                                                <button type="button" class="btn btn-primary" style="padding: 0.25rem 0.65rem; font-size: 0.78rem; font-weight: 700;" @onclick="() => OpenPaySpecificDebtModal(debt)">
+                                                    <i class="fa-solid fa-hand-holding-dollar me-1"></i> تحصيل الدفعة
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else if (dossierActiveTab == "installments")
+                {
+                    <!-- INSTALLMENTS TAB -->
+                    @if (!customerInstallmentsList.Any())
+                    {
+                        <div style="text-align: center; padding: 3rem 0; color: var(--text-muted);">
+                            <i class="fa-solid fa-file-invoice-dollar fa-2x" style="opacity: 0.4; margin-bottom: 0.5rem;"></i>
+                            <p>لا توجد عقود تقسيط مسجلة لهذا العميل.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+                            @foreach (var c in customerInstallmentsList)
+                            {
+                                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                                    <div>
+                                        <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                            <span style="font-weight: 800; font-size: 0.95rem; color: var(--text-primary);">عقد رقم: @c.ContractNumber</span>
+                                            <span class="badge @(c.Status == 1 ? "badge-emerald" : "badge-secondary")">@(string.IsNullOrWhiteSpace(c.StatusText) ? "ساري" : c.StatusText)</span>
+                                        </div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                            تاريخ البدء: @c.StartDate.ToString("yyyy/MM/dd") | عدد الشهور: @c.NumberOfMonths شهر | القسط الشهري: <strong style="color: var(--accent-indigo);">@c.MonthlyInstallmentAmount.ToString("N2") ج.م</strong>
+                                        </div>
+                                    </div>
+                                    <div style="text-align: left;">
+                                        <div style="font-size: 0.75rem; color: var(--text-muted);">المبلغ المتبقي</div>
+                                        <div style="font-size: 1.15rem; font-weight: 900; color: var(--accent-amber);">@c.RemainingAmount.ToString("N2") ج.م</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer" style="padding: 0.75rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" @onclick="CloseCustomerDossier">إغلاق</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========================================================================= -->
+<!-- WHATSAPP INVOICE SENDER MODAL -->
+<!-- ========================================================================= -->
+@if (showWhatsAppSenderModal && targetCustomerForWhatsApp != null)
+{
+    <div class="modal-overlay" @onclick="CloseWhatsAppSenderModal" style="z-index: 1050;">
+        <div class="modal-card" style="width: 840px; max-width: 95vw; height: 88vh; max-height: 88vh; display: flex; flex-direction: column;" @onclick:stopPropagation="true">
+            <!-- Modal Header -->
+            <div class="modal-header" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1)); border-bottom: 1px solid var(--border-color); padding: 0.85rem 1.25rem; flex-shrink: 0;">
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <i class="fa-brands fa-whatsapp fa-xl" style="color: #10b981;"></i>
+                    <div>
+                        <h3 class="modal-title" style="margin: 0; font-size: 1.1rem; font-weight: 800; color: #10b981;">
+                            إرسال الفاتورة عبر واتساب للعميل
+                        </h3>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">
+                            العميل: <strong style="color: var(--text-primary);">@targetCustomerForWhatsApp.Name</strong>
+                        </span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.55rem;" @onclick="CloseWhatsAppSenderModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body: flex column with overflow hidden to prevent nested scroll conflict -->
+            <div class="modal-body" style="padding: 1.15rem 1.4rem; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.75rem; overflow: hidden;">
+                <!-- Customer Phone & Details Row (Compact) -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; flex-shrink: 0;">
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 0.2rem; display: block; color: var(--text-secondary);">
+                            اسم العميل:
+                        </label>
+                        <input type="text" class="form-control" value="@targetCustomerForWhatsApp.Name" readonly style="background: var(--bg-secondary); font-weight: 700; height: 34px; font-size: 0.85rem;" />
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 0.2rem; display: block; color: var(--text-secondary);">
+                            <i class="fa-brands fa-whatsapp text-emerald me-1"></i> رقم هاتف الواتساب:
+                        </label>
+                        <input type="text" class="form-control" @bind="whatsAppTargetPhone" placeholder="مثال: 01012345678" dir="ltr" style="font-weight: 700; text-align: left; height: 34px; font-size: 0.85rem;" />
+                    </div>
+                </div>
+
+                <!-- Select Invoice Dropdown (Compact) -->
+                <div class="form-group" style="margin: 0; flex-shrink: 0;">
+                    <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 0.2rem; display: block; color: var(--text-secondary);">
+                        اختر الفاتورة المراد إرسالها:
+                    </label>
+                    @if (isLoadingCustomerSalesForWhatsApp)
+                    {
+                        <div style="padding: 0.4rem; color: var(--text-secondary); font-size: 0.82rem;">
+                            <i class="fa-solid fa-spinner fa-spin me-2 text-emerald"></i> جاري استرجاع فواتير العميل...
+                        </div>
+                    }
+                    else if (!availableSalesForWhatsApp.Any())
+                    {
+                        <div style="padding: 0.5rem 0.75rem; background: var(--bg-secondary); border-radius: 6px; font-size: 0.82rem; color: var(--text-muted);">
+                            لا توجد فواتير مبيعات سابقة لهذا العميل.
+                        </div>
+                    }
+                    else
+                    {
+                        <select class="form-select" @onchange="OnSelectedInvoiceChanged" style="font-size: 0.85rem; font-weight: 700; padding: 0.4rem 0.65rem; height: 35px;">
+                            @foreach (var s in availableSalesForWhatsApp)
+                            {
+                                <option value="@s.Id" selected="@(selectedSaleForWhatsApp?.Id == s.Id)">
+                                    فاتورة #@s.InvoiceNumber — بتاريخ @s.SaleDate.ToString("yyyy/MM/dd") — بمبلغ @s.TotalAmount.ToString("N2") ج.م (@(s.RemainingAmount > 0 ? $"متبقي دين: {s.RemainingAmount:N2}" : "مسددة بالكامل"))
+                                </option>
+                            }
+                        </select>
+                    }
+                </div>
+
+                <!-- Tabs / Mode Switcher -->
+                <div style="display: flex; background: var(--bg-primary); border-radius: 0.65rem; padding: 0.25rem; gap: 0.35rem; border: 1.5px solid var(--border-color); flex-shrink: 0;">
+                    <button type="button"
+                            class="btn"
+                            style="flex: 1; border-radius: 0.5rem; font-weight: 800; font-size: 0.85rem; padding: 0.5rem 0.85rem; border: none; cursor: pointer; transition: all 0.15s ease; @(whatsAppSendMode == "pdf" ? "background: #059669; color: #fff; box-shadow: 0 2px 6px rgba(5,150,105,0.35);" : "background: transparent; color: var(--text-secondary);")"
+                            @onclick='() => SetWhatsAppSendMode("pdf")'>
+                        <i class="fa-solid fa-file-pdf me-1"></i> إرسال ملف الفاتورة PDF (المطبوعة)
+                    </button>
+                    <button type="button"
+                            class="btn"
+                            style="flex: 1; border-radius: 0.5rem; font-weight: 800; font-size: 0.85rem; padding: 0.5rem 0.85rem; border: none; cursor: pointer; transition: all 0.15s ease; @(whatsAppSendMode == "text" ? "background: var(--accent-indigo); color: #fff; box-shadow: 0 2px 6px rgba(99,102,241,0.35);" : "background: transparent; color: var(--text-secondary);")"
+                            @onclick='() => SetWhatsAppSendMode("text")'>
+                        <i class="fa-solid fa-message me-1"></i> إرسال ملخص الفاتورة كنص مكتوب
+                    </button>
+                </div>
+
+                <!-- TAB 1: PDF MODE -->
+                @if (whatsAppSendMode == "pdf")
+                {
+                    <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0.85rem;">
+                        @if (selectedSaleForWhatsApp != null)
+                        {
+                            <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(99, 102, 241, 0.08)); border: 1.5px solid rgba(16, 185, 129, 0.35); border-radius: 0.75rem; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.6rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <div style="width: 48px; height: 48px; border-radius: 10px; background: rgba(239, 68, 68, 0.15); color: #ef4444; font-size: 1.6rem; display: flex; align-items: center; justify-content: center;">
+                                            <i class="fa-solid fa-file-pdf"></i>
+                                        </div>
+                                        <div>
+                                            <h4 style="margin: 0; font-size: 1rem; font-weight: 800; color: var(--text-primary);">
+                                                ملف الفاتورة المطبوعة (PDF)
+                                            </h4>
+                                            <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                                                الفاتورة الرسمية بكامل الأصناف والباركود واللوجو — رقم #@selectedSaleForWhatsApp.InvoiceNumber
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div style="display: flex; gap: 0.45rem;">
+                                        <button type="button" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 700;" @onclick="DownloadInvoicePdfDirectly" title="تحميل وحفظ نسخة من الفاتورة كملف PDF">
+                                            <i class="fa-solid fa-download me-1 text-blue"></i> تحميل PDF
+                                        </button>
+                                        <button type="button" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 700;" @onclick="() => Printer.PrintInvoiceAsync(selectedSaleForWhatsApp.Id)" title="طباعة الفاتورة">
+                                            <i class="fa-solid fa-print me-1 text-indigo"></i> طباعة
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Guide Tip -->
+                                <div style="background: rgba(16, 185, 129, 0.12); border-radius: 0.5rem; padding: 0.8rem 1rem; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.65rem; line-height: 1.5;">
+                                    <i class="fa-solid fa-circle-info text-emerald" style="font-size: 1.25rem; flex-shrink: 0;"></i>
+                                    <div>
+                                        عند الضغط على <strong>"إرسال ملف الفاتورة PDF عبر واتساب"</strong> بالأسفل، يقوم النظام بتجهيز ملف الـ <strong>PDF</strong> ونسخه تلقائياً للحافظة (Clipboard) وفتح محادثة العميل؛ اضغط فقط <strong>(Ctrl + V)</strong> داخل المحادثة ليتم إرسال الملف فوراً!
+                                    </div>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(lastSavedPdfPath))
+                                {
+                                    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 6px; padding: 0.5rem 0.85rem; font-size: 0.8rem;">
+                                        <span style="color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 480px;">
+                                            <i class="fa-solid fa-check text-emerald me-1"></i> مكان الحفظ: @lastSavedPdfPath
+                                        </span>
+                                        <button type="button" class="btn btn-secondary" style="padding: 0.15rem 0.55rem; font-size: 0.75rem;" @onclick="OpenLastPdfFolder" title="فتح مجلد الفاتورة في الويندوز">
+                                            <i class="fa-solid fa-folder-open text-amber me-1"></i> فتح المجلد
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- TAB 2: TEXT MESSAGE MODE (Dedicated Full Height View) -->
+                @if (whatsAppSendMode == "text")
+                {
+                    <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                            <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700;">
+                                <i class="fa-solid fa-align-right text-indigo me-1"></i> معاينة نص الفاتورة كاملاً قبل الإرسال:
+                            </span>
+                            <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.7rem; font-size: 0.78rem; font-weight: 700;" @onclick="CopyWhatsAppText" title="نسخ نص الرسالة كاملاً">
+                                <i class="fa-solid fa-copy me-1 text-indigo"></i> @(isCopied ? "تم النسخ بنجاح!" : "نسخ النص كاملاً")
+                            </button>
+                        </div>
+
+                        <!-- Dedicated Full-Height Scrollable Box with Single Native Scrollbar -->
+                        <div style="flex: 1; min-height: 0; overflow-y: scroll; background: var(--bg-primary); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem 1.5rem; font-family: 'Segoe UI', Tahoma, monospace; font-size: 0.95rem; line-height: 1.8; color: var(--text-primary); direction: rtl; white-space: pre-wrap; word-break: break-word; user-select: text; box-shadow: inset 0 2px 6px rgba(0,0,0,0.06);">
+@whatsAppMessageText
+
+                            <div style="margin-top: 2rem; padding: 0.85rem 1rem; background: rgba(16, 185, 129, 0.12); border: 1.5px dashed #10b981; border-radius: 8px; text-align: center; color: #10b981; font-weight: 800; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-circle-check fa-lg"></i>
+                                <span>نهاية نص الفاتورة — كافة الأصناف والبيانات مكتملة وجاهزة للإرسال</span>
+                            </div>
+                            <div style="height: 3.5rem;"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer" style="padding: 0.85rem 1.25rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <button type="button" class="btn btn-secondary" @onclick="CloseWhatsAppSenderModal">إلغاء</button>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    @if (whatsAppSendMode == "text")
+                    {
+                        <button type="button" class="btn btn-secondary" style="font-weight: 700;" @onclick="CopyWhatsAppText" title="نسخ نص الرسالة كاملاً">
+                            <i class="fa-solid fa-copy me-1 text-indigo"></i> @(isCopied ? "تم النسخ بنجاح!" : "نسخ النص كاملاً")
+                        </button>
+                        <button type="button" class="btn btn-emerald" style="padding: 0.55rem 1.35rem; font-weight: 800; font-size: 0.92rem; background: #059669; border-color: #059669; color: #fff; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);" @onclick="ExecuteSendWhatsApp" disabled="@(selectedSaleForWhatsApp == null)">
+                            <i class="fa-brands fa-whatsapp fa-lg"></i>
+                            <i class="fa-solid fa-paper-plane"></i>
+                            <span>إرسال الرسالة النصية عبر واتساب</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-emerald" style="padding: 0.55rem 1.35rem; font-weight: 800; font-size: 0.92rem; background: #059669; border-color: #059669; color: #fff; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);" @onclick="SendInvoicePdfViaWhatsAppAsync" disabled="@(isPreparingPdf || selectedSaleForWhatsApp == null)">
+                            @if (isPreparingPdf)
+                            {
+                                <i class="fa-solid fa-spinner fa-spin"></i>
+                                <span>جاري تجهيز الفاتورة...</span>
+                            }
+                            else
+                            {
+                                <i class="fa-solid fa-file-pdf"></i>
+                                <i class="fa-brands fa-whatsapp"></i>
+                                <span>إرسال ملف الفاتورة PDF عبر واتساب</span>
+                            }
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========================================================================= -->
+<!-- ADD CUSTOMER MODAL -->
+<!-- ========================================================================= -->
+@if (showAddCustomerModal)
+{
+    <div class="modal-overlay" @onclick="() => showAddCustomerModal = false" style="z-index: 1050;">
+        <div class="modal-card" style="width: 480px; max-width: 95vw;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid fa-user-plus text-indigo me-2"></i> إضافة عميل جديد
+                </h3>
+                <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.55rem;" @onclick="() => showAddCustomerModal = false">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" style="padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;">
+                @if (!string.IsNullOrEmpty(newCustomerError))
+                {
+                    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171; padding: 0.6rem 0.85rem; border-radius: 6px; font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @newCustomerError
+                    </div>
+                }
+
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.82rem; font-weight: 700; margin-bottom: 0.25rem; display: block;">اسم العميل <span style="color: var(--accent-red);">*</span></label>
+                    <input type="text" class="form-control" @bind="newCustomerName" placeholder="أدخل اسم العميل بالكامل..." />
+                </div>
+
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.82rem; font-weight: 700; margin-bottom: 0.25rem; display: block;">رقم الهاتف / الواتساب <span style="color: var(--accent-red);">*</span></label>
+                    <input type="text" class="form-control" @bind="newCustomerPhone" placeholder="010xxxxxxxx" dir="ltr" style="text-align: left;" />
+                </div>
+
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.82rem; font-weight: 700; margin-bottom: 0.25rem; display: block;">العنوان ومحل الإقامة</label>
+                    <input type="text" class="form-control" @bind="newCustomerAddress" placeholder="المدينة، الشارع، أو علامة مميزة..." />
+                </div>
+
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.82rem; font-weight: 700; margin-bottom: 0.25rem; display: block;">البريد الإلكتروني (اختياري)</label>
+                    <input type="email" class="form-control" @bind="newCustomerEmail" placeholder="example@mail.com" dir="ltr" style="text-align: left;" />
+                </div>
+            </div>
+
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.6rem; padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary" @onclick="() => showAddCustomerModal = false" disabled="@isSavingCustomer">إلغاء</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveNewCustomerAsync" disabled="@isSavingCustomer">
+                    @if (isSavingCustomer)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-check me-1"></i> <span>حفظ العميل</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========================================================================= -->
+<!-- PAY DEBT MODAL -->
+<!-- ========================================================================= -->
+@if (selectedDebtToPay != null)
+{
+    <div class="modal-overlay" @onclick="() => selectedDebtToPay = null" style="z-index: 1060;">
+        <div class="modal-card" style="width: 480px; max-width: 95vw;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid fa-hand-holding-dollar text-red me-2"></i> تحصيل مديونية عميل
+                </h3>
+                <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.55rem;" @onclick="() => selectedDebtToPay = null">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" style="padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;">
+                <div style="background: var(--bg-primary); padding: 0.85rem; border-radius: 6px; font-size: 0.88rem; display: flex; flex-direction: column; gap: 0.35rem;">
+                    <div><strong>العميل:</strong> @selectedDebtToPay.CustomerName</div>
+                    <div><strong>فاتورة رقم:</strong> <code>@selectedDebtToPay.InvoiceNumber</code></div>
+                    <div><strong>إجمالي الفاتورة:</strong> @selectedDebtToPay.TotalAmount.ToString("N2") ج.م</div>
+                    <div><strong>المدفوع سابقاً:</strong> <span style="color: var(--accent-emerald);">@selectedDebtToPay.PaidAmount.ToString("N2") ج.م</span></div>
+                    <div><strong>المبلغ المتبقي كدين:</strong> <span style="color: #f87171; font-weight: 800;">@selectedDebtToPay.RemainingAmount.ToString("N2") ج.م</span></div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(debtPayError))
+                {
+                    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171; padding: 0.6rem 0.85rem; border-radius: 6px; font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @debtPayError
+                    </div>
+                }
+
+                <div class="form-group" style="margin: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+                        <label style="font-size: 0.82rem; font-weight: 700; margin: 0;">المبلغ المحصل الآن (ج.م) <span style="color: var(--accent-red);">*</span></label>
+                        <button type="button" class="btn btn-secondary" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;" @onclick="() => debtPayAmount = selectedDebtToPay.RemainingAmount">
+                            كامل المتبقي (@selectedDebtToPay.RemainingAmount.ToString("N2"))
+                        </button>
+                    </div>
+                    <input type="number" step="0.5" min="1" max="@selectedDebtToPay.RemainingAmount" class="form-control" @bind="debtPayAmount" style="font-size: 1.15rem; font-weight: 800; text-align: center; color: var(--accent-emerald);" />
+                </div>
+            </div>
+
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.6rem; padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary" @onclick="() => selectedDebtToPay = null" disabled="@isPayingDebt">إلغاء</button>
+                <button type="button" class="btn btn-primary" @onclick="SubmitDebtPaymentAsync" disabled="@(isPayingDebt || debtPayAmount <= 0)">
+                    @if (isPayingDebt)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري تسجيل التحصيل...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-check me-1"></i> <span>تأكيد التحصيل وإيداع بالخزينة</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .customers-page {
+        padding: 0 0.5rem 2rem 0.5rem;
+    }
+    .btn-whatsapp-icon:hover {
+        background: rgba(16, 185, 129, 0.25) !important;
+    }
+    .badge-emerald {
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--accent-emerald);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+</style>
+
+@code {
+    private List<CustomerDto> customers = new();
+    private List<CustomerDto> filteredCustomers = new();
+    private List<CustomerDebtDto> allDebts = new();
+    private List<InstallmentContractDto> installmentContracts = new();
+
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private IEnumerable<CustomerDto> PagedCustomers => filteredCustomers.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private void EnsureValidPage()
+    {
+        int maxPage = Math.Max(1, (int)Math.Ceiling((double)filteredCustomers.Count / pageSize));
+        if (currentPage > maxPage) currentPage = maxPage;
+    }
+
+    private bool isLoading = true;
+    private string searchQuery = string.Empty;
+    private string filterDebtType = "all"; // all, debt, clear
+    private string? alertMessage;
+    private bool alertIsError = false;
+
+    private decimal totalDebtsAmount => allDebts.Sum(d => d.RemainingAmount);
+    private int customersWithDebtCount => customers.Count(c => GetCustomerTotalDebt(c.Id) > 0);
+    private int customersWithCreditDebtCount => customers.Count(c => GetCustomerCreditDebt(c.Id) > 0);
+    private decimal totalInstallmentRemaining => installmentContracts.Sum(i => i.RemainingAmount);
+
+    // Customer Dossier
+    private CustomerDto? selectedCustomerForDossier;
+    private bool isLoadingDossier = false;
+    private string dossierActiveTab = "sales";
+    private List<SaleDto> customerSalesList = new();
+    private List<CustomerDebtDto> customerDebtsList = new();
+    private List<InstallmentContractDto> customerInstallmentsList = new();
+
+    // WhatsApp Sender Modal
+    private bool showWhatsAppSenderModal = false;
+    private CustomerDto? targetCustomerForWhatsApp;
+    private string whatsAppTargetPhone = string.Empty;
+    private List<SaleDto> availableSalesForWhatsApp = new();
+    private SaleDto? selectedSaleForWhatsApp;
+    private string whatsAppMessageText = string.Empty;
+    private bool isLoadingCustomerSalesForWhatsApp = false;
+    private bool isCopied = false;
+    private bool isPreparingPdf = false;
+    private string? lastSavedPdfPath;
+    private string whatsAppSendMode = "pdf"; // "pdf" or "text"
+
+    private void SetWhatsAppSendMode(string mode)
+    {
+        whatsAppSendMode = mode;
+        isCopied = false;
+    }
+
+    // Add Customer Modal
+    private bool showAddCustomerModal = false;
+    private string newCustomerName = string.Empty;
+    private string newCustomerPhone = string.Empty;
+    private string? newCustomerAddress;
+    private string? newCustomerEmail;
+    private string? newCustomerError;
+    private bool isSavingCustomer = false;
+
+    // Debt Payment Modal
+    private CustomerDebtDto? selectedDebtToPay;
+    private decimal debtPayAmount;
+    private bool isPayingDebt = false;
+    private string? debtPayError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CloudSync.OnDataImported += HandleSyncDataImported;
+        await LoadDataAsync();
+    }
+
+    private async void HandleSyncDataImported()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadDataAsync(silent: true);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        CloudSync.OnDataImported -= HandleSyncDataImported;
+    }
+
+    private async Task LoadDataAsync(bool silent = false)
+    {
+        if (!silent) isLoading = true;
+        try
+        {
+            customers = await ApiClient.GetCustomersAsync() ?? new();
+            allDebts = await ApiClient.GetCustomerDebtsAsync() ?? new();
+            installmentContracts = await ApiClient.GetInstallmentContractsAsync() ?? new();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"خطأ أثناء تحميل البيانات: {ex.Message}";
+            alertIsError = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private decimal GetCustomerCreditDebt(Guid customerId)
+    {
+        return allDebts
+            .Where(d => d.CustomerId == customerId && d.RemainingAmount > 0)
+            .Sum(d => d.RemainingAmount);
+    }
+
+    private decimal GetCustomerInstallmentDebt(Guid customerId)
+    {
+        return installmentContracts
+            .Where(i => i.CustomerId == customerId && i.RemainingAmount > 0)
+            .Sum(i => i.RemainingAmount);
+    }
+
+    private decimal GetCustomerTotalDebt(Guid customerId)
+    {
+        return GetCustomerCreditDebt(customerId) + GetCustomerInstallmentDebt(customerId);
+    }
+
+    private void ApplyFilters()
+    {
+        var query = customers.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var q = searchQuery.Trim().ToLowerInvariant();
+            query = query.Where(c =>
+                (c.Name != null && c.Name.ToLowerInvariant().Contains(q)) ||
+                (c.Phone != null && c.Phone.Contains(q)) ||
+                (c.Address != null && c.Address.ToLowerInvariant().Contains(q)));
+        }
+
+        if (filterDebtType == "debt")
+        {
+            query = query.Where(c => GetCustomerTotalDebt(c.Id) > 0);
+        }
+        else if (filterDebtType == "clear")
+        {
+            query = query.Where(c => GetCustomerTotalDebt(c.Id) <= 0);
+        }
+
+        filteredCustomers = query.OrderByDescending(c => GetCustomerTotalDebt(c.Id)).ThenBy(c => c.Name).ToList();
+        currentPage = 1;
+        EnsureValidPage();
+    }
+
+    private void SetFilterType(string type)
+    {
+        filterDebtType = type;
+        ApplyFilters();
+    }
+
+    // --- Dossier Operations ---
+    private async Task OpenCustomerDossier(CustomerDto cust)
+    {
+        selectedCustomerForDossier = cust;
+        dossierActiveTab = "sales";
+        isLoadingDossier = true;
+
+        customerDebtsList = allDebts.Where(d => d.CustomerId == cust.Id).ToList();
+        customerInstallmentsList = installmentContracts.Where(i => i.CustomerId == cust.Id).ToList();
+
+        try
+        {
+            customerSalesList = await ApiClient.GetSalesListAsync(customerId: cust.Id) ?? new();
+        }
+        catch
+        {
+            customerSalesList = new();
+        }
+        finally
+        {
+            isLoadingDossier = false;
+        }
+    }
+
+    private void CloseCustomerDossier()
+    {
+        selectedCustomerForDossier = null;
+        customerSalesList.Clear();
+        customerDebtsList.Clear();
+        customerInstallmentsList.Clear();
+    }
+
+    private async Task PrintSale(Guid saleId)
+    {
+        await Printer.PrintInvoiceAsync(saleId);
+    }
+
+    private string FormatPaymentMethod(string method)
+    {
+        return method switch
+        {
+            "Cash" => "نقداً",
+            "Visa" => "بطاقة / فيزا",
+            "Credit" => "آجل (دين)",
+            "Installment" => "تقسيط",
+            _ => method
+        };
+    }
+
+    // --- WhatsApp Operations ---
+    private async Task OpenSendInvoiceWhatsAppModal(CustomerDto cust)
+    {
+        targetCustomerForWhatsApp = cust;
+        whatsAppTargetPhone = cust.Phone ?? string.Empty;
+        showWhatsAppSenderModal = true;
+        isLoadingCustomerSalesForWhatsApp = true;
+        isCopied = false;
+        whatsAppSendMode = "pdf";
+
+        try
+        {
+            availableSalesForWhatsApp = await ApiClient.GetSalesListAsync(customerId: cust.Id) ?? new();
+            if (availableSalesForWhatsApp.Any())
+            {
+                var first = availableSalesForWhatsApp.First();
+                await SelectInvoiceForWhatsApp(first.Id);
+            }
+            else
+            {
+                selectedSaleForWhatsApp = null;
+                whatsAppMessageText = "لا توجد فواتير بيع مسجلة لهذا العميل حالياً.";
+            }
+        }
+        catch (Exception ex)
+        {
+            whatsAppMessageText = $"تعذر تحميل فواتير العميل: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingCustomerSalesForWhatsApp = false;
+        }
+    }
+
+    private async Task OnSelectedInvoiceChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && Guid.TryParse(e.Value.ToString(), out var saleId))
+        {
+            await SelectInvoiceForWhatsApp(saleId);
+        }
+    }
+
+    private async Task SelectInvoiceForWhatsApp(Guid saleId)
+    {
+        // Fetch detailed sale to ensure line items are present
+        var detailedSale = await ApiClient.GetSaleByIdAsync(saleId);
+        if (detailedSale != null)
+        {
+            selectedSaleForWhatsApp = detailedSale;
+        }
+        else
+        {
+            selectedSaleForWhatsApp = availableSalesForWhatsApp.FirstOrDefault(s => s.Id == saleId);
+        }
+
+        if (selectedSaleForWhatsApp != null)
+        {
+            whatsAppMessageText = WhatsAppInvoiceHelper.BuildInvoiceMessage(
+                selectedSaleForWhatsApp,
+                StoreState.StoreName,
+                StoreState.Settings?.Phone,
+                StoreState.Settings?.InvoiceFooterMessage);
+        }
+    }
+
+    private async Task SendSingleSaleWhatsApp(SaleDto sale, CustomerDto cust)
+    {
+        targetCustomerForWhatsApp = cust;
+        whatsAppTargetPhone = cust.Phone ?? string.Empty;
+        showWhatsAppSenderModal = true;
+        isLoadingCustomerSalesForWhatsApp = false;
+        isCopied = false;
+        whatsAppSendMode = "pdf";
+
+        availableSalesForWhatsApp = customerSalesList.Any() ? customerSalesList : new List<SaleDto> { sale };
+        await SelectInvoiceForWhatsApp(sale.Id);
+    }
+
+    private async Task SendInvoicePdfViaWhatsAppAsync()
+    {
+        if (selectedSaleForWhatsApp == null) return;
+        if (string.IsNullOrWhiteSpace(whatsAppTargetPhone))
+        {
+            alertMessage = "يرجى إدخال رقم هاتف واتساب للعميل.";
+            alertIsError = true;
+            return;
+        }
+
+        isPreparingPdf = true;
+        try
+        {
+            // 1. Fetch exact PDF bytes from backend (the one used for printing)
+            var pdfBytes = await Printer.GetInvoicePdfBytesAsync(selectedSaleForWhatsApp.Id, isThermal: false);
+
+            // 2. Save PDF file to Documents\POS_Invoices
+            var filePath = WhatsAppInvoiceHelper.SaveInvoicePdf(pdfBytes, selectedSaleForWhatsApp.InvoiceNumber);
+            lastSavedPdfPath = filePath;
+
+            // 3. Copy file to Windows Clipboard (enables Ctrl+V in WhatsApp)
+            WhatsAppInvoiceHelper.CopyFileToClipboard(filePath);
+
+            // 4. Open WhatsApp chat with clean intro
+            WhatsAppInvoiceHelper.OpenWhatsAppChatForPdf(
+                whatsAppTargetPhone,
+                selectedSaleForWhatsApp.InvoiceNumber,
+                StoreState.StoreName);
+
+            alertMessage = $"📄 تم تجهيز ونسخ ملف الفاتورة ({System.IO.Path.GetFileName(filePath)}) إلى الحافظة بنجاح! بمجرد فتح محادثة الواتساب، اضغط (Ctrl + V) لإرسال الملف للعميل فوراً.";
+            alertIsError = false;
+            CloseWhatsAppSenderModal();
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"تعذر تجهيز ملف الفاتورة: {ex.Message}";
+            alertIsError = true;
+        }
+        finally
+        {
+            isPreparingPdf = false;
+        }
+    }
+
+    private void OpenLastPdfFolder()
+    {
+        if (!string.IsNullOrEmpty(lastSavedPdfPath))
+        {
+            WhatsAppInvoiceHelper.ShowFileInExplorer(lastSavedPdfPath);
+        }
+    }
+
+    private async Task DownloadInvoicePdfDirectly()
+    {
+        if (selectedSaleForWhatsApp == null) return;
+        try
+        {
+            var pdfBytes = await Printer.GetInvoicePdfBytesAsync(selectedSaleForWhatsApp.Id, isThermal: false);
+            var base64 = Convert.ToBase64String(pdfBytes);
+            var cleanInv = string.Concat(selectedSaleForWhatsApp.InvoiceNumber.Split(System.IO.Path.GetInvalidFileNameChars()));
+            await JS.InvokeVoidAsync("downloadFileFromBase64", $"فاتورة_{cleanInv}.pdf", "application/pdf", base64);
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"تعذر تحميل ملف الفاتورة: {ex.Message}";
+            alertIsError = true;
+        }
+    }
+
+    private void ExecuteSendWhatsApp()
+    {
+        if (string.IsNullOrWhiteSpace(whatsAppTargetPhone))
+        {
+            alertMessage = "يرجى إدخال رقم هاتف واتساب للعميل.";
+            alertIsError = true;
+            return;
+        }
+
+        var ok = WhatsAppInvoiceHelper.OpenWhatsApp(whatsAppTargetPhone, whatsAppMessageText);
+        if (ok)
+        {
+            alertMessage = $"تم فتح محادثة واتساب مع العميل ({targetCustomerForWhatsApp?.Name}) بنجاح.";
+            alertIsError = false;
+            CloseWhatsAppSenderModal();
+        }
+        else
+        {
+            alertMessage = "تعذر فتح تطبيق الواتساب، تأكد من وجود متصفح أو تطبيق واتساب مثبت على الجهاز.";
+            alertIsError = true;
+        }
+    }
+
+    private async Task CopyWhatsAppText()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", whatsAppMessageText);
+            isCopied = true;
+        }
+        catch
+        {
+            isCopied = false;
+        }
+    }
+
+    private void CloseWhatsAppSenderModal()
+    {
+        showWhatsAppSenderModal = false;
+        targetCustomerForWhatsApp = null;
+        selectedSaleForWhatsApp = null;
+        whatsAppMessageText = string.Empty;
+        whatsAppSendMode = "pdf";
+    }
+
+    // --- Add Customer ---
+    private void OpenAddCustomerModal()
+    {
+        newCustomerName = string.Empty;
+        newCustomerPhone = string.Empty;
+        newCustomerAddress = null;
+        newCustomerEmail = null;
+        newCustomerError = null;
+        showAddCustomerModal = true;
+    }
+
+    private async Task SaveNewCustomerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newCustomerName))
+        {
+            newCustomerError = "يرجى إدخال اسم العميل.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(newCustomerPhone))
+        {
+            newCustomerError = "يرجى إدخال رقم هاتف العميل.";
+            return;
+        }
+
+        isSavingCustomer = true;
+        newCustomerError = null;
+
+        var req = new CreateCustomerRequest(newCustomerName.Trim(), newCustomerPhone.Trim(), newCustomerEmail?.Trim(), newCustomerAddress?.Trim());
+        var (id, err) = await ApiClient.CreateCustomerAsync(req);
+        isSavingCustomer = false;
+
+        if (id.HasValue)
+        {
+            showAddCustomerModal = false;
+            alertMessage = $"تمت إضافة العميل ({newCustomerName}) بنجاح.";
+            alertIsError = false;
+            await LoadDataAsync();
+            CloudSync.RecordLocalChange();
+        }
+        else
+        {
+            newCustomerError = err ?? "فشل حفظ بيانات العميل.";
+        }
+    }
+
+    // --- Debt Operations ---
+    private void OpenQuickPayDebt(CustomerDto cust)
+    {
+        var debt = allDebts.FirstOrDefault(d => d.CustomerId == cust.Id && d.RemainingAmount > 0);
+        if (debt != null)
+        {
+            OpenPaySpecificDebtModal(debt);
+        }
+        else
+        {
+            alertMessage = "لا توجد فواتير دين مفتوحة حالياً لهذا العميل.";
+            alertIsError = true;
+        }
+    }
+
+    private void OpenPaySpecificDebtModal(CustomerDebtDto debt)
+    {
+        selectedDebtToPay = debt;
+        debtPayAmount = debt.RemainingAmount;
+        debtPayError = null;
+    }
+
+    private async Task SubmitDebtPaymentAsync()
+    {
+        if (selectedDebtToPay == null || debtPayAmount <= 0) return;
+        if (debtPayAmount > selectedDebtToPay.RemainingAmount + 0.01m)
+        {
+            debtPayError = "المبلغ المحصل أكبر من المتبقي على الفاتورة.";
+            return;
+        }
+
+        isPayingDebt = true;
+        debtPayError = null;
+
+        var (success, err) = await ApiClient.PayCustomerDebtAsync(selectedDebtToPay.SaleId, debtPayAmount);
+        isPayingDebt = false;
+
+        if (success)
+        {
+            alertMessage = $"تم تحصيل مبلغ {debtPayAmount:N2} ج.م من العميل ({selectedDebtToPay.CustomerName}) بنجاح.";
+            alertIsError = false;
+            selectedDebtToPay = null;
+
+            await LoadDataAsync();
+            if (selectedCustomerForDossier != null)
+            {
+                await OpenCustomerDossier(selectedCustomerForDossier);
+            }
+            CloudSync.RecordLocalChange();
+            _ = Task.Run(async () => await CloudSync.SyncDebtsAndInstallmentsOnlyAsync());
+        }
+        else
+        {
+            debtPayError = err ?? "فشل تسجيل تحصيل الدفعة.";
+        }
+    }
+}

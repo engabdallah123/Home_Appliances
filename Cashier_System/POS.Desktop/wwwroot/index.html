@@ -255,9 +255,8 @@
                     return;
                 }
 
-                // Global shortcut for Calculator: F10 or Alt + C
-                const isAltC = e.altKey && (e.key === 'c' || e.key === 'C' || e.key === 'ؤ' || e.code === 'KeyC');
-                if (e.key === 'F10' || isAltC) {
+                // Global shortcut for Calculator: F10
+                if (e.key === 'F10') {
                     e.preventDefault();
                     e.stopPropagation();
                     if (dotNetHelper) {
@@ -317,6 +316,9 @@
                 const altKeyMap = {
                     'p': 'pos',               // Alt + P -> POS (شاشة البيع)
                     'KeyP': 'pos',
+                    'c': 'customers',         // Alt + C -> Customers (دليل وسجلات العملاء)
+                    'KeyC': 'customers',
+                    'ؤ': 'customers',
                     'm': 'products',          // Alt + M -> Montajat / المخزون (المنتجات)
                     'KeyM': 'products',
                     'b': 'price-check',       // Alt + B -> Barcode / Check Price (استعلام الأسعار)
@@ -327,6 +329,7 @@
                     'KeyS': 'shifts',
                     'r': 'returns/sales',     // Alt + R -> Sales Returns (مرتجع المبيعات)
                     'KeyR': 'returns/sales',
+                    'ق': 'returns/sales',
                     'l': 'sales',             // Alt + L -> Sales List (سجل المبيعات)
                     'KeyL': 'sales',
                     'u': 'purchases',         // Alt + U -> Purchases (المشتريات)
@@ -335,6 +338,7 @@
                     'KeyE': 'expenses',
                     't': 'returns/purchases', // Alt + T -> Purchase Returns (مرتجع المشتريات)
                     'KeyT': 'returns/purchases',
+                    'ف': 'returns/purchases',
                     'd': 'debts',             // Alt + D -> Debts (فواتير الديون)
                     'KeyD': 'debts',
                     'y': 'monthly-report',     // Alt + Y -> Monthly Report (نتيجة المبيعات الشهرية)

@@ -151,7 +151,19 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
   }
 
   void _openPayModal(SaleSummaryModel contract, bool isDark) {
-    final amountCtrl = TextEditingController(text: contract.remainingAmount > 0 ? (contract.totalAmount / 12).toStringAsFixed(0) : "0");
+    final months = contract.numberOfMonths > 0 ? contract.numberOfMonths : 12;
+    double suggested = contract.monthlyInstallmentAmount > 0
+        ? contract.monthlyInstallmentAmount
+        : (contract.totalAmount > 0 ? (contract.totalAmount / months) : 0);
+
+    if (contract.remainingAmount > 0 && (suggested <= 0 || suggested > contract.remainingAmount)) {
+      suggested = contract.remainingAmount;
+    }
+
+    final defaultText = suggested > 0
+        ? (suggested % 1 == 0 ? suggested.toInt().toString() : suggested.toStringAsFixed(2))
+        : "0";
+    final amountCtrl = TextEditingController(text: defaultText);
     final notesCtrl = TextEditingController();
 
     showModalBottomSheet(
@@ -210,6 +222,15 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
                       title: "إجمالي العقد",
                       value: "${_currencyFormatter.format(contract.totalAmount)} ج.م",
                       color: AppColors.primaryLight,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildInfoTag(
+                      isDark,
+                      title: "المطلوب شهرياً",
+                      value: "${_currencyFormatter.format(suggested)} ج.م ($months شهر)",
+                      color: AppColors.cyan,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -759,6 +780,19 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerRight,
                       child: Text("${_currencyFormatter.format(c.remainingAmount)} ج.م", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.danger)),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("القسط الشهري", style: TextStyle(fontSize: 10, color: AppColors.getTextMuted(isDark))),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text("${_currencyFormatter.format(c.calculatedMonthlyAmount)} ج.م", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.cyan)),
                     ),
                   ],
                 ),

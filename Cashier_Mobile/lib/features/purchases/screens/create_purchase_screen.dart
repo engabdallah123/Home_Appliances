@@ -8,6 +8,7 @@ import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/camera_barcode_scanner.dart';
 import '../../products/models/product_model.dart';
+import '../../products/screens/add_edit_product_screen.dart';
 import '../../products/providers/products_provider.dart';
 import '../../suppliers/models/supplier_model.dart';
 import '../../suppliers/providers/suppliers_provider.dart';
@@ -173,6 +174,27 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                             ],
                           ),
                         ),
+                        TextButton.icon(
+                          style: TextButton.styleFrom(
+                            backgroundColor: AppColors.primary.withOpacity(0.12),
+                            foregroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.add_box_outlined, size: 16),
+                          label: const Text("صنف جديد", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          onPressed: () async {
+                            final res = await Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const AddEditProductScreen()),
+                            );
+                            if (res == true) {
+                              await prodProv.fetchProducts();
+                              setModalState(() {});
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 4),
                         IconButton(
                           icon: Icon(Icons.close, color: AppColors.getTextSecondary(isDark)),
                           onPressed: () => Navigator.pop(ctx),
@@ -381,7 +403,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                 style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 16),
                               ),
                               Text(
-                                "جهاز كهربائي (${product.modelNumber ?? 'عام'}) - وحدة الصنف: قطعة",
+                                "جهاز كهربائي (${product.modelNumber ?? 'عام'}) - وحدة الصنف: ${product.baseUnit.isNotEmpty ? product.baseUnit : 'قطعة'}",
                                 style: const TextStyle(color: AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.w600),
                               ),
                             ],
@@ -402,14 +424,14 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text("الكمية المورّدة (قطعة) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
+                              Text("الكمية المورّدة (${product.baseUnit.isNotEmpty ? product.baseUnit : 'قطعة'}) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
                               const SizedBox(height: 6),
                               TextField(
                                 controller: qtyCtrl,
                                 keyboardType: TextInputType.number,
                                 style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 16),
                                 decoration: InputDecoration(
-                                  suffixText: "قطعة",
+                                  suffixText: product.baseUnit.isNotEmpty ? product.baseUnit : "قطعة",
                                   filled: true,
                                   fillColor: AppColors.getBackground(isDark),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -424,7 +446,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text("سعر شراء القطعة (ج.م) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
+                              Text("سعر شراء ${product.baseUnit.isNotEmpty ? product.baseUnit : 'القطعة'} (ج.م) *", style: TextStyle(color: AppColors.getTextSecondary(isDark), fontSize: 12, fontWeight: FontWeight.w600)),
                               const SizedBox(height: 6),
                               TextField(
                                 controller: costCtrl,
@@ -517,7 +539,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                             if (existingItem != null) {
                               existingItem.quantity = currentQty;
                               existingItem.unitCost = currentCost;
-                              existingItem.unit = 'قطعة';
+                              existingItem.unit = product.baseUnit.isNotEmpty ? product.baseUnit : 'قطعة';
                               existingItem.conversionFactor = 1;
                               existingItem.isWeighable = false;
                             } else {
@@ -526,17 +548,18 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                 _items[idx].quantity += currentQty;
                                 _items[idx].unitCost = currentCost;
                               } else {
+                                final pUnit = product.baseUnit.isNotEmpty ? product.baseUnit : 'قطعة';
                                 _items.add(CreatePurchaseItemModel(
                                   productId: product.id,
                                   productName: product.nameAr,
                                   barcode: product.barcode,
                                   quantity: currentQty,
                                   unitCost: currentCost,
-                                  unit: 'قطعة',
+                                  unit: pUnit,
                                   isWeighable: false,
                                   conversionFactor: 1,
-                                  parentUnit: 'قطعة',
-                                  baseUnit: 'قطعة',
+                                  parentUnit: product.parentUnit ?? pUnit,
+                                  baseUnit: pUnit,
                                   shelfLifeDays: null,
                                   expiryDate: null,
                                   batchNumber: null,
@@ -897,6 +920,27 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                     label: const Text("إضافة صنف", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                                     onPressed: _openProductPicker,
                                   ),
+                                  const SizedBox(width: 6),
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.primaryLight,
+                                      side: const BorderSide(color: AppColors.primaryLight),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    icon: const Icon(Icons.add_box_outlined, size: 15),
+                                    label: const Text("صنف جديد", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                    onPressed: () async {
+                                      final res = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const AddEditProductScreen()),
+                                      );
+                                      if (res == true) {
+                                        final prodProv = Provider.of<ProductsProvider>(context, listen: false);
+                                        await prodProv.fetchProducts();
+                                      }
+                                    },
+                                  ),
                                 ],
                               ),
                             ],
@@ -968,7 +1012,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                           Expanded(
                                             flex: 4,
                                             child: Text(
-                                              "${item.quantity.toInt()} قطعة",
+                                              "${item.quantity.toInt()} ${item.unit}",
                                               style: TextStyle(color: AppColors.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 13),
                                               overflow: TextOverflow.ellipsis,
                                             ),

@@ -109,16 +109,23 @@ namespace POS.CloudAPI.Controllers
                         TargetCategoryName = o.TargetCategoryName,
                         TargetBrandId = o.TargetBrandId,
                         TargetBrandName = o.TargetBrandName,
-                        Items = (o.Items ?? new List<CloudOfferItem>()).Select(i => new
+                        Items = (o.Items ?? new List<CloudOfferItem>()).Select(i =>
                         {
-                            Id = i.Id,
-                            ProductId = i.ProductId,
-                            ProductName = i.ProductName,
-                            ProductBarcode = i.ProductBarcode,
-                            Quantity = (double)i.Quantity,
-                            UnitPrice = (double)i.OriginalUnitPrice,
-                            SellingPrice = (double)i.OriginalUnitPrice,
-                            OriginalUnitPrice = (double)i.OriginalUnitPrice
+                            var prodName = !string.IsNullOrWhiteSpace(i.ProductName) 
+                                ? i.ProductName 
+                                : (targetProducts.TryGetValue(i.ProductId, out var tp) ? tp.NameAr : "جهاز");
+                            return new
+                            {
+                                Id = i.Id,
+                                ProductId = i.ProductId,
+                                ProductName = prodName,
+                                NameAr = prodName,
+                                ProductBarcode = i.ProductBarcode,
+                                Quantity = (double)i.Quantity,
+                                UnitPrice = (double)i.OriginalUnitPrice,
+                                SellingPrice = (double)i.OriginalUnitPrice,
+                                OriginalUnitPrice = (double)i.OriginalUnitPrice
+                            };
                         }).ToList()
                     };
                 }).ToList();

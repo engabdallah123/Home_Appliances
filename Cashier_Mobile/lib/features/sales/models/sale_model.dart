@@ -195,6 +195,11 @@ class SaleSummaryModel {
   final String? syncError;
   final int itemsCount;
   final DateTime createdAt;
+  final int numberOfMonths;
+  final double interestPercentage;
+  final double monthlyInstallmentAmount;
+  final String? guarantorName;
+  final String? guarantorPhone;
 
   SaleSummaryModel({
     required this.id,
@@ -217,7 +222,18 @@ class SaleSummaryModel {
     this.syncError,
     this.itemsCount = 0,
     required this.createdAt,
+    this.numberOfMonths = 12,
+    this.interestPercentage = 0,
+    this.monthlyInstallmentAmount = 0,
+    this.guarantorName,
+    this.guarantorPhone,
   });
+
+  double get calculatedMonthlyAmount {
+    if (monthlyInstallmentAmount > 0) return monthlyInstallmentAmount;
+    final months = numberOfMonths > 0 ? numberOfMonths : 12;
+    return totalAmount > 0 ? (totalAmount / months) : 0;
+  }
 
   factory SaleSummaryModel.fromJson(Map<String, dynamic> json) {
     return SaleSummaryModel(
@@ -247,6 +263,11 @@ class SaleSummaryModel {
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),
+      numberOfMonths: (json['numberOfMonths'] as num?)?.toInt() ?? 12,
+      interestPercentage: (json['interestPercentage'] as num?)?.toDouble() ?? 0.0,
+      monthlyInstallmentAmount: (json['monthlyInstallmentAmount'] as num?)?.toDouble() ?? 0.0,
+      guarantorName: json['guarantorName']?.toString(),
+      guarantorPhone: json['guarantorPhone']?.toString(),
     );
   }
 }

@@ -10,6 +10,7 @@ import '../../products/providers/products_provider.dart';
 import '../models/sale_model.dart';
 import '../providers/sales_provider.dart';
 import 'sales_list_screen.dart';
+import '../../../core/services/whatsapp_helper.dart';
 
 class MobilePosScreen extends StatefulWidget {
   const MobilePosScreen({super.key});
@@ -1337,6 +1338,31 @@ class _MobilePosScreenState extends State<MobilePosScreen> {
                   );
                 },
                 child: const Text("عرض قائمة الفواتير", style: TextStyle(color: Colors.white70)),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.send_rounded, size: 16),
+                label: const Text("واتساب"),
+                onPressed: () {
+                  final msg = WhatsAppHelper.buildInvoiceReceiptMessage(
+                    invoiceNumber: created.invoiceNumber,
+                    customerName: created.customerName,
+                    customerPhone: created.customerPhone,
+                    date: created.createdAt,
+                    totalAmount: created.totalAmount,
+                    paidAmount: created.paidAmount,
+                    remainingAmount: created.remainingAmount,
+                    paymentMethod: created.paymentMethod,
+                  );
+                  WhatsAppHelper.openWhatsApp(
+                    phone: created.customerPhone,
+                    message: msg,
+                  );
+                },
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(

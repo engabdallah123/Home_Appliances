@@ -60,6 +60,10 @@ class ApiEndpoints {
   static const String returns = "/api/cloud/returns";
   static String returnDetails(String id) => "/api/cloud/returns/$id";
 
+  // Customers (العملاء وكشف الحساب والواتساب)
+  static const String customers = "/api/cloud/customers";
+  static const String customerDossier = "/api/cloud/customers/dossier";
+
   // Sales & Mobile POS (المبيعات ونقاط البيع المتنقلة)
   static const String sales = "/api/cloud/sales";
   static String saleDetails(String id) => "/api/cloud/sales/$id";

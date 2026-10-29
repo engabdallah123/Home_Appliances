@@ -19,6 +19,7 @@ import 'features/purchases/providers/purchases_provider.dart';
 import 'features/returns/providers/returns_provider.dart';
 import 'features/sales/providers/sales_provider.dart';
 import 'features/suppliers/providers/suppliers_provider.dart';
+import 'features/customers/providers/customers_provider.dart';
 
 import 'dart:ui';
 import 'core/widgets/safe_error_widget.dart';
@@ -68,6 +69,7 @@ class CashierMobileApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => DebtsProvider()),
         ChangeNotifierProvider(create: (_) => ExpensesProvider()),
         ChangeNotifierProvider(create: (_) => SalesProvider()),
+        ChangeNotifierProvider(create: (_) => CustomersProvider()),
         ChangeNotifierProvider(create: (_) => NotificationsProvider(), lazy: false),
       ],
       child: Consumer<ThemeProvider>(

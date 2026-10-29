@@ -53,6 +53,7 @@ namespace POS.Desktop.Services.State
         public List<CartItemModel> Items { get; } = new();
         public Guid? CustomerId { get; set; }
         public string CustomerName { get; set; } = "Walk-in Customer";
+        public string? CustomerPhone { get; set; }
         public decimal OverallDiscount { get; set; }
         public string PaymentMethod { get; set; } = "Cash";
 
@@ -266,6 +267,7 @@ namespace POS.Desktop.Services.State
             Items.Clear();
             CustomerId = null;
             CustomerName = "Walk-in Customer";
+            CustomerPhone = null;
             OverallDiscount = 0;
             PaymentMethod = "Cash";
             NotifyStateChanged();

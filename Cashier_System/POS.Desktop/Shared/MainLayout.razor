@@ -166,6 +166,13 @@
                                 <span class="item-desc">فواتير البيع وأرشيف الكاشير</span>
                             </div>
                         </NavLink>
+                           <NavLink class="dropdown-item" href="customers" @onclick="CloseAllMenus">
+                            <i class="fa-solid fa-users text-indigo"></i>
+                            <div class="item-text">
+                                <span class="item-title">دليل وسجلات العملاء</span>
+                                <span class="item-desc">كشف الحساب، فواتير واتساب، والديون</span>
+                            </div>
+                        </NavLink>
                         @if (IsAdminOrManager)
                         {
                             <NavLink class="dropdown-item" href="monthly-report" @onclick="CloseAllMenus">
@@ -288,6 +295,7 @@
                 @if (openMenu == "finance")
                 {
                     <div class="top-nav-dropdown-menu">
+                     
                         <NavLink class="dropdown-item" href="shifts" @onclick="CloseAllMenus">
                             <i class="fa-solid fa-clock-rotate-left text-blue"></i>
                             <div class="item-text">
@@ -379,7 +387,7 @@
                         <NavLink class="dropdown-item" href="price-check" @onclick="CloseAllMenus">
                             <i class="fa-solid fa-tag text-cyan"></i>
                             <div class="item-text">
-                                <span class="item-title">الاستعلام عن السعر [Alt+B]</span>
+                                <span class="item-title">الاستعلام عن السعر</span>
                                 <span class="item-desc">استعلام فوري عن سعر ومواصفات الأجهزة</span>
                             </div>
                         </NavLink>
@@ -387,7 +395,7 @@
                         <button type="button" class="dropdown-item" @onclick='() => { CloseAllMenus(); CalcState.Toggle(); }'>
                             <i class="fa-solid fa-calculator text-emerald"></i>
                             <div class="item-text">
-                                <span class="item-title">الآلة الحاسبة الذكية [F10 / Alt+C]</span>
+                                <span class="item-title">الآلة الحاسبة الذكية</span>
                                 <span class="item-desc">حاسبة سريعة مع حساب الباقي والنسب</span>
                             </div>
                         </button>

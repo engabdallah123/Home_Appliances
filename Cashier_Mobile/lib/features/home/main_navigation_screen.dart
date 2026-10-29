@@ -19,6 +19,7 @@ import '../sales/screens/installments_screen.dart';
 import '../sales/screens/mobile_pos_screen.dart';
 import '../sales/screens/reservations_screen.dart';
 import '../sales/screens/sales_list_screen.dart';
+import '../customers/screens/customers_list_screen.dart';
 import '../settings/screens/settings_screen.dart';
 import '../settings/screens/users_list_screen.dart';
 import '../suppliers/screens/suppliers_list_screen.dart';
@@ -151,6 +152,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   icon: Icons.bookmark_added_rounded,
                   color: AppColors.accent,
                   onTap: () => _navigate(ctx, const ReservationsScreen()),
+                ),
+                _HubItem(
+                  title: "دليل العملاء",
+                  icon: Icons.people_alt_rounded,
+                  color: AppColors.cyan,
+                  onTap: () => _navigate(ctx, const CustomersListScreen()),
                 ),
                 _HubItem(
                   title: "مرتجع المبيعات",

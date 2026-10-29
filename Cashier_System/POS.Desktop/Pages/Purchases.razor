@@ -15,6 +15,187 @@
     .search-result-item:hover {
         background: rgba(99, 102, 241, 0.15) !important;
     }
+
+    /* Cloud Sync Status Toast Alert */
+    .sync-toast-alert {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(14, 165, 233, 0.15);
+        border: 1.5px solid #0284c7;
+        color: #bae6fd;
+        border-radius: 0.75rem;
+        padding: 0.75rem 1.25rem;
+        margin-bottom: 1.25rem;
+    }
+    .sync-toast-alert .sync-icon {
+        font-size: 1.2rem;
+        color: #38bdf8;
+    }
+    .sync-toast-alert .sync-close-btn {
+        background: none;
+        border: none;
+        color: #bae6fd;
+        cursor: pointer;
+        font-size: 1rem;
+    }
+    [data-theme="light"] .sync-toast-alert {
+        background: #e0f2fe;
+        border-color: #0284c7;
+        color: #0369a1;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15);
+    }
+    [data-theme="light"] .sync-toast-alert .sync-icon {
+        color: #0284c7;
+    }
+    [data-theme="light"] .sync-toast-alert .sync-close-btn {
+        color: #0369a1;
+    }
+
+    /* Draft Stock Invoice Recovery Alert Banner */
+    .draft-notice-banner {
+        background: linear-gradient(90deg, rgba(245, 158, 11, 0.15), rgba(234, 88, 12, 0.1));
+        border: 1.5px solid #f59e0b;
+        border-radius: 0.75rem;
+        padding: 0.9rem 1.25rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+    }
+    .draft-notice-banner .draft-icon-box {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: rgba(245, 158, 11, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fbbf24;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+    .draft-notice-banner .draft-title {
+        font-weight: 700;
+        color: #fef08a;
+        font-size: 1rem;
+    }
+    .draft-notice-banner .draft-subtitle {
+        font-size: 0.85rem;
+        color: #cbd5e1;
+        margin-top: 0.2rem;
+    }
+    .draft-notice-banner .draft-amount {
+        color: #34d399;
+    }
+    .draft-notice-banner .btn-discard-draft {
+        background: rgba(239, 68, 68, 0.15);
+        border-color: rgba(239, 68, 68, 0.4);
+        color: #fca5a5;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    [data-theme="light"] .draft-notice-banner {
+        background: linear-gradient(90deg, #fffbeb, #fef3c7);
+        border-color: #d97706;
+        box-shadow: 0 4px 12px rgba(217, 119, 6, 0.15);
+    }
+    [data-theme="light"] .draft-notice-banner .draft-icon-box {
+        background: #fde68a;
+        color: #b45309;
+    }
+    [data-theme="light"] .draft-notice-banner .draft-title {
+        color: #92400e;
+    }
+    [data-theme="light"] .draft-notice-banner .draft-subtitle {
+        color: #334155;
+    }
+    [data-theme="light"] .draft-notice-banner .draft-amount {
+        color: #047857;
+    }
+    [data-theme="light"] .draft-notice-banner .btn-discard-draft {
+        background: #fee2e2;
+        border-color: #ef4444;
+        color: #991b1b;
+    }
+
+    /* Auto-save Draft Banner inside Invoice Modals */
+    .draft-modal-notice {
+        background: rgba(16, 185, 129, 0.08);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        border-radius: 0.5rem;
+        padding: 0.55rem 0.85rem;
+        margin-bottom: 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.82rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .draft-modal-notice .draft-notice-text {
+        color: #34d399;
+        font-weight: 600;
+    }
+    [data-theme="light"] .draft-modal-notice {
+        background: #ecfdf5;
+        border: 1px solid #10b981;
+    }
+    [data-theme="light"] .draft-modal-notice .draft-notice-text {
+        color: #065f46;
+    }
+
+    /* Error alert in modals */
+    .alert-danger-custom {
+        background-color: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+    }
+    [data-theme="light"] .alert-danger-custom {
+        background-color: #fef2f2;
+        border: 1.5px solid #ef4444;
+        color: #b91c1c;
+        font-weight: 600;
+    }
+
+    /* Header cloud sync button */
+    .btn-sync-cloud {
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        background: rgba(56, 189, 248, 0.15);
+        border: 1.5px solid #38bdf8;
+        color: #38bdf8;
+    }
+    [data-theme="light"] .btn-sync-cloud {
+        background: #e0f2fe;
+        border: 1.5px solid #0284c7;
+        color: #0284c7;
+    }
+
+    /* Footer save draft button */
+    .btn-save-draft {
+        background: rgba(16, 185, 129, 0.15);
+        border-color: rgba(16, 185, 129, 0.4);
+        color: #34d399;
+        font-weight: 600;
+    }
+    [data-theme="light"] .btn-save-draft {
+        background: #d1fae5;
+        border-color: #10b981;
+        color: #065f46;
+    }
 </style>
 
 <div>
@@ -24,7 +205,7 @@
             <p class="page-subtitle">تسجيل فواتير توريد البضائع وإدارة بيانات الموردين</p>
         </div>
         <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-            <button class="btn btn-secondary" style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(56, 189, 248, 0.15); border: 1.5px solid #38bdf8; color: #38bdf8;" @onclick="TriggerCloudSync" disabled="@CloudSync.IsSyncing" title="مزامنة فواتير المشتريات المسجلة من تطبيق الموبايل">
+            <button class="btn btn-secondary btn-sync-cloud" @onclick="TriggerCloudSync" disabled="@CloudSync.IsSyncing" title="مزامنة فواتير المشتريات المسجلة من تطبيق الموبايل">
                 <i class="fa-solid fa-cloud-arrow-down @(CloudSync.IsSyncing ? "fa-spin" : "")"></i>
                 <span>@(CloudSync.IsSyncing ? "جارِ المزامنة..." : "مزامنة السحاب ☁️")</span>
             </button>
@@ -41,12 +222,12 @@
     <!-- Cloud Sync Status Toast Alert -->
     @if (showSyncToast)
     {
-        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(14, 165, 233, 0.15); border: 1.5px solid #0284c7; color: #bae6fd; border-radius: 0.75rem; padding: 0.75rem 1.25rem; margin-bottom: 1.25rem;">
+        <div class="sync-toast-alert">
             <div style="display: flex; align-items: center; gap: 0.6rem;">
-                <i class="fa-solid fa-cloud-arrow-down" style="font-size: 1.2rem; color: #38bdf8;"></i>
+                <i class="fa-solid fa-cloud-arrow-down sync-icon"></i>
                 <span style="font-weight: 600;">@syncToastMessage</span>
             </div>
-            <button type="button" style="background: none; border: none; color: #bae6fd; cursor: pointer; font-size: 1rem;" @onclick="() => showSyncToast = false">
+            <button type="button" class="sync-close-btn" @onclick="() => showSyncToast = false">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
@@ -55,17 +236,17 @@
     <!-- Draft Stock Invoice Recovery Alert Banner -->
     @if (DraftState.HasDraft && !showAddPurchaseModal)
     {
-        <div class="draft-notice-banner" style="background: linear-gradient(90deg, rgba(245, 158, 11, 0.15), rgba(234, 88, 12, 0.1)); border: 1.5px solid #f59e0b; border-radius: 0.75rem; padding: 0.9rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);">
+        <div class="draft-notice-banner">
             <div style="display: flex; align-items: center; gap: 0.85rem;">
-                <div style="width: 42px; height: 42px; border-radius: 50%; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; color: #fbbf24; font-size: 1.25rem;">
+                <div class="draft-icon-box">
                     <i class="fa-solid fa-clock-rotate-left"></i>
                 </div>
                 <div>
-                    <div style="font-weight: 700; color: #fef08a; font-size: 1rem;">
+                    <div class="draft-title">
                         ⚠️ توجد مسودة فاتورة مخزون غير محفوظة مسبقاً!
                     </div>
-                    <div style="font-size: 0.85rem; color: #cbd5e1; margin-top: 0.2rem;">
-                        تحتوي سلة المخزون على <strong>@DraftState.ItemsCount صنف</strong> بإجمالي <strong style="color: #34d399;">@DraftState.TotalAmount.ToString("N2") ج.م</strong>. يمكنك استرجاعها لمتابعة إدخال البضائع أو حفظها.
+                    <div class="draft-subtitle">
+                        تحتوي سلة المخزون على <strong>@DraftState.ItemsCount صنف</strong> بإجمالي <strong class="draft-amount">@DraftState.TotalAmount.ToString("N2") ج.م</strong>. يمكنك استرجاعها لمتابعة إدخال البضائع أو حفظها.
                     </div>
                 </div>
             </div>
@@ -74,7 +255,7 @@
                     <i class="fa-solid fa-folder-open"></i>
                     <span>استرجاع الفاتورة ومتابعة الإدخال</span>
                 </button>
-                <button class="btn btn-secondary" style="background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;" @onclick="DiscardDraftInvoice">
+                <button class="btn btn-secondary btn-discard-draft" @onclick="DiscardDraftInvoice">
                     <i class="fa-solid fa-trash"></i>
                     <span>حذف المسودة</span>
                 </button>
@@ -296,7 +477,7 @@
             <div class="modal-body">
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                    <div class="alert-danger-custom">
                         <i class="fa-solid fa-circle-exclamation me-1"></i> @errorMessage
                     </div>
                 }
@@ -362,7 +543,7 @@
             <div class="modal-body">
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                    <div class="alert-danger-custom">
                         <i class="fa-solid fa-circle-exclamation me-1"></i> @errorMessage
                     </div>
                 }
@@ -428,15 +609,15 @@
             <div class="modal-body">
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                    <div class="alert-danger-custom">
                         <i class="fa-solid fa-circle-exclamation me-1"></i> @errorMessage
                     </div>
                 }
 
                 @if (purchaseItems.Any())
                 {
-                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 0.5rem; padding: 0.55rem 0.85rem; margin-bottom: 0.85rem; display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; flex-wrap: wrap; gap: 0.5rem;">
-                        <span style="color: #34d399; font-weight: 600;">
+                    <div class="draft-modal-notice">
+                        <span class="draft-notice-text">
                             <i class="fa-solid fa-floppy-disk me-1"></i> يتم حفظ مسودة الفاتورة تلقائياً على هذا الجهاز لمنع ضياع الأصناف عند الخروج.
                         </span>
                         <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.15rem 0.5rem; font-size: 0.75rem; color: #f87171; border-color: rgba(239, 68, 68, 0.3);" @onclick="StartNewBlankPurchaseInvoice">
@@ -541,10 +722,14 @@
                     </div>
                 </div>
 
-                <div style="margin: 1rem 0 0.5rem 0;">
+                <div style="margin: 1rem 0 0.5rem 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <h4 style="font-size: 0.95rem; font-weight: 700; margin: 0; color: var(--accent-indigo); display: flex; align-items: center; gap: 0.4rem;">
                         <i class="fa-solid fa-boxes-stacked"></i> أصناف الفاتورة
                     </h4>
+                    <button type="button" class="btn btn-sm btn-primary" style="font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.28rem 0.75rem;" @onclick="() => OpenQuickAddProductModal(forEdit: false)">
+                        <i class="fa-solid fa-circle-plus"></i>
+                        <span>إضافة صنف جديد غير مسجل</span>
+                    </button>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
@@ -573,10 +758,22 @@
                     </div>
                 </div>
 
+                @if (!string.IsNullOrWhiteSpace(unregisteredScannedBarcode))
+                {
+                    <div style="margin-bottom: 0.75rem; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.5rem; padding: 0.6rem 0.85rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                        <span style="font-size: 0.84rem; color: var(--accent-red); font-weight: 600;">
+                            <i class="fa-solid fa-circle-exclamation me-1"></i> الباركود '@unregisteredScannedBarcode' غير مسجل مسبقاً في قائمة المنتجات.
+                        </span>
+                        <button type="button" class="btn btn-xs btn-primary" style="font-weight: 700; padding: 0.3rem 0.75rem;" @onclick="() => OpenQuickAddProductModal(forEdit: false, barcode: unregisteredScannedBarcode)">
+                            <i class="fa-solid fa-plus me-1"></i> تسجيل وإضافة هذا الصنف الآن
+                        </button>
+                    </div>
+                }
+
                 <!-- Live Direct Search Filter Results Panel (Directly Below the Search Input) -->
                 @if (!string.IsNullOrWhiteSpace(searchProductByName))
                 {
-                    <div class="purchase-live-search-results" style="background: var(--bg-card); border: 1.5px solid var(--accent-indigo); border-radius: 0.65rem; margin-bottom: 0.75rem; max-height: 220px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,0.3); z-index: 10;">
+                    <div class="purchase-live-search-results" style="background: var(--bg-card); border: 1.5px solid var(--accent-indigo); border-radius: 0.65rem; margin-bottom: 0.75rem; max-height: 240px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,0.3); z-index: 10;">
                         <div style="padding: 0.4rem 0.85rem; background: rgba(99, 102, 241, 0.1); border-bottom: 1px solid var(--border-color); font-size: 0.78rem; font-weight: 700; color: var(--accent-indigo); display: flex; justify-content: space-between;">
                             <span>نتائج البحث المباشرة بالاسم (@FilteredPurchaseProducts.Count صنف مطابقة)</span>
                             <span style="font-size: 0.72rem; color: var(--text-secondary);">اضغط على الصنف لاختياره مباشرة</span>
@@ -620,11 +817,21 @@
                                     </div>
                                 </div>
                             }
+                            <div style="padding: 0.5rem 0.85rem; background: rgba(99, 102, 241, 0.05); border-top: 1px solid var(--border-color); text-align: center;">
+                                <button type="button" class="btn btn-xs btn-secondary" style="font-size: 0.78rem; font-weight: 600;" @onclick="() => OpenQuickAddProductModal(forEdit: false, name: searchProductByName)">
+                                    <i class="fa-solid fa-plus me-1"></i> لم تجد الصنف المطلوب؟ أضف صنفاً جديداً باسم "@searchProductByName"
+                                </button>
+                            </div>
                         }
                         else
                         {
                             <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-                                <i class="fa-solid fa-circle-exclamation me-1" style="color: var(--accent-amber);"></i> لا توجد أصناف مطابقة لـ "@searchProductByName"
+                                <div style="margin-bottom: 0.6rem;">
+                                    <i class="fa-solid fa-circle-exclamation me-1" style="color: var(--accent-amber);"></i> لا توجد أصناف مطابقة لـ "@searchProductByName"
+                                </div>
+                                <button type="button" class="btn btn-sm btn-primary" style="font-weight: 700; font-size: 0.85rem;" @onclick="() => OpenQuickAddProductModal(forEdit: false, name: searchProductByName)">
+                                    <i class="fa-solid fa-plus me-1"></i> إضافة صنف جديد باسم "@searchProductByName"
+                                </button>
                             </div>
                         }
                     </div>
@@ -796,7 +1003,7 @@
                     </button>
                     @if (purchaseItems.Any())
                     {
-                        <button class="btn btn-secondary" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #34d399; font-weight: 600;" @onclick="() => { SyncDraftState(); CloseModals(); }" disabled="@isSaving" title="حفظ الأصناف الحالية كمسودة وإغلاق النافذة">
+                        <button class="btn btn-save-draft" @onclick="() => { SyncDraftState(); CloseModals(); }" disabled="@isSaving" title="حفظ الأصناف الحالية كمسودة وإغلاق النافذة">
                             <i class="fa-solid fa-floppy-disk me-1"></i> حفظ كمسودة
                         </button>
                     }
@@ -834,7 +1041,7 @@
             <div class="modal-body">
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                    <div class="alert-danger-custom">
                         <i class="fa-solid fa-circle-exclamation me-1"></i> @errorMessage
                     </div>
                 }
@@ -1003,7 +1210,7 @@
             <div class="modal-body">
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                    <div class="alert-danger-custom">
                         <i class="fa-solid fa-circle-exclamation me-1"></i> @errorMessage
                     </div>
                 }
@@ -1107,6 +1314,10 @@
                         <h4 style="font-size: 0.9rem; font-weight: 700; margin: 0; color: var(--accent-indigo);">
                             <i class="fa-solid fa-plus-circle me-1"></i> إضافة / مسح صنف في الفاتورة
                         </h4>
+                        <button type="button" class="btn btn-sm btn-primary" style="font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.28rem 0.75rem;" @onclick="() => OpenQuickAddProductModal(forEdit: true)">
+                            <i class="fa-solid fa-circle-plus"></i>
+                            <span>إضافة صنف جديد غير مسجل</span>
+                        </button>
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
@@ -1126,10 +1337,22 @@
                         </div>
                     </div>
 
+                    @if (!string.IsNullOrWhiteSpace(editUnregisteredScannedBarcode))
+                    {
+                        <div style="margin-bottom: 0.75rem; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.5rem; padding: 0.6rem 0.85rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="font-size: 0.84rem; color: var(--accent-red); font-weight: 600;">
+                                <i class="fa-solid fa-circle-exclamation me-1"></i> الباركود '@editUnregisteredScannedBarcode' غير مسجل مسبقاً في قائمة المنتجات.
+                            </span>
+                            <button type="button" class="btn btn-xs btn-primary" style="font-weight: 700; padding: 0.3rem 0.75rem;" @onclick="() => OpenQuickAddProductModal(forEdit: true, barcode: editUnregisteredScannedBarcode)">
+                                <i class="fa-solid fa-plus me-1"></i> تسجيل وإضافة هذا الصنف الآن
+                            </button>
+                        </div>
+                    }
+
                     <!-- Live Direct Search Filter Results Panel for Edit Modal -->
                     @if (!string.IsNullOrWhiteSpace(editSearchProductByName))
                     {
-                        <div class="purchase-live-search-results" style="background: var(--bg-card); border: 1.5px solid var(--accent-indigo); border-radius: 0.65rem; margin-bottom: 0.75rem; max-height: 220px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,0.3); z-index: 10;">
+                        <div class="purchase-live-search-results" style="background: var(--bg-card); border: 1.5px solid var(--accent-indigo); border-radius: 0.65rem; margin-bottom: 0.75rem; max-height: 240px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,0.3); z-index: 10;">
                             <div style="padding: 0.4rem 0.85rem; background: rgba(99, 102, 241, 0.1); border-bottom: 1px solid var(--border-color); font-size: 0.78rem; font-weight: 700; color: var(--accent-indigo); display: flex; justify-content: space-between;">
                                 <span>نتائج البحث المباشرة بالاسم (@FilteredEditPurchaseProducts.Count صنف مطابقة)</span>
                                 <span style="font-size: 0.72rem; color: var(--text-secondary);">اضغط على الصنف لاختياره مباشرة</span>
@@ -1173,11 +1396,21 @@
                                         </div>
                                     </div>
                                 }
+                                <div style="padding: 0.5rem 0.85rem; background: rgba(99, 102, 241, 0.05); border-top: 1px solid var(--border-color); text-align: center;">
+                                    <button type="button" class="btn btn-xs btn-secondary" style="font-size: 0.78rem; font-weight: 600;" @onclick="() => OpenQuickAddProductModal(forEdit: true, name: editSearchProductByName)">
+                                        <i class="fa-solid fa-plus me-1"></i> لم تجد الصنف المطلوب؟ أضف صنفاً جديداً باسم "@editSearchProductByName"
+                                    </button>
+                                </div>
                             }
                             else
                             {
                                 <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-                                    <i class="fa-solid fa-circle-exclamation me-1" style="color: var(--accent-amber);"></i> لا توجد أصناف مطابقة لـ "@editSearchProductByName"
+                                    <div style="margin-bottom: 0.6rem;">
+                                        <i class="fa-solid fa-circle-exclamation me-1" style="color: var(--accent-amber);"></i> لا توجد أصناف مطابقة لـ "@editSearchProductByName"
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-primary" style="font-weight: 700; font-size: 0.85rem;" @onclick="() => OpenQuickAddProductModal(forEdit: true, name: editSearchProductByName)">
+                                        <i class="fa-solid fa-plus me-1"></i> إضافة صنف جديد باسم "@editSearchProductByName"
+                                    </button>
                                 </div>
                             }
                         </div>
@@ -1373,7 +1606,7 @@
             <div class="modal-body">
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                    <div class="alert-danger-custom">
                         <i class="fa-solid fa-circle-exclamation me-1"></i> @errorMessage
                     </div>
                 }
@@ -1480,6 +1713,133 @@
     </div>
 }
 
+<!-- Quick Add Product Modal directly from Purchase Invoice -->
+@if (showQuickAddProductModal)
+{
+    <div class="modal-overlay" style="z-index: 1070;" @onclick="CloseQuickAddProductModal">
+        <div class="modal-card" style="width: 760px; max-width: 95vw; max-height: 92vh; overflow-y: auto; z-index: 1071;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fa-solid fa-box-open me-2" style="color: var(--accent-indigo);"></i>
+                    إضافة صنف جديد وتسجيله في المخزون
+                </h3>
+                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" @onclick="CloseQuickAddProductModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(quickProductErrorMessage))
+                {
+                    <div class="alert-danger-custom">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @quickProductErrorMessage
+                    </div>
+                }
+
+                <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid var(--accent-indigo); border-radius: 0.5rem; padding: 0.65rem 0.9rem; margin-bottom: 1rem; font-size: 0.86rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.6rem;">
+                    <i class="fa-solid fa-lightbulb" style="color: var(--accent-amber); font-size: 1.1rem;"></i>
+                    <span>سيتم إنشاء هذا الصنف وحفظه في الكتالوج، وإدراجه تلقائياً في فاتورة الشراء الحالية بسعر التكلفة والكمية المحددة.</span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 0.85rem; margin-bottom: 0.85rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600;">اسم الصنف <span style="color: var(--accent-red);">*</span></label>
+                        <input class="form-control" @bind="quickProduct.NameAr" placeholder="مثال: غسالة توشيبا 8 كيلو فوق أوتوماتيك" />
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                            <span>باركود الصنف <span style="color: var(--accent-red);">*</span></span>
+                            <button type="button" class="btn btn-xs btn-secondary" style="font-size: 0.72rem; padding: 0.1rem 0.4rem;" @onclick="GenerateQuickBarcode">
+                                <i class="fa-solid fa-arrows-rotate me-1"></i> توليد باركود
+                            </button>
+                        </label>
+                        <input class="form-control" @bind="quickProduct.Barcode" placeholder="امسح الباركود أو اكتبه..." />
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.85rem; margin-bottom: 0.85rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600;">سعر الشراء / التكلفة (ج.م) <span style="color: var(--accent-red);">*</span></label>
+                        <input type="number" step="0.01" class="form-control" @bind="quickProduct.PurchasePrice" min="0" placeholder="0.00" />
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600;">سعر بيع القطاعي (ج.م) <span style="color: var(--accent-red);">*</span></label>
+                        <input type="number" step="0.01" class="form-control" @bind="quickProduct.SellingPrice" min="0" placeholder="0.00" />
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600;">سعر بيع الجملة (ج.م)</label>
+                        <input type="number" step="0.01" class="form-control" @bind="quickProduct.WholesalePrice" min="0" placeholder="0.00" />
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.85rem; margin-bottom: 0.85rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600;">التصنيف <span style="color: var(--accent-red);">*</span></label>
+                        <select class="form-control" @bind="quickProductCategoryId">
+                            @foreach (var cat in categories)
+                            {
+                                <option value="@cat.Id.ToString()">@cat.NameAr</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600;">الوحدة <span style="color: var(--accent-red);">*</span></label>
+                        <select class="form-control" @bind="quickProductUnitId">
+                            @foreach (var u in units)
+                            {
+                                <option value="@u.Id.ToString()">@u.NameAr</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600;">الماركة (اختياري)</label>
+                        <select class="form-control" @bind="quickProductBrandId">
+                            <option value="">بدون ماركة</option>
+                            @foreach (var b in brands)
+                            {
+                                <option value="@b.Id.ToString()">@b.NameAr</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 0.85rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-weight: 600;">الكمية المراد إدراجها بالفاتورة <span style="color: var(--accent-red);">*</span></label>
+                        <input type="number" step="1" class="form-control" @bind="quickProductInitialQty" min="1" placeholder="1" />
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0; display: flex; align-items: center; padding-top: 1.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0; font-size: 0.88rem; font-weight: 600;">
+                            <input type="checkbox" @bind="quickProduct.HasSerialNumber" />
+                            <span>يتطلب سيريال نمبر (أجهزة كهربائية)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseQuickAddProductModal" disabled="@isQuickProductSaving">إلغاء</button>
+                <button class="btn btn-primary" @onclick="SaveQuickProduct" disabled="@isQuickProductSaving" style="font-weight: 700; padding: 0.5rem 1.4rem;">
+                    @if (isQuickProductSaving)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الحفظ والإدراج...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-check me-1"></i> <span>حفظ وإضافة إلى الفاتورة</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string activeTab = "purchases";
     private List<PurchaseDto> purchases = new();
@@ -1488,6 +1848,22 @@
     private List<SupplierDto> filteredSuppliers = new();
     private List<ProductDto> availableProducts = new();
     private bool isLoading = true;
+
+    // Quick Add Product Modal State
+    private bool showQuickAddProductModal = false;
+    private bool isQuickProductSaving = false;
+    private string quickProductErrorMessage = string.Empty;
+    private CreateProductFormModel quickProduct = new();
+    private string quickProductCategoryId = string.Empty;
+    private string quickProductUnitId = string.Empty;
+    private string quickProductBrandId = string.Empty;
+    private decimal quickProductInitialQty = 1;
+    private bool isEditingModeForQuickProduct = false;
+    private string unregisteredScannedBarcode = string.Empty;
+    private string editUnregisteredScannedBarcode = string.Empty;
+    private List<CategoryDto> categories = new();
+    private List<BrandDto> brands = new();
+    private List<UnitDto> units = new();
 
     private string searchQueryPurchases = string.Empty;
     private string searchQuerySuppliers = string.Empty;
@@ -1860,12 +2236,18 @@
             var pTask = ApiClient.GetPurchasesListAsync();
             var sTask = ApiClient.GetSuppliersAsync();
             var prTask = ApiClient.GetProductsAsync();
+            var cTask = ApiClient.GetCategoriesAsync();
+            var bTask = ApiClient.GetBrandsAsync(onlyActive: true);
+            var uTask = ApiClient.GetUnitsAsync();
 
-            await Task.WhenAll(pTask, sTask, prTask);
+            await Task.WhenAll(pTask, sTask, prTask, cTask, bTask, uTask);
 
             purchases = await pTask ?? new();
             suppliers = await sTask ?? new();
             availableProducts = await prTask ?? new();
+            categories = await cTask ?? new();
+            brands = await bTask ?? new();
+            units = await uTask ?? new();
             FilterPurchases();
             FilterSuppliers();
         }
@@ -2065,6 +2447,9 @@
         showDetailsModal = false;
         showEditPurchaseModal = false;
         showDeletePurchaseModal = false;
+        showQuickAddProductModal = false;
+        unregisteredScannedBarcode = string.Empty;
+        editUnregisteredScannedBarcode = string.Empty;
         selectedPurchaseDetail = null;
         purchaseToDelete = null;
         errorMessage = string.Empty;
@@ -2177,10 +2562,12 @@
                 editAddItemCost = editBaseProductPieceCost;
                 editAddItemQty = 1;
                 errorMessage = string.Empty;
+                editUnregisteredScannedBarcode = string.Empty;
             }
             else
             {
-                errorMessage = $"المنتج بالباركود '{code}' غير موجود.";
+                editUnregisteredScannedBarcode = code;
+                errorMessage = $"المنتج بالباركود '{code}' غير مسجل في النظام. يمكنك إضافته الآن.";
             }
         }
     }
@@ -2485,10 +2872,12 @@
                 addItemCost = baseProductPieceCost;
                 addItemQty = 1;
                 errorMessage = string.Empty;
+                unregisteredScannedBarcode = string.Empty;
             }
             else
             {
-                errorMessage = $"المنتج بالباركود '{code}' غير موجود.";
+                unregisteredScannedBarcode = code;
+                errorMessage = $"المنتج بالباركود '{code}' غير مسجل في النظام. يمكنك إضافته الآن.";
             }
             await FocusPurchaseBarcodeAsync();
         }
@@ -2672,6 +3061,244 @@
         else
         {
             errorMessage = !string.IsNullOrEmpty(error) ? error : "فشل استلام فاتورة الشراء.";
+        }
+    }
+
+    // ==========================================
+    // Quick Add Product Directly From Purchases
+    // ==========================================
+    private async Task OpenQuickAddProductModal(bool forEdit = false, string? barcode = null, string? name = null)
+    {
+        isEditingModeForQuickProduct = forEdit;
+        quickProductErrorMessage = string.Empty;
+        quickProductInitialQty = 1;
+
+        if (!categories.Any())
+        {
+            categories = await ApiClient.GetCategoriesAsync() ?? new();
+        }
+        if (!units.Any())
+        {
+            units = await ApiClient.GetUnitsAsync() ?? new();
+        }
+        if (!brands.Any())
+        {
+            brands = await ApiClient.GetBrandsAsync(onlyActive: true) ?? new();
+        }
+
+        quickProduct = new CreateProductFormModel
+        {
+            Barcode = barcode?.Trim() ?? string.Empty,
+            NameAr = name?.Trim() ?? string.Empty,
+            NameEn = name?.Trim() ?? string.Empty,
+            BaseUnit = "قطعة",
+            ParentUnit = "كرتونة",
+            ConversionFactor = 1,
+            ShelfLifeDays = 0,
+            ExpiryAlertDays = 0,
+            InitialStock = 0,
+            ReorderLevel = 5,
+            MaxStockLevel = 100,
+            IsActive = true,
+            WarrantyPeriodMonths = 12
+        };
+
+        if (string.IsNullOrWhiteSpace(quickProduct.Barcode))
+        {
+            GenerateQuickBarcode();
+        }
+
+        quickProductCategoryId = categories.FirstOrDefault()?.Id.ToString() ?? string.Empty;
+        quickProductUnitId = units.FirstOrDefault()?.Id.ToString() ?? string.Empty;
+        quickProductBrandId = string.Empty;
+
+        showQuickAddProductModal = true;
+    }
+
+    private void GenerateQuickBarcode()
+    {
+        quickProduct.Barcode = $"{Random.Shared.Next(6290000, 6299999)}{Random.Shared.Next(10000, 99999)}";
+    }
+
+    private void CloseQuickAddProductModal()
+    {
+        showQuickAddProductModal = false;
+        quickProductErrorMessage = string.Empty;
+    }
+
+    private async Task SaveQuickProduct()
+    {
+        if (string.IsNullOrWhiteSpace(quickProduct.NameAr))
+        {
+            quickProductErrorMessage = "يرجى كتابة اسم الصنف.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(quickProduct.Barcode))
+        {
+            GenerateQuickBarcode();
+        }
+
+        if (string.IsNullOrWhiteSpace(quickProduct.NameEn))
+        {
+            quickProduct.NameEn = quickProduct.NameAr;
+        }
+
+        if (Guid.TryParse(quickProductCategoryId, out var catId) && catId != Guid.Empty)
+        {
+            quickProduct.CategoryId = catId;
+        }
+        else if (categories.Any())
+        {
+            quickProduct.CategoryId = categories.First().Id;
+        }
+        else
+        {
+            quickProductErrorMessage = "يرجى اختيار التصنيف.";
+            return;
+        }
+
+        if (Guid.TryParse(quickProductUnitId, out var uId) && uId != Guid.Empty)
+        {
+            quickProduct.UnitId = uId;
+            var selectedUnit = units.FirstOrDefault(u => u.Id == uId);
+            if (selectedUnit != null)
+            {
+                quickProduct.BaseUnit = selectedUnit.NameAr;
+            }
+        }
+        else if (units.Any())
+        {
+            quickProduct.UnitId = units.First().Id;
+            quickProduct.BaseUnit = units.First().NameAr;
+        }
+        else
+        {
+            quickProductErrorMessage = "يرجى اختيار الوحدة.";
+            return;
+        }
+
+        if (Guid.TryParse(quickProductBrandId, out var bId) && bId != Guid.Empty)
+        {
+            quickProduct.BrandId = bId;
+        }
+        else
+        {
+            quickProduct.BrandId = null;
+        }
+
+        if (isEditingModeForQuickProduct)
+        {
+            if (Guid.TryParse(editSupplierIdString, out var supId) && supId != Guid.Empty)
+            {
+                quickProduct.SupplierId = supId;
+            }
+        }
+        else
+        {
+            if (Guid.TryParse(selectedSupplierIdString, out var supId) && supId != Guid.Empty)
+            {
+                quickProduct.SupplierId = supId;
+            }
+        }
+
+        if (quickProduct.PurchasePrice < 0)
+        {
+            quickProductErrorMessage = "سعر الشراء لا يمكن أن يكون سالباً.";
+            return;
+        }
+        if (quickProduct.SellingPrice < 0)
+        {
+            quickProductErrorMessage = "سعر البيع لا يمكن أن يكون سالباً.";
+            return;
+        }
+        if (quickProductInitialQty <= 0)
+        {
+            quickProductInitialQty = 1;
+        }
+
+        isQuickProductSaving = true;
+        quickProductErrorMessage = string.Empty;
+
+        try
+        {
+            var (result, error) = await ApiClient.CreateProductAsync(quickProduct);
+            if (result.HasValue && result.Value != Guid.Empty)
+            {
+                availableProducts = await ApiClient.GetProductsAsync() ?? new();
+                FilterPurchases();
+
+                var createdProduct = availableProducts.FirstOrDefault(p => p.Id == result.Value)
+                                     ?? availableProducts.FirstOrDefault(p => p.Barcode == quickProduct.Barcode);
+
+                if (createdProduct != null)
+                {
+                    string unitName = !string.IsNullOrWhiteSpace(createdProduct.BaseUnit) ? createdProduct.BaseUnit : "قطعة";
+                    decimal itemCost = quickProduct.PurchasePrice > 0 ? quickProduct.PurchasePrice : (quickProduct.SellingPrice > 0 ? quickProduct.SellingPrice : 1);
+
+                    if (isEditingModeForQuickProduct)
+                    {
+                        editPurchaseItems.Add(new CreatePurchaseItemRequest(
+                            createdProduct.Id,
+                            quickProductInitialQty,
+                            itemCost,
+                            ExpiryDate: null,
+                            BatchNumber: null,
+                            Unit: unitName));
+
+                        editSelectedProductIdString = createdProduct.Id.ToString();
+                        editBaseProductPieceCost = itemCost;
+                        editAddItemCost = itemCost;
+                        editAddItemQty = 1;
+                        editSearchProductByName = string.Empty;
+                        editScannedBarcode = string.Empty;
+                        editUnregisteredScannedBarcode = string.Empty;
+                    }
+                    else
+                    {
+                        purchaseItems.Add(new CreatePurchaseItemRequest(
+                            createdProduct.Id,
+                            quickProductInitialQty,
+                            itemCost,
+                            ExpiryDate: null,
+                            BatchNumber: null,
+                            Unit: unitName));
+
+                        if (isFullPayment)
+                        {
+                            purchasePaidAmount = purchaseInvoiceTotal;
+                        }
+                        else
+                        {
+                            purchasePaidAmount = Math.Clamp(purchasePaidAmount, 0, purchaseInvoiceTotal);
+                        }
+                        SyncDraftState();
+
+                        selectedProductIdString = createdProduct.Id.ToString();
+                        baseProductPieceCost = itemCost;
+                        addItemCost = itemCost;
+                        addItemQty = 1;
+                        searchProductByName = string.Empty;
+                        scannedPurchaseBarcode = string.Empty;
+                        unregisteredScannedBarcode = string.Empty;
+                    }
+                }
+
+                showQuickAddProductModal = false;
+                errorMessage = string.Empty;
+            }
+            else
+            {
+                quickProductErrorMessage = !string.IsNullOrEmpty(error) ? error : "فشل إنشاء المنتج. يرجى مراجعة البيانات المدخلة.";
+            }
+        }
+        catch (Exception ex)
+        {
+            quickProductErrorMessage = $"حدث خطأ: {ex.Message}";
+        }
+        finally
+        {
+            isQuickProductSaving = false;
         }
     }
 }

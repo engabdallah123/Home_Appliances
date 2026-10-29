@@ -42,6 +42,22 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   bool _hasSerialNumber = false;
   String? _selectedBrandId;
 
+  static const List<String> _standardUnits = [
+    'قطعة',
+    'طقم',
+    'كرتونة',
+    'علبة',
+    'دستة',
+    'متر',
+    'كجم',
+    'لتر',
+    'باكت',
+    'لفة',
+  ];
+  String _selectedBaseUnit = 'قطعة';
+  bool _isCustomUnit = false;
+  late TextEditingController _customUnitCtrl;
+
   String? _selectedCategoryId;
   bool _isSaving = false;
 
@@ -52,11 +68,24 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     super.initState();
     final p = widget.product;
 
+    final initialUnit = (p?.baseUnit != null && p!.baseUnit.trim().isNotEmpty)
+        ? p.baseUnit.trim()
+        : 'قطعة';
+    if (_standardUnits.contains(initialUnit)) {
+      _selectedBaseUnit = initialUnit;
+      _isCustomUnit = false;
+      _customUnitCtrl = TextEditingController();
+    } else {
+      _selectedBaseUnit = 'أخرى';
+      _isCustomUnit = true;
+      _customUnitCtrl = TextEditingController(text: initialUnit);
+    }
+
     _nameArCtrl = TextEditingController(text: p?.nameAr ?? '');
     _nameEnCtrl = TextEditingController(text: p?.nameEn ?? '');
     _barcodeCtrl = TextEditingController(text: p?.barcode ?? _generateBarcode());
-    _baseUnitCtrl = TextEditingController(text: p?.baseUnit ?? 'قطعة');
-    _parentUnitCtrl = TextEditingController(text: p?.parentUnit ?? 'قطعة');
+    _baseUnitCtrl = TextEditingController(text: initialUnit);
+    _parentUnitCtrl = TextEditingController(text: p?.parentUnit ?? initialUnit);
     _factorCtrl = TextEditingController(text: (p?.conversionFactor ?? 1).toString());
     _purchasePriceCtrl = TextEditingController(text: p != null && p.purchasePrice > 0 ? p.purchasePrice.toStringAsFixed(2) : '');
     _sellingPriceCtrl = TextEditingController(text: p != null && p.sellingPrice > 0 ? p.sellingPrice.toStringAsFixed(2) : '');
@@ -88,6 +117,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _barcodeCtrl.dispose();
     _baseUnitCtrl.dispose();
     _parentUnitCtrl.dispose();
+    _customUnitCtrl.dispose();
     _factorCtrl.dispose();
     _purchasePriceCtrl.dispose();
     _sellingPriceCtrl.dispose();
@@ -180,13 +210,17 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     final brands = prov.brands;
     final brandObj = brands.where((b) => b.id == _selectedBrandId).firstOrNull;
 
+    final finalUnit = _isCustomUnit && _customUnitCtrl.text.trim().isNotEmpty
+        ? _customUnitCtrl.text.trim()
+        : (_selectedBaseUnit != 'أخرى' && _selectedBaseUnit.isNotEmpty ? _selectedBaseUnit : (_baseUnitCtrl.text.trim().isNotEmpty ? _baseUnitCtrl.text.trim() : 'قطعة'));
+
     final productModel = ProductModel(
       id: widget.product?.id ?? '',
       barcode: _barcodeCtrl.text.trim(),
       nameAr: _nameArCtrl.text.trim(),
       nameEn: _nameEnCtrl.text.trim().isNotEmpty ? _nameEnCtrl.text.trim() : null,
-      baseUnit: 'قطعة',
-      parentUnit: 'قطعة',
+      baseUnit: finalUnit,
+      parentUnit: finalUnit,
       conversionFactor: 1,
       purchasePrice: double.tryParse(_purchasePriceCtrl.text.trim()) ?? 0.0,
       sellingPrice: double.tryParse(_sellingPriceCtrl.text.trim()) ?? 0.0,
@@ -581,37 +615,86 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     );
   }
 
-  // 4. Regular Product Units Section (Home Appliances: Piece only)
+  // 4. Regular Product Units Section (Selectable Units)
   Widget _buildRegularUnitsSection(bool isDark) {
     return _buildSectionCard(
       isDark,
       title: "وحدة القياس والتعبئة",
       icon: Icons.all_inbox_rounded,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.primary.withOpacity(0.08) : const Color(0xFFEFF6FF),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.check_circle_outline_rounded, color: AppColors.primaryLight, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  "وحدة الصنف: قطعة (الأجهزة الكهربائية والمنزلية تُباع وتُخزن بالقطعة)",
-                  style: TextStyle(
-                    color: isDark ? AppColors.primaryLight : const Color(0xFF1E40AF),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+        Text(
+          "اختر وحدة قياس الصنف (قطعة، طقم، كرتونة، إلخ):",
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: AppColors.getTextSecondary(isDark),
           ),
         ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ..._standardUnits.map((u) {
+              final isSelected = !_isCustomUnit && _selectedBaseUnit == u;
+              return ChoiceChip(
+                label: Text(u),
+                selected: isSelected,
+                selectedColor: AppColors.primary,
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.getTextPrimary(isDark),
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  fontSize: 12.5,
+                ),
+                backgroundColor: isDark ? AppColors.darkSurfaceElevated : Colors.grey.shade100,
+                onSelected: (selected) {
+                  if (selected) {
+                    setState(() {
+                      _selectedBaseUnit = u;
+                      _isCustomUnit = false;
+                      _baseUnitCtrl.text = u;
+                      _parentUnitCtrl.text = u;
+                    });
+                  }
+                },
+              );
+            }),
+            ChoiceChip(
+              label: const Text("وحدة أخرى..."),
+              selected: _isCustomUnit,
+              selectedColor: AppColors.primary,
+              labelStyle: TextStyle(
+                color: _isCustomUnit ? Colors.white : AppColors.getTextPrimary(isDark),
+                fontWeight: _isCustomUnit ? FontWeight.bold : FontWeight.w500,
+                fontSize: 12.5,
+              ),
+              backgroundColor: isDark ? AppColors.darkSurfaceElevated : Colors.grey.shade100,
+              onSelected: (selected) {
+                if (selected) {
+                  setState(() {
+                    _isCustomUnit = true;
+                    _selectedBaseUnit = 'أخرى';
+                  });
+                }
+              },
+            ),
+          ],
+        ),
+        if (_isCustomUnit) ...[
+          const SizedBox(height: 12),
+          CustomTextField(
+            controller: _customUnitCtrl,
+            label: "اكتب وحدة الصنف المخصصة *",
+            hint: "مثال: رول، لفة، طقم...",
+            prefixIcon: Icons.edit_note_rounded,
+            validator: (v) => (v == null || v.trim().isEmpty) ? "يرجى كتابة اسم الوحدة" : null,
+            onChanged: (v) {
+              _baseUnitCtrl.text = v.trim();
+              _parentUnitCtrl.text = v.trim();
+              setState(() {});
+            },
+          ),
+        ],
       ],
     );
   }
@@ -623,61 +706,73 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       title: "الأسعار والمخزون",
       icon: Icons.price_change_rounded,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: CustomTextField(
-                controller: _purchasePriceCtrl,
-                label: "سعر الشراء للقطعة (ج.م) *",
-                hint: "0.00",
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                prefixIcon: Icons.arrow_downward_rounded,
-                validator: (v) => (double.tryParse(v ?? "") == null) ? "سعر غير صحيح" : null,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: CustomTextField(
-                controller: _sellingPriceCtrl,
-                label: "سعر بيع القطعة قطاعي (ج.م) *",
-                hint: "0.00",
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                prefixIcon: Icons.arrow_upward_rounded,
-                validator: (v) => (double.tryParse(v ?? "") == null) ? "سعر غير صحيح" : null,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: CustomTextField(
-                controller: _wholesalePriceCtrl,
-                label: "سعر بيع القطعة جملة (ج.م)",
-                hint: "0.00",
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                prefixIcon: Icons.storefront_outlined,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: CustomTextField(
-                controller: _reorderLevelCtrl,
-                label: "حد إعادة الطلب (قطعة)",
-                hint: "2",
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                prefixIcon: Icons.warning_amber_rounded,
-              ),
-            ),
-          ],
-        ),
-        if (!isEdit) ...[
-          const SizedBox(height: 12),
-          CustomTextField(
-            controller: _stockCtrl,
-            label: "الرصيد الافتتاحي في المخزن (قطعة)",
-            hint: "0",
+        Builder(
+          builder: (context) {
+            final unitName = _isCustomUnit && _customUnitCtrl.text.trim().isNotEmpty 
+                ? _customUnitCtrl.text.trim() 
+                : (_selectedBaseUnit != 'أخرى' ? _selectedBaseUnit : 'الوحدة');
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: CustomTextField(
+                        controller: _purchasePriceCtrl,
+                        label: "سعر الشراء لـ $unitName (ج.م) *",
+                        hint: "0.00",
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        prefixIcon: Icons.arrow_downward_rounded,
+                        validator: (v) => (double.tryParse(v ?? "") == null) ? "سعر غير صحيح" : null,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: CustomTextField(
+                        controller: _sellingPriceCtrl,
+                        label: "سعر بيع $unitName قطاعي (ج.م) *",
+                        hint: "0.00",
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        prefixIcon: Icons.arrow_upward_rounded,
+                        validator: (v) => (double.tryParse(v ?? "") == null) ? "سعر غير صحيح" : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: CustomTextField(
+                        controller: _wholesalePriceCtrl,
+                        label: "سعر بيع $unitName جملة (ج.م)",
+                        hint: "0.00",
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        prefixIcon: Icons.storefront_outlined,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: CustomTextField(
+                        controller: _reorderLevelCtrl,
+                        label: "حد إعادة الطلب ($unitName)",
+                        hint: "2",
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        prefixIcon: Icons.warning_amber_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+                if (!isEdit) ...[
+                  const SizedBox(height: 12),
+                  CustomTextField(
+                    controller: _stockCtrl,
+                    label: "الرصيد الافتتاحي في المخزن ($unitName)",
+                    hint: "0",
+              ],
+            );
+          },
+        )
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             prefixIcon: Icons.warehouse_rounded,
           ),
