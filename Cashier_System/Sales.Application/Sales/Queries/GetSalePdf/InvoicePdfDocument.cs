@@ -61,7 +61,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                     }
                 });
 
-                // 2. Content Section (Customer Info + Installment Details + Main Grid)
+                // 2. Content Section (Customer Info + Installment Details + Main Grid + Footer directly attached)
                 page.Content().Column(column =>
                 {
                     // Info Section (Customer Name, Date, Phone, Address, Payment Type, Delivery / Driver)
@@ -280,18 +280,15 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                             });
                         });
                     });
-                });
 
-                // 4. Footer Section (Docked at the bottom of the page, full width matching table)
-                page.Footer().Element(footer =>
-                {
+                    // 4. Footer Section (Directly attached to the bottom of the table - no gap)
                     if (_trimmedFooterBytes != null && _trimmedFooterBytes.Length > 0)
                     {
-                        footer.PaddingTop(2).Image(_trimmedFooterBytes).FitWidth();
+                        column.Item().PaddingTop(0).Image(_trimmedFooterBytes).FitWidth();
                     }
                     else
                     {
-                        ComposeFallbackFooter(footer);
+                        ComposeFallbackFooter(column);
                     }
                 });
             });
@@ -310,7 +307,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                 c = c.BorderBottom(0.6f).BorderColor(Colors.Grey.Darken1);
             }
 
-            c.MinHeight(20).PaddingVertical(1.5f).PaddingHorizontal(3).Element(content);
+            c.MinHeight(22).PaddingVertical(1.5f).PaddingHorizontal(3).Element(content);
         }
 
         private void ComposeFallbackHeader(IContainer header)
@@ -333,9 +330,9 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
             });
         }
 
-        private void ComposeFallbackFooter(IContainer footer)
+        private void ComposeFallbackFooter(ColumnDescriptor column)
         {
-            footer.PaddingTop(4).Column(fc =>
+            column.Item().PaddingTop(4).Column(fc =>
             {
                 // Pill 1: Store name & phone
                 fc.Item().PaddingBottom(4).Background(Colors.Black).PaddingVertical(4).PaddingHorizontal(16).Row(r =>
