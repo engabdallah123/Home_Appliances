@@ -2,61 +2,94 @@
 @using Microsoft.AspNetCore.Authorization
 @using global::POS.Desktop.Services.Api
 @using global::POS.Desktop.Services.State
+@using global::POS.Desktop.Services.Backup
 @using System.IO
 @using System.Diagnostics
 @attribute [Authorize(Roles = "Admin,Manager,Administrator")]
 @inject PosApiClient ApiClient
 @inject StoreStateContainer StoreState
+@inject ICloudflareR2BackupService R2Service
 @inject IJSRuntime JS
 
-<div style="max-width: 950px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem;">
-    <div>
-        <h2 style="font-weight: 700;">النسخ الاحتياطي واستعادة البيانات (Backup & Restore)</h2>
-        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
-            تصدير وحفظ نسخة احتياطية شاملة لبيانات المتجر، واستيراد واسترجاع البيانات المحفوظة في أي وقت بأمان تام.
-        </p>
+<div style="max-width: 1050px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2.5rem;">
+    <!-- Page Header -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h2 style="font-weight: 700; margin-bottom: 0.25rem;">النسخ الاحتياطي وإدارة المساحة والسحابة</h2>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
+                ضغط وتصدير نسخ النظام، الحذف التلقائي للنسخ القديمة لتوفير مساحة القرص الصلب، والرفع السحابي المباشر إلى Cloudflare R2.
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem;" @onclick="OpenR2SettingsModal">
+                <i class="fa-solid fa-cloud me-1" style="color: var(--accent-indigo);"></i>
+                <span>إعدادات السحابة (Cloudflare R2)</span>
+                @if (r2Settings.IsEnabled)
+                {
+                    <span class="badge badge-green ms-1" style="font-size: 0.7rem;">مفعل</span>
+                }
+            </button>
+            <button class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem;" @onclick="OpenCloudBackupsModal" disabled="@(!r2Settings.IsEnabled)">
+                <i class="fa-solid fa-server me-1" style="color: var(--accent-blue);"></i>
+                <span>عرض النسخ السحابية</span>
+            </button>
+        </div>
     </div>
 
+    <!-- Alert Messages -->
     @if (!string.IsNullOrEmpty(successMessage))
     {
-        <div style="background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--accent-emerald); padding: 0.85rem 1.25rem; border-radius: 0.6rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; animation: fadeIn 0.2s ease;">
-            <i class="fa-solid fa-circle-check fa-lg"></i>
-            <div>@successMessage</div>
+        <div style="background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--accent-emerald); padding: 0.85rem 1.25rem; border-radius: 0.6rem; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; animation: fadeIn 0.2s ease;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-circle-check fa-lg"></i>
+                <div>@successMessage</div>
+            </div>
+            <button type="button" class="btn-close" style="color: inherit; background: none; border: none; cursor: pointer;" @onclick="() => successMessage = null">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
     }
 
     @if (!string.IsNullOrEmpty(errorMessage))
     {
-        <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.85rem 1.25rem; border-radius: 0.6rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; animation: fadeIn 0.2s ease;">
-            <i class="fa-solid fa-circle-exclamation fa-lg"></i>
-            <div>@errorMessage</div>
+        <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.85rem 1.25rem; border-radius: 0.6rem; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; animation: fadeIn 0.2s ease;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-circle-exclamation fa-lg"></i>
+                <div>@errorMessage</div>
+            </div>
+            <button type="button" class="btn-close" style="color: inherit; background: none; border: none; cursor: pointer;" @onclick="() => errorMessage = null">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
     }
 
     <!-- Quick Action Cards Grid -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
-        <!-- Export Card -->
+        <!-- Export & Compress Card -->
         <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 1.25rem; border-top: 3px solid var(--accent-indigo);">
             <div>
                 <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem;">
                     <div style="width: 38px; height: 38px; border-radius: 0.5rem; background: rgba(99, 102, 241, 0.15); color: var(--accent-indigo); display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
-                        <i class="fa-solid fa-cloud-arrow-down"></i>
+                        <i class="fa-solid fa-file-zipper"></i>
                     </div>
-                    <h3 style="font-size: 1.05rem; font-weight: 700; margin: 0;">إنشاء وتصدير نسخة احتياطية</h3>
+                    <div>
+                        <h3 style="font-size: 1.05rem; font-weight: 700; margin: 0;">إنشاء نسخة احتياطية مضغوطة (.zip)</h3>
+                        <span style="font-size: 0.75rem; color: var(--accent-emerald); font-weight: 600;">توفير 85% إلى 90% من مساحة الهارد</span>
+                    </div>
                 </div>
                 <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; margin: 0;">
-                    يقوم النظام بحفظ كافة الجداول (المنتجات، المبيعات، المشتريات، المرتجعات، العملاء والمصروفات) في ملف <code>.json</code> مشفر ومنظم.
+                    يتم استخراج كافة الجداول وضغطها تلقائياً بأعلى كفاءة، مع مسح النسخ القديمة لحماية الهارد من الامتلاء، ورفعها للسحابة إن وُجدت.
                 </p>
             </div>
 
             <button class="btn btn-primary" style="padding: 0.75rem 1.5rem; font-size: 0.95rem; justify-content: center;" disabled="@isExporting" @onclick="ExportBackup">
                 @if (isExporting)
                 {
-                    <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري إنشاء النسخة الاحتياطية...</span>
+                    <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري الضغط والتصدير...</span>
                 }
                 else
                 {
-                    <i class="fa-solid fa-shield-halved me-1"></i> <span>تصدير نسخة احتياطية الآن</span>
+                    <i class="fa-solid fa-shield-halved me-1"></i> <span>تصدير نسخة مضغوطة الآن</span>
                 }
             </button>
         </div>
@@ -71,13 +104,52 @@
                     <h3 style="font-size: 1.05rem; font-weight: 700; margin: 0;">استرجاع بيانات من ملف محفوظ</h3>
                 </div>
                 <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; margin: 0;">
-                    استعراض ورفع أي ملف نسخة احتياطية سابقة من جهازك لاسترجاع البيانات بالكامل وتحديث قاعدة البيانات فوراً.
+                    يدعم استيراد النسخ المضغوطة الحديثة <code>.zip</code> أو النسخ السابقة <code>.json</code> وفك ضغطها وتحديث قاعدة البيانات بالكامل.
                 </p>
             </div>
 
             <button class="btn btn-secondary" style="padding: 0.75rem 1.5rem; font-size: 0.95rem; justify-content: center; border-color: rgba(16, 185, 129, 0.4); color: var(--accent-emerald);" disabled="@isRestoring" @onclick="BrowseAndPrepareRestore">
-                <i class="fa-solid fa-folder-open me-1"></i> <span>اختيار ملف نسخة احتياطية للاسترجاع...</span>
+                <i class="fa-solid fa-folder-open me-1"></i> <span>اختيار ملف للاسترجاع (.zip أو .json)...</span>
             </button>
+        </div>
+    </div>
+
+    <!-- Storage Optimization & Retention Banner -->
+    <div class="card" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(16, 185, 129, 0.05)); border: 1px solid rgba(99, 102, 241, 0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div style="width: 42px; height: 42px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); color: var(--accent-indigo); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    <i class="fa-solid fa-hard-drive"></i>
+                </div>
+                <div>
+                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700;">سياسة تدوير النسخ وحماية الهارد (Retention Policy)</h4>
+                    <p style="margin: 0.2rem 0 0 0; font-size: 0.8rem; color: var(--text-secondary);">
+                        التحكم في الحد الأقصى لعدد النسخ المحفوظة على الهارد قبل مسح الأقدم تلقائياً لمنع الامتلاء.
+                    </p>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 0.4rem; background: var(--bg-primary); padding: 0.35rem 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color);">
+                    <span style="font-size: 0.85rem; font-weight: 600;">الاحتفاظ بآخر:</span>
+                    <input type="number" min="1" max="50" style="width: 65px; text-align: center; font-weight: 700; border: 1px solid var(--border-color); border-radius: 0.35rem; padding: 0.2rem 0.4rem; background: var(--bg-secondary); color: var(--text-primary);" 
+                           value="@r2Settings.LocalRetentionCount" 
+                           @onchange="async (e) => { if (int.TryParse(e.Value?.ToString(), out var val)) await UpdateRetentionCountDirectly(val); }" />
+                    <span style="font-size: 0.85rem; color: var(--text-secondary);">نسخ</span>
+                </div>
+
+                <button class="btn btn-secondary" style="font-size: 0.82rem; padding: 0.45rem 0.9rem;" @onclick="ExecuteManualPrune" disabled="@isPruning">
+                    @if (isPruning)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري التنظيف...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-broom me-1" style="color: var(--accent-amber);"></i>
+                        <span>تنظيف الهارد الآن (حذف ما زاد عن @r2Settings.LocalRetentionCount)</span>
+                    }
+                </button>
+            </div>
         </div>
     </div>
 
@@ -98,7 +170,7 @@
                 </button>
             </div>
             <span style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.35rem; display: block;">
-                ملاحظة: الباك اب التلقائي كل 12 ساعة يقوم بحفظ النسخ تلقائياً داخل هذا المجلد.
+                ملاحظة: الباك اب التلقائي كل 12 ساعة يقوم بحفظ النسخ مضغوطة داخل هذا المجلد ويحذف النسخ الأقدم تلقائياً.
             </span>
         </div>
     </div>
@@ -106,9 +178,14 @@
     <!-- Existing Backups in Selected Folder Table -->
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-            <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--accent-indigo); margin: 0;">
-                <i class="fa-solid fa-clock-rotate-left me-2"></i> النسخ الاحتياطية المتوفرة في المجلد (@existingBackups.Count)
-            </h3>
+            <div>
+                <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--accent-indigo); margin: 0;">
+                    <i class="fa-solid fa-clock-rotate-left me-2"></i> النسخ الاحتياطية المتوفرة على القرص الصلب (@existingBackups.Count)
+                </h3>
+                <span style="font-size: 0.78rem; color: var(--text-secondary);">
+                    مرتبة من الأحدث إلى الأقدم (إجمالي المساحة المستخدمة: @((existingBackups.Sum(x => x.Length) / 1024.0 / 1024.0).ToString("N2")) MB)
+                </span>
+            </div>
             <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" @onclick="RefreshExistingBackups">
                 <i class="fa-solid fa-arrows-rotate me-1"></i> تحديث القائمة
             </button>
@@ -120,9 +197,9 @@
                     <tr>
                         <th>اسم ملف النسخة</th>
                         <th>تاريخ الحفظ</th>
+                        <th>النوع والضغط</th>
                         <th>الحجم</th>
-                        <th style="width: 110px; text-align: center;">الحالة</th>
-                        <th style="width: 140px; text-align: center;">الإجراء</th>
+                        <th style="width: 220px; text-align: center;">الإجراءات</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -139,20 +216,54 @@
                     {
                         @foreach (var file in existingBackups)
                         {
+                            var isZip = file.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
                             <tr>
                                 <td>
-                                    <i class="fa-solid fa-file-code me-2" style="color: var(--accent-blue);"></i>
+                                    @if (isZip)
+                                    {
+                                        <i class="fa-solid fa-file-zipper me-2" style="color: var(--accent-amber);"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-solid fa-file-code me-2" style="color: var(--accent-blue);"></i>
+                                    }
                                     <code style="font-weight: 600;">@file.Name</code>
                                 </td>
                                 <td>@file.LastWriteTime.ToString("dd/MM/yyyy HH:mm:ss")</td>
-                                <td>@((file.Length / 1024.0).ToString("N1")) KB</td>
-                                <td style="text-align: center;">
-                                    <span class="badge badge-green">جاهزة</span>
+                                <td>
+                                    @if (isZip)
+                                    {
+                                        <span class="badge badge-green">مضغوط ZIP (توفير 90%)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-gray">نصي JSON</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (file.Length >= 1024 * 1024)
+                                    {
+                                        <strong>@((file.Length / (1024.0 * 1024.0)).ToString("N2")) MB</strong>
+                                    }
+                                    else
+                                    {
+                                        <span>@((file.Length / 1024.0).ToString("N1")) KB</span>
+                                    }
                                 </td>
                                 <td style="text-align: center;">
-                                    <div style="display: flex; gap: 0.4rem; justify-content: center;">
-                                        <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.8rem; border-color: rgba(16, 185, 129, 0.4); color: var(--accent-emerald);" disabled="@(isRestoring || isDeleting)" @onclick="() => PrepareRestoreFromFile(file.FullPath, file.Name, file.Length, file.LastWriteTime)">
+                                    <div style="display: flex; gap: 0.4rem; justify-content: center; flex-wrap: wrap;">
+                                        <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.8rem; border-color: rgba(16, 185, 129, 0.4); color: var(--accent-emerald);" disabled="@(isRestoring || isDeleting || isUploadingToCloud)" @onclick="() => PrepareRestoreFromFile(file.FullPath, file.Name, file.Length, file.LastWriteTime)">
                                             <i class="fa-solid fa-rotate-left me-1"></i> استرجاع
+                                        </button>
+                                        <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.8rem; border-color: rgba(99, 102, 241, 0.4); color: var(--accent-indigo);" disabled="@(!r2Settings.IsEnabled || isUploadingToCloud)" @onclick="() => UploadFileToCloudAsync(file)" title="رفع هذه النسخة مباشرة إلى Cloudflare R2">
+                                            @if (uploadingFileKey == file.FullPath)
+                                            {
+                                                <i class="fa-solid fa-spinner fa-spin"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fa-solid fa-cloud-arrow-up me-1"></i> <span>رفع لـ R2</span>
+                                            }
                                         </button>
                                         <button class="btn btn-sm btn-danger" style="padding: 0.3rem 0.5rem; font-size: 0.8rem;" disabled="@(isRestoring || isDeleting)" @onclick="() => ConfirmDeleteBackup(file)" title="حذف هذا الملف نهائياً">
                                             <i class="fa-solid fa-trash"></i>
@@ -167,6 +278,184 @@
         </div>
     </div>
 </div>
+
+<!-- Cloudflare R2 Settings Modal -->
+@if (showR2SettingsModal)
+{
+    <div class="modal-overlay" @onclick="CloseR2SettingsModal">
+        <div class="modal-card" style="max-width: 620px;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--accent-indigo); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-cloud"></i>
+                    <span>إعدادات النسخ الاحتياطي السحابي (Cloudflare R2)</span>
+                </h3>
+                <button class="btn-close" @onclick="CloseR2SettingsModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.1rem;">
+                <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 0.5rem; padding: 0.75rem 1rem; font-size: 0.82rem; line-height: 1.5; color: var(--text-secondary);">
+                    <i class="fa-solid fa-circle-info me-1" style="color: var(--accent-indigo);"></i>
+                    خدمة Cloudflare R2 توفر <strong>10 جيجابايت تخزين مجاني دائم</strong> بدون أي مصاريف نقل بيانات (Zero Egress Fees).
+                    يتم رفع الملفات مباشرة من جهاز الكاشير إلى سحابة كلاودفلير دون لمس سيرفر الموبايل.
+                </div>
+
+                <!-- Enable Toggle -->
+                <div style="display: flex; align-items: center; gap: 0.75rem; background: var(--bg-primary); padding: 0.75rem 1rem; border-radius: 0.5rem; border: 1px solid var(--border-color);">
+                    <input type="checkbox" id="enableR2" style="width: 18px; height: 18px; cursor: pointer;" @bind="tempR2Settings.IsEnabled" />
+                    <label for="enableR2" style="font-weight: 600; cursor: pointer; margin: 0;">تفعيل الرفع السحابي التلقائي إلى Cloudflare R2</label>
+                </div>
+
+                <!-- Fields -->
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">Cloudflare Account ID (معرف الحساب)</label>
+                    <input class="form-control" @bind="tempR2Settings.AccountId" placeholder="مثال: 8b7a6c5d4e3f210987654321..." />
+                </div>
+
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">R2 Access Key ID (مفتاح الوصول S3)</label>
+                    <input class="form-control" @bind="tempR2Settings.AccessKeyId" placeholder="مثال: 4c3d2e1f0a9b8c7..." />
+                </div>
+
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">R2 Secret Access Key (المفتاح السري S3)</label>
+                    <input class="form-control" type="password" @bind="tempR2Settings.SecretAccessKey" placeholder="••••••••••••••••••••••••••••••••" />
+                </div>
+
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">R2 Bucket Name (اسم الحاوية)</label>
+                    <input class="form-control" @bind="tempR2Settings.BucketName" placeholder="مثال: pos-backups" />
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.82rem; font-weight: 600; margin-bottom: 0.25rem;">عدد النسخ المحفوظة على الهارد</label>
+                        <input class="form-control" type="number" min="1" max="50" @bind="tempR2Settings.LocalRetentionCount" @bind:event="oninput" />
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.25rem;">
+                        <input type="checkbox" id="autoUpload" @bind="tempR2Settings.AutoUploadOnBackup" style="width: 16px; height: 16px; cursor: pointer;" />
+                        <label for="autoUpload" style="font-size: 0.82rem; cursor: pointer; margin: 0;">رفع تلقائي بعد كل تصدير</label>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(r2TestResult))
+                {
+                    <div style="padding: 0.65rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; @(r2TestSuccess ? "background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald);" : "background: rgba(239, 68, 68, 0.15); color: #f87171;")">
+                        <i class="fa-solid @(r2TestSuccess ? "fa-circle-check" : "fa-triangle-exclamation")"></i>
+                        <span>@r2TestResult</span>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                <button class="btn btn-secondary" style="padding: 0.5rem 1rem;" disabled="@isTestingR2" @onclick="TestR2ConnectionAsync">
+                    @if (isTestingR2)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin me-1"></i> <span>جاري اختبار الاتصال...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-plug me-1"></i> <span>اختبار الاتصال</span>
+                    }
+                </button>
+
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary" @onclick="CloseR2SettingsModal">إلغاء</button>
+                    <button class="btn btn-primary" style="padding: 0.5rem 1.25rem;" @onclick="SaveR2SettingsAsync">
+                        <i class="fa-solid fa-floppy-disk me-1"></i> <span>حفظ الإعدادات</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Cloud Backups List Modal -->
+@if (showCloudBackupsModal)
+{
+    <div class="modal-overlay" @onclick="CloseCloudBackupsModal">
+        <div class="modal-card" style="max-width: 750px;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--accent-blue); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-cloud"></i>
+                    <span>النسخ المحفوظة على Cloudflare R2 (@cloudBackups.Count)</span>
+                </h3>
+                <button class="btn-close" @onclick="CloseCloudBackupsModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                        الحاوية: <code>@r2Settings.BucketName</code> (إجمالي الحجم: @((cloudBackups.Sum(x => x.Size) / (1024.0 * 1024.0)).ToString("N2")) MB)
+                    </span>
+                    <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" @onclick="LoadCloudBackupsAsync" disabled="@isLoadingCloudList">
+                        <i class="fa-solid fa-arrows-rotate me-1 @(isLoadingCloudList ? "fa-spin" : "")"></i> تحديث
+                    </button>
+                </div>
+
+                <div class="table-container" style="max-height: 350px; overflow-y: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>اسم الملف على السحابة</th>
+                                <th>تاريخ الرفع</th>
+                                <th>الحجم</th>
+                                <th style="width: 80px; text-align: center;">حذف</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (isLoadingCloudList)
+                            {
+                                <tr>
+                                    <td colspan="4" style="text-align: center; padding: 2rem;">
+                                        <i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--accent-indigo);"></i>
+                                        <p style="margin-top: 0.5rem; font-size: 0.85rem;">جاري جلب قائمة النسخ من Cloudflare R2...</p>
+                                    </td>
+                                </tr>
+                            }
+                            else if (!cloudBackups.Any())
+                            {
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                                        <i class="fa-solid fa-cloud-sun" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+                                        لا توجد نسخ احتياطية مرفوعة في حاوية Cloudflare R2 حتى الآن.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var item in cloudBackups)
+                                {
+                                    <tr>
+                                        <td>
+                                            <i class="fa-solid fa-file-zipper me-2" style="color: var(--accent-indigo);"></i>
+                                            <code>@item.Key.Replace("backups/", "")</code>
+                                        </td>
+                                        <td>@item.LastModified.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@((item.Size / 1024.0 / 1024.0).ToString("N2")) MB</td>
+                                        <td style="text-align: center;">
+                                            <button class="btn btn-sm btn-danger" style="padding: 0.25rem 0.5rem;" @onclick="() => DeleteCloudBackupAsync(item.Key)" title="حذف من السحابة">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseCloudBackupsModal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+}
 
 <!-- Restore Confirmation Modal -->
 @if (showRestoreModal)
@@ -250,7 +539,7 @@
 
                 <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.5rem; padding: 0.75rem 1rem; color: #f87171; font-size: 0.85rem; line-height: 1.5;">
                     <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                    <strong>تحذير الأثر:</strong> سيتم حذف هذا الملف نهائياً من القرص الصلب. لن تتمكن من استرجاع البيانات أو الاعتماد على هذه النسخة مستقبلاً.
+                    <strong>تحذير الأثر:</strong> سيتم حذف هذا الملف نهائياً من القرص الصلب لتوفير المساحة.
                 </div>
             </div>
 
@@ -276,8 +565,24 @@
     private bool isExporting = false;
     private bool isRestoring = false;
     private bool isDeleting = false;
+    private bool isPruning = false;
+    private bool isUploadingToCloud = false;
+    private string? uploadingFileKey;
     private string? successMessage;
     private string? errorMessage;
+
+    // R2 Settings Modal State
+    private bool showR2SettingsModal = false;
+    private CloudflareR2Settings r2Settings = new();
+    private CloudflareR2Settings tempR2Settings = new();
+    private bool isTestingR2 = false;
+    private string? r2TestResult;
+    private bool r2TestSuccess = false;
+
+    // Cloud Backups Modal State
+    private bool showCloudBackupsModal = false;
+    private bool isLoadingCloudList = false;
+    private List<CloudBackupItem> cloudBackups = new();
 
     // Delete Modal State
     private bool showDeleteModal = false;
@@ -302,6 +607,8 @@
 
     protected override void OnInitialized()
     {
+        r2Settings = R2Service.GetSettings();
+
         var defaultFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             "POS_Cashier_Backups");
@@ -351,7 +658,9 @@
         try
         {
             var dir = new DirectoryInfo(backupFolderPath);
-            var files = dir.GetFiles("POS_Backup_*.json")
+            var files = dir.GetFiles("POS_Backup_*.*")
+                           .Where(f => f.Extension.Equals(".zip", StringComparison.OrdinalIgnoreCase) ||
+                                       f.Extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
                            .OrderByDescending(f => f.LastWriteTime)
                            .Select(f => new BackupFileInfo
                            {
@@ -392,26 +701,129 @@
         errorMessage = null;
 
         var (data, fileName, err) = await ApiClient.ExportBackupAsync();
-        isExporting = false;
 
         if (data != null && data.Length > 0)
         {
             try
             {
-                var targetFile = Path.Combine(backupFolderPath, fileName ?? $"POS_Backup_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json");
-                await File.WriteAllBytesAsync(targetFile, data);
+                var originalName = fileName ?? $"POS_Backup_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json";
 
-                successMessage = $"تم حفظ النسخة الاحتياطية بنجاح في: {targetFile} (الحجم: {(data.Length / 1024.0):N1} KB)";
+                // Compress data into .zip
+                var (zipBytes, zipFileName) = R2Service.CompressJsonBytes(data, originalName);
+                var targetZipPath = Path.Combine(backupFolderPath, zipFileName);
+
+                await File.WriteAllBytesAsync(targetZipPath, zipBytes);
+
+                // Auto-Prune old local backups to protect disk space
+                var retention = r2Settings.LocalRetentionCount > 0 ? r2Settings.LocalRetentionCount : 5;
+                var (deletedCount, freedBytes) = R2Service.PruneLocalBackups(backupFolderPath, retention);
+
                 RefreshExistingBackups();
+
+                var msg = $"تم حفظ النسخة المضغوطة بنجاح: {zipFileName} (حجم الملف: {(zipBytes.Length / 1024.0):N1} KB - توفير: {(((data.Length - zipBytes.Length) / (double)data.Length) * 100):N0}%).";
+
+                if (deletedCount > 0)
+                {
+                    msg += $" وتم مسح {deletedCount} نسخة قديمة لتوفير {((freedBytes / 1024.0 / 1024.0)):N1} MB من الهارد.";
+                }
+
+                // If R2 is enabled and auto-upload is on, upload in background
+                if (r2Settings.IsEnabled && r2Settings.AutoUploadOnBackup)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        var (ok, r2Err, _) = await R2Service.UploadBackupAsync(targetZipPath, r2Settings);
+                        if (!ok && !string.IsNullOrEmpty(r2Err))
+                        {
+                            await InvokeAsync(() =>
+                            {
+                                errorMessage = $"تم الحفظ محلياً لكن فشل الرفع لـ Cloudflare R2: {r2Err}";
+                                StateHasChanged();
+                            });
+                        }
+                    });
+                    msg += " وجاري الرفع السحابي إلى Cloudflare R2 في الخلفية.";
+                }
+
+                successMessage = msg;
             }
             catch (Exception ex)
             {
-                errorMessage = $"تم تحميل النسخة بنجاح ولكن فشل كتابة الملف على القرص: {ex.Message}";
+                errorMessage = $"تم استخراج البيانات ولكن فشل الضغط أو الكتابة على القرص: {ex.Message}";
             }
         }
         else
         {
             errorMessage = err ?? "فشل تصدير النسخة الاحتياطية من السيرفر.";
+        }
+
+        isExporting = false;
+    }
+
+    private void ExecuteManualPrune()
+    {
+        isPruning = true;
+        successMessage = null;
+        errorMessage = null;
+
+        try
+        {
+            var retention = r2Settings.LocalRetentionCount > 0 ? r2Settings.LocalRetentionCount : 5;
+            var (deletedCount, freedBytes) = R2Service.PruneLocalBackups(backupFolderPath, retention);
+            RefreshExistingBackups();
+
+            if (deletedCount > 0)
+            {
+                successMessage = $"تم تنظيف الهارد بنجاح! تم حذف {deletedCount} نسخة قديمة وتوفير {((freedBytes / 1024.0 / 1024.0)):N2} MB على القرص الصلب.";
+            }
+            else
+            {
+                successMessage = $"الهارد منظم بالفعل! عدد النسخ الحالية ({existingBackups.Count}) ضمن الحد المسموح به ({retention})، لم يتم حذف أي ملفات.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"فشلت عملية تنظيف النسخ القديمة: {ex.Message}";
+        }
+        finally
+        {
+            isPruning = false;
+        }
+    }
+
+    private async Task UploadFileToCloudAsync(BackupFileInfo file)
+    {
+        if (!r2Settings.IsEnabled)
+        {
+            errorMessage = "يرجى تفعيل وضبط إعدادات Cloudflare R2 أولاً.";
+            return;
+        }
+
+        isUploadingToCloud = true;
+        uploadingFileKey = file.FullPath;
+        successMessage = null;
+        errorMessage = null;
+
+        try
+        {
+            var (success, err, remoteKey) = await R2Service.UploadBackupAsync(file.FullPath, r2Settings);
+            if (success)
+            {
+                successMessage = $"تم رفع النسخة الاحتياطية ({file.Name}) بنجاح إلى Cloudflare R2 باسم: {remoteKey}";
+            }
+            else
+            {
+                errorMessage = err ?? "فشل رفع النسخة إلى Cloudflare R2.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"خطأ أثناء الرفع السحابي: {ex.Message}";
+        }
+        finally
+        {
+            isUploadingToCloud = false;
+            uploadingFileKey = null;
         }
     }
 
@@ -421,8 +833,8 @@
         {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
-                Title = "اختر ملف النسخة الاحتياطية (.json)",
-                Filter = "ملفات النسخ الاحتياطية (*.json)|*.json|كل الملفات (*.*)|*.*",
+                Title = "اختر ملف النسخة الاحتياطية (.zip أو .json)",
+                Filter = "كل النسخ المدعومة (*.zip;*.json)|*.zip;*.json|نسخ مضغوطة (*.zip)|*.zip|ملفات JSON (*.json)|*.json|كل الملفات (*.*)|*.*",
                 InitialDirectory = Directory.Exists(backupFolderPath) ? backupFolderPath : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
             };
 
@@ -468,7 +880,8 @@
 
         try
         {
-            var jsonContent = await File.ReadAllTextAsync(selectedFileForRestorePath);
+            // Transparently extracts JSON whether the file is .zip or .json
+            var jsonContent = await R2Service.ExtractJsonFromBackupAsync(selectedFileForRestorePath);
             var (success, msg) = await ApiClient.RestoreBackupAsync(jsonContent);
 
             isRestoring = false;
@@ -489,7 +902,7 @@
         {
             isRestoring = false;
             showRestoreModal = false;
-            errorMessage = $"حدث خطأ أثناء قراءة الملف أو إرساله: {ex.Message}";
+            errorMessage = $"حدث خطأ أثناء فك ضغط أو قراءة الملف: {ex.Message}";
         }
     }
 
@@ -540,7 +953,7 @@
             if (File.Exists(fileToDelete.FullPath))
             {
                 await Task.Run(() => File.Delete(fileToDelete.FullPath));
-                successMessage = $"تم حذف ملف النسخة الاحتياطية ({fileToDelete.Name}) بنجاح.";
+                successMessage = $"تم حذف ملف النسخة الاحتياطية ({fileToDelete.Name}) بنجاح لتوفير المساحة.";
                 RefreshExistingBackups();
             }
             else
@@ -559,5 +972,146 @@
             fileToDelete = null;
         }
     }
-}
 
+    // R2 Settings Modal Handlers
+    private void OpenR2SettingsModal()
+    {
+        tempR2Settings = new CloudflareR2Settings
+        {
+            IsEnabled = r2Settings.IsEnabled,
+            AccountId = r2Settings.AccountId,
+            AccessKeyId = r2Settings.AccessKeyId,
+            SecretAccessKey = r2Settings.SecretAccessKey,
+            BucketName = r2Settings.BucketName,
+            LocalRetentionCount = r2Settings.LocalRetentionCount > 0 ? r2Settings.LocalRetentionCount : 5,
+            AutoUploadOnBackup = r2Settings.AutoUploadOnBackup
+        };
+        r2TestResult = null;
+        showR2SettingsModal = true;
+    }
+
+    private void CloseR2SettingsModal()
+    {
+        showR2SettingsModal = false;
+    }
+
+    private async Task TestR2ConnectionAsync()
+    {
+        isTestingR2 = true;
+        r2TestResult = null;
+        try
+        {
+            var (success, err) = await R2Service.TestConnectionAsync(tempR2Settings);
+            r2TestSuccess = success;
+            r2TestResult = success
+                ? "تم الاتصال بنجاح بـ Cloudflare R2 والحاوية جاهزة لاستقبال النسخ الاحتياطية!"
+                : $"فشل الاتصال: {err}";
+        }
+        catch (Exception ex)
+        {
+            r2TestSuccess = false;
+            r2TestResult = $"خطأ أثناء الاتصال: {ex.Message}";
+        }
+        finally
+        {
+            isTestingR2 = false;
+        }
+    }
+
+    private async Task UpdateRetentionCountDirectly(int newCount)
+    {
+        if (newCount < 1) newCount = 1;
+        if (newCount > 50) newCount = 50;
+
+        r2Settings.LocalRetentionCount = newCount;
+        try
+        {
+            await R2Service.SaveSettingsAsync(r2Settings);
+            successMessage = $"تم تحديث سياسة الحفظ: سيتم الاحتفاظ بآخر {newCount} نسخ على الهارد.";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"فشل حفظ التغيير: {ex.Message}";
+        }
+    }
+
+    private async Task SaveR2SettingsAsync()
+    {
+        try
+        {
+            if (tempR2Settings.LocalRetentionCount < 1)
+            {
+                tempR2Settings.LocalRetentionCount = 5;
+            }
+
+            await R2Service.SaveSettingsAsync(tempR2Settings);
+            r2Settings = R2Service.GetSettings();
+            showR2SettingsModal = false;
+            successMessage = $"تم حفظ إعدادات Cloudflare R2 وسياسة تدوير النسخ (الاحتفاظ بآخر {r2Settings.LocalRetentionCount} نسخ) بنجاح!";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"فشل حفظ الإعدادات: {ex.Message}";
+        }
+    }
+
+    // Cloud Backups List Modal Handlers
+    private async Task OpenCloudBackupsModal()
+    {
+        showCloudBackupsModal = true;
+        await LoadCloudBackupsAsync();
+    }
+
+    private void CloseCloudBackupsModal()
+    {
+        showCloudBackupsModal = false;
+    }
+
+    private async Task LoadCloudBackupsAsync()
+    {
+        isLoadingCloudList = true;
+        try
+        {
+            var (success, items, err) = await R2Service.ListCloudBackupsAsync(r2Settings);
+            if (success)
+            {
+                cloudBackups = items;
+            }
+            else
+            {
+                errorMessage = err;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"تعذر جلب النسخ السحابية: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingCloudList = false;
+        }
+    }
+
+    private async Task DeleteCloudBackupAsync(string key)
+    {
+        try
+        {
+            var (success, err) = await R2Service.DeleteCloudBackupAsync(key, r2Settings);
+            if (success)
+            {
+                cloudBackups.RemoveAll(x => x.Key == key);
+                successMessage = $"تم حذف النسخة ({key.Replace("backups/", "")}) من سحابة Cloudflare R2 بنجاح.";
+            }
+            else
+            {
+                errorMessage = err ?? "فشل حذف النسخة من السحابة.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"خطأ أثناء حذف النسخة السحابية: {ex.Message}";
+        }
+    }
+}

@@ -12,14 +12,27 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
         private readonly ReceiptResponse _receipt;
         private readonly bool _isThermal;
         private readonly byte[]? _faintWatermarkBytes;
+        private readonly byte[]? _trimmedHeaderBytes;
+        private readonly byte[]? _trimmedFooterBytes;
 
         public InvoicePdfDocument(ReceiptResponse receipt, bool isThermal = false)
         {
             _receipt = receipt;
             _isThermal = isThermal;
+
             if (_receipt.LogoBytes != null && _receipt.LogoBytes.Length > 0)
             {
-                _faintWatermarkBytes = WatermarkHelper.MakeFaintWatermark(_receipt.LogoBytes, 0.15f);
+                _faintWatermarkBytes = WatermarkHelper.MakeFaintWatermark(_receipt.LogoBytes, 0.22f);
+            }
+
+            if (_receipt.HeaderImageBytes != null && _receipt.HeaderImageBytes.Length > 0)
+            {
+                _trimmedHeaderBytes = WatermarkHelper.TrimWhitespace(_receipt.HeaderImageBytes);
+            }
+
+            if (_receipt.FooterImageBytes != null && _receipt.FooterImageBytes.Length > 0)
+            {
+                _trimmedFooterBytes = WatermarkHelper.TrimWhitespace(_receipt.FooterImageBytes);
             }
         }
 
@@ -30,24 +43,29 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.Margin(20, Unit.Point);
+                page.MarginHorizontal(18, Unit.Point);
+                page.MarginVertical(10, Unit.Point);
                 page.PageColor(Colors.White);
                 page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Cairo", "Segoe UI", "Tahoma", "Arial"));
 
-                page.Content().Column(column =>
+                // 1. Header Section (Edge-to-edge width aligned with the table)
+                page.Header().Element(header =>
                 {
-                    // 1. Header Image (or fallback)
-                    if (_receipt.HeaderImageBytes != null && _receipt.HeaderImageBytes.Length > 0)
+                    if (_trimmedHeaderBytes != null && _trimmedHeaderBytes.Length > 0)
                     {
-                        column.Item().AlignCenter().Height(90).Image(_receipt.HeaderImageBytes).FitArea();
+                        header.PaddingBottom(2).Image(_trimmedHeaderBytes).FitWidth();
                     }
                     else
                     {
-                        ComposeFallbackHeader(column);
+                        ComposeFallbackHeader(header);
                     }
+                });
 
-                    // 2. Info Section (Customer Name, Date, Phone, Address, Payment Type, Delivery / Driver)
-                    column.Item().PaddingTop(4).PaddingBottom(6).Column(infoCol =>
+                // 2. Content Section (Customer Info + Installment Details + Main Grid)
+                page.Content().Column(column =>
+                {
+                    // Info Section (Customer Name, Date, Phone, Address, Payment Type, Delivery / Driver)
+                    column.Item().PaddingTop(2).PaddingBottom(4).Column(infoCol =>
                     {
                         var dateStr = _receipt.SaleDate.ToString("yyyy / MM / dd");
                         var customerName = !string.IsNullOrWhiteSpace(_receipt.CustomerName) ? _receipt.CustomerName : "........................................";
@@ -123,25 +141,25 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                         // If installment summary exists
                         if (_receipt.IsInstallment)
                         {
-                            infoCol.Item().PaddingTop(3).Border(1f).BorderColor(Colors.Indigo.Lighten2).Background(Colors.Indigo.Lighten5).Padding(5).Column(instBox =>
+                            infoCol.Item().PaddingTop(3).Border(1f).BorderColor(Colors.Indigo.Lighten2).Background(Colors.Indigo.Lighten5).Padding(4).Column(instBox =>
                             {
-                                instBox.Item().AlignCenter().Text(FormatRtl("تفاصيل وثيقة البيع بالتقسيط")).FontSize(10f).ExtraBold().FontColor(Colors.Indigo.Darken3);
+                                instBox.Item().AlignCenter().Text(FormatRtl("تفاصيل وثيقة البيع بالتقسيط")).FontSize(9.5f).ExtraBold().FontColor(Colors.Indigo.Darken3);
                                 instBox.Item().PaddingTop(2).Row(r =>
                                 {
-                                    r.RelativeItem().AlignRight().Text(FormatRtl($"أصل السعر النقدي: {_receipt.InstallmentTotalCashAmount ?? _receipt.SubTotal:N2} {_receipt.Currency}")).FontSize(9f).Bold();
-                                    r.RelativeItem().AlignCenter().Text(FormatRtl($"المقدم المدفوع: {_receipt.InstallmentDownPayment ?? _receipt.PaidAmount:N2} {_receipt.Currency}")).FontSize(9f).Bold().FontColor(Colors.Green.Darken2);
-                                    r.RelativeItem().AlignLeft().Text(FormatRtl($"نسبة الفائدة: {_receipt.InstallmentInterestPercentage ?? 0:G29}% (+{_receipt.InstallmentInterestAmount ?? 0:N2} {_receipt.Currency})")).FontSize(9f).Bold().FontColor(Colors.Amber.Darken3);
+                                    r.RelativeItem(1.1f).AlignRight().Text(FormatRtl($"أصل السعر النقدي: {_receipt.InstallmentTotalCashAmount ?? _receipt.SubTotal:N2} {_receipt.Currency}")).FontSize(8.5f).Bold();
+                                    r.RelativeItem(1f).AlignCenter().Text(FormatRtl($"المقدم المدفوع: {_receipt.InstallmentDownPayment ?? _receipt.PaidAmount:N2} {_receipt.Currency}")).FontSize(8.5f).Bold().FontColor(Colors.Green.Darken2);
+                                    r.RelativeItem(1f).AlignLeft().Text(FormatRtl($"نسبة الفائدة: {_receipt.InstallmentInterestPercentage ?? 0:G29}% (+{_receipt.InstallmentInterestAmount ?? 0:N2} {_receipt.Currency})")).FontSize(8.5f).Bold().FontColor(Colors.Amber.Darken3);
                                 });
                                 instBox.Item().PaddingTop(2).Row(r =>
                                 {
-                                    r.RelativeItem().AlignRight().Text(FormatRtl($"إجمالي الفاتورة بالتقسيط: {_receipt.TotalAmount:N2} {_receipt.Currency}")).FontSize(9.5f).ExtraBold().FontColor(Colors.Indigo.Darken4);
-                                    r.RelativeItem().AlignCenter().Text(FormatRtl($"المتبقي للأقساط: {_receipt.InstallmentRemainingAmount ?? (_receipt.TotalAmount - _receipt.PaidAmount):N2} {_receipt.Currency}")).FontSize(9f).Bold();
-                                    r.RelativeItem().AlignLeft().Text(FormatRtl($"القسط الشهري: {_receipt.MonthlyInstallmentAmount ?? 0:N2} {_receipt.Currency} ({_receipt.InstallmentMonths ?? 12} شهر)")).FontSize(9.5f).ExtraBold().FontColor(Colors.Indigo.Darken2);
+                                    r.RelativeItem(1.2f).AlignRight().Text(FormatRtl($"إجمالي الفاتورة بالتقسيط: {_receipt.TotalAmount:N2} {_receipt.Currency}")).FontSize(9f).ExtraBold().FontColor(Colors.Indigo.Darken4);
+                                    r.RelativeItem(1f).AlignCenter().Text(FormatRtl($"المتبقي للأقساط: {_receipt.InstallmentRemainingAmount ?? (_receipt.TotalAmount - _receipt.PaidAmount):N2} {_receipt.Currency}")).FontSize(8.5f).Bold();
+                                    r.RelativeItem(1.1f).AlignLeft().Text(FormatRtl($"القسط الشهري: {_receipt.MonthlyInstallmentAmount ?? 0:N2} {_receipt.Currency} ({_receipt.InstallmentMonths ?? 12} شهر)")).FontSize(9f).ExtraBold().FontColor(Colors.Indigo.Darken2);
                                 });
                                 if (!string.IsNullOrWhiteSpace(_receipt.GuarantorName))
                                 {
                                     var gPhone = string.IsNullOrWhiteSpace(_receipt.GuarantorPhone) ? "-" : _receipt.GuarantorPhone;
-                                    instBox.Item().PaddingTop(2).AlignRight().Text(FormatRtl($"الضامن المعتمد: {_receipt.GuarantorName} - هاتف: {gPhone}")).FontSize(8.5f).SemiBold();
+                                    instBox.Item().PaddingTop(2).AlignRight().Text(FormatRtl($"الضامن المعتمد: {_receipt.GuarantorName} - هاتف: {gPhone}")).FontSize(8f).SemiBold();
                                 }
                             });
                         }
@@ -150,10 +168,10 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                     // 3. Main Table & Watermark in a Bordered Container
                     column.Item().Border(1.8f).BorderColor(Colors.Black).Layers(layers =>
                     {
-                        // Watermark Layer (Ultra-faint, subtle background watermark)
+                        // Watermark Layer (Clearly visible, elegant background watermark)
                         if (_faintWatermarkBytes != null && _faintWatermarkBytes.Length > 0)
                         {
-                            layers.Layer().AlignCenter().AlignMiddle().Width(240).Height(240).Image(_faintWatermarkBytes).FitArea();
+                            layers.Layer().AlignCenter().AlignMiddle().Width(360).Height(260).Image(_faintWatermarkBytes).FitArea();
                         }
 
                         // Table Content
@@ -174,7 +192,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                                 table.Header(header =>
                                 {
                                     header.Cell().BorderRight(1.2f).BorderColor(Colors.Black).BorderBottom(1.5f).BorderColor(Colors.Black)
-                                        .PaddingVertical(5).AlignCenter().Text("الإجمالي").FontSize(11.5f).Bold();
+                                        .PaddingVertical(4).AlignCenter().Text("الإجمالي").FontSize(11.5f).Bold();
 
                                     header.Cell().BorderRight(1.2f).BorderColor(Colors.Black).BorderBottom(1.5f).BorderColor(Colors.Black)
                                         .PaddingVertical(2).AlignCenter().Column(c =>
@@ -184,13 +202,13 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                                         });
 
                                     header.Cell().BorderRight(1.2f).BorderColor(Colors.Black).BorderBottom(1.5f).BorderColor(Colors.Black)
-                                        .PaddingVertical(5).AlignCenter().Text("العدد").FontSize(11.5f).Bold();
+                                        .PaddingVertical(4).AlignCenter().Text("العدد").FontSize(11.5f).Bold();
 
                                     header.Cell().BorderRight(1.2f).BorderColor(Colors.Black).BorderBottom(1.5f).BorderColor(Colors.Black)
-                                        .PaddingVertical(5).AlignCenter().Text("الصـــــنـــــف").FontSize(13.5f).Bold();
+                                        .PaddingVertical(4).AlignCenter().Text("الصـــــنـــــف").FontSize(13.5f).Bold();
 
                                     header.Cell().BorderBottom(1.5f).BorderColor(Colors.Black)
-                                        .PaddingVertical(5).AlignCenter().Text("الرقم").FontSize(11.5f).Bold();
+                                        .PaddingVertical(4).AlignCenter().Text("الرقم").FontSize(11.5f).Bold();
                                 });
 
                                 // Body rows (At least 15 rows)
@@ -239,7 +257,7 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
 
                             // Bottom Summary Row inside the table box with Total Amount & Total Pieces
                             var totalPieces = _receipt.Items.Sum(i => i.Quantity);
-                            boxCol.Item().BorderTop(1.5f).BorderColor(Colors.Black).MinHeight(32).Row(bRow =>
+                            boxCol.Item().BorderTop(1.5f).BorderColor(Colors.Black).MinHeight(30).Row(bRow =>
                             {
                                 // Box with total amount (under Col 0: الإجمالي)
                                 bRow.ConstantItem(85).BorderRight(1.2f).BorderColor(Colors.Black).PaddingVertical(4).AlignCenter().AlignMiddle()
@@ -262,15 +280,18 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                             });
                         });
                     });
+                });
 
-                    // 4. Footer Section
-                    if (_receipt.FooterImageBytes != null && _receipt.FooterImageBytes.Length > 0)
+                // 4. Footer Section (Docked at the bottom of the page, full width matching table)
+                page.Footer().Element(footer =>
+                {
+                    if (_trimmedFooterBytes != null && _trimmedFooterBytes.Length > 0)
                     {
-                        column.Item().PaddingTop(8).AlignCenter().Height(65).Image(_receipt.FooterImageBytes).FitArea();
+                        footer.PaddingTop(2).Image(_trimmedFooterBytes).FitWidth();
                     }
                     else
                     {
-                        ComposeFallbackFooter(column);
+                        ComposeFallbackFooter(footer);
                     }
                 });
             });
@@ -289,12 +310,12 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
                 c = c.BorderBottom(0.6f).BorderColor(Colors.Grey.Darken1);
             }
 
-            c.MinHeight(19).PaddingVertical(1.5f).PaddingHorizontal(3).Element(content);
+            c.MinHeight(20).PaddingVertical(1.5f).PaddingHorizontal(3).Element(content);
         }
 
-        private void ComposeFallbackHeader(ColumnDescriptor column)
+        private void ComposeFallbackHeader(IContainer header)
         {
-            column.Item().Row(row =>
+            header.PaddingBottom(4).Row(row =>
             {
                 row.RelativeItem().Column(c =>
                 {
@@ -312,9 +333,9 @@ namespace Sales.Application.Sales.Queries.GetSalePdf
             });
         }
 
-        private void ComposeFallbackFooter(ColumnDescriptor column)
+        private void ComposeFallbackFooter(IContainer footer)
         {
-            column.Item().PaddingTop(8).Column(fc =>
+            footer.PaddingTop(4).Column(fc =>
             {
                 // Pill 1: Store name & phone
                 fc.Item().PaddingBottom(4).Background(Colors.Black).PaddingVertical(4).PaddingHorizontal(16).Row(r =>

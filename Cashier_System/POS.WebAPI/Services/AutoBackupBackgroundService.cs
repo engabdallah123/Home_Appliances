@@ -36,7 +36,9 @@ namespace POS.WebAPI.Services
                     if (Directory.Exists(backupFolder))
                     {
                         var dir = new DirectoryInfo(backupFolder);
-                        var latestFile = dir.GetFiles("POS_Backup_*.json")
+                        var latestFile = dir.GetFiles("POS_Backup_*.*")
+                                            .Where(f => f.Extension.Equals(".zip", StringComparison.OrdinalIgnoreCase) ||
+                                                        f.Extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
                                             .OrderByDescending(f => f.LastWriteTimeUtc)
                                             .FirstOrDefault();
                         if (latestFile != null)
@@ -112,15 +114,63 @@ namespace POS.WebAPI.Services
                 var backupService = scope.ServiceProvider.GetRequiredService<IBackupService>();
 
                 var (fileBytes, fileName) = await backupService.ExportBackupAsync(ct);
-                var filePath = Path.Combine(backupFolder, fileName);
 
-                await File.WriteAllBytesAsync(filePath, fileBytes, ct);
+                // Compress to .zip using standard System.IO.Compression
+                var zipFileName = Path.ChangeExtension(fileName, ".zip");
+                var zipFilePath = Path.Combine(backupFolder, zipFileName);
 
-                _logger.LogInformation("Automatic 12-hour backup completed successfully: {FilePath} ({SizeKb:F1} KB)", filePath, fileBytes.Length / 1024.0);
+                using (var zipStream = new FileStream(zipFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var archive = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Create))
+                {
+                    var entry = archive.CreateEntry(fileName, System.IO.Compression.CompressionLevel.Optimal);
+                    using var entryStream = entry.Open();
+                    await entryStream.WriteAsync(fileBytes, ct);
+                }
+
+                var zipLength = new FileInfo(zipFilePath).Length;
+                _logger.LogInformation(
+                    "Automatic 12-hour backup compressed and completed successfully: {FilePath} (Original: {OriginalKb:F1} KB, Compressed: {ZipKb:F1} KB)",
+                    zipFilePath,
+                    fileBytes.Length / 1024.0,
+                    zipLength / 1024.0);
+
+                // Prune local backups: Keep strictly the latest 5 backups
+                PruneOldBackups(backupFolder, maxToKeep: 5);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to create automatic backup.");
+            }
+        }
+
+        private void PruneOldBackups(string folderPath, int maxToKeep = 5)
+        {
+            try
+            {
+                var dir = new DirectoryInfo(folderPath);
+                var backups = dir.GetFiles("POS_Backup_*.*")
+                    .Where(f => f.Extension.Equals(".zip", StringComparison.OrdinalIgnoreCase) ||
+                                f.Extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(f => f.LastWriteTimeUtc)
+                    .ToList();
+
+                if (backups.Count > maxToKeep)
+                {
+                    var toDelete = backups.Skip(maxToKeep).ToList();
+                    foreach (var file in toDelete)
+                    {
+                        try
+                        {
+                            file.Delete();
+                            _logger.LogInformation("Pruned old local backup to save disk space: {FileName}", file.Name);
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to prune old backups in folder: {FolderPath}", folderPath);
             }
         }
     }

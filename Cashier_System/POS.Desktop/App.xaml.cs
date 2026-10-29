@@ -88,6 +88,7 @@ namespace POS.Desktop
             serviceCollection.AddSingleton<StoreStateContainer>();
             serviceCollection.AddSingleton<CalculatorStateContainer>();
             serviceCollection.AddSingleton<ICloudSyncService, CloudSyncService>();
+            serviceCollection.AddSingleton<POS.Desktop.Services.Backup.ICloudflareR2BackupService, POS.Desktop.Services.Backup.CloudflareR2BackupService>();
 
             Services = serviceCollection.BuildServiceProvider();
 
@@ -95,6 +96,7 @@ namespace POS.Desktop
             try
             {
                 _ = Services.GetRequiredService<ICloudSyncService>();
+                _ = Services.GetRequiredService<POS.Desktop.Services.Backup.ICloudflareR2BackupService>();
             }
             catch { }
         }

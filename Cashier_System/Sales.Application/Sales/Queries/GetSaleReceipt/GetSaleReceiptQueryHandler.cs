@@ -45,7 +45,16 @@ namespace Sales.Application.Sales.Queries.GetSaleReceipt
             {
                 try
                 {
-                    var logoResult = await _fileService.GetFileAsByteArrayAsync(logoUrl);
+                    var cleanUrl = logoUrl.Trim();
+                    if (cleanUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || cleanUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (Uri.TryCreate(cleanUrl, UriKind.Absolute, out var uri))
+                        {
+                            cleanUrl = uri.AbsolutePath.TrimStart('/');
+                        }
+                    }
+
+                    var logoResult = await _fileService.GetFileAsByteArrayAsync(cleanUrl);
                     if (logoResult.IsSuccess && logoResult.Value != null && logoResult.Value.Length > 0)
                     {
                         logoBytes = logoResult.Value;
