@@ -7,5 +7,5 @@ namespace Inventory.Application.Catalog.Products.Queries.GetProducts
         string? SearchTerm = null,
         bool? IsActive = null,
         int Page = 1,
-        int PageSize = 50) : IQuery<IReadOnlyList<ProductResponse>>;
+        int PageSize = 0) : IQuery<IReadOnlyList<ProductResponse>>;
 }

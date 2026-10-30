@@ -49,21 +49,38 @@ namespace Inventory.Application.Catalog.Products.Queries.GetProducts
             if (!string.IsNullOrWhiteSpace(request.SearchTerm))
                 sql += " AND (p.NameAr LIKE @SearchStr OR p.NameEn LIKE @SearchStr OR p.Barcode LIKE @SearchStr)";
 
-            sql += " ORDER BY p.CreatedAt DESC OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
-
-            var offset = (request.Page - 1) * request.PageSize;
-
-            var products = await connection.QueryAsync<ProductResponse>(sql, new
+            if (request.PageSize > 0)
             {
-                request.CategoryId,
-                request.IsActive,
-                SearchStr = $"%{request.SearchTerm}%",
-                Offset = offset,
-                request.PageSize
-            });
+                sql += " ORDER BY p.CreatedAt DESC OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
 
-            var resultList = (IReadOnlyList<ProductResponse>)products.ToList();
-            return Result<IReadOnlyList<ProductResponse>>.Success(resultList);
+                var offset = Math.Max(0, (request.Page - 1) * request.PageSize);
+
+                var products = await connection.QueryAsync<ProductResponse>(sql, new
+                {
+                    request.CategoryId,
+                    request.IsActive,
+                    SearchStr = $"%{request.SearchTerm}%",
+                    Offset = offset,
+                    request.PageSize
+                });
+
+                var resultList = (IReadOnlyList<ProductResponse>)products.ToList();
+                return Result<IReadOnlyList<ProductResponse>>.Success(resultList);
+            }
+            else
+            {
+                sql += " ORDER BY p.CreatedAt DESC";
+
+                var products = await connection.QueryAsync<ProductResponse>(sql, new
+                {
+                    request.CategoryId,
+                    request.IsActive,
+                    SearchStr = $"%{request.SearchTerm}%"
+                });
+
+                var resultList = (IReadOnlyList<ProductResponse>)products.ToList();
+                return Result<IReadOnlyList<ProductResponse>>.Success(resultList);
+            }
         }
     }
 }

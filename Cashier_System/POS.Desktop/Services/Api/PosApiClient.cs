@@ -74,11 +74,14 @@ namespace POS.Desktop.Services.Api
         }
 
         // Products
-        public async Task<List<ProductDto>> GetProductsAsync(string? search = null)
+        public async Task<List<ProductDto>> GetProductsAsync(string? search = null, int pageSize = 0)
         {
             try
             {
-                var url = string.IsNullOrWhiteSpace(search) ? "api/inventory/products?pageSize=1000" : $"api/inventory/products?pageSize=1000&searchTerm={search}";
+                var url = string.IsNullOrWhiteSpace(search)
+                    ? (pageSize > 0 ? $"api/inventory/products?pageSize={pageSize}" : "api/inventory/products?pageSize=0")
+                    : (pageSize > 0 ? $"api/inventory/products?pageSize={pageSize}&searchTerm={Uri.EscapeDataString(search)}" : $"api/inventory/products?pageSize=0&searchTerm={Uri.EscapeDataString(search)}");
+
                 return await _http.GetFromJsonAsync<List<ProductDto>>(url) ?? new();
             }
             catch
